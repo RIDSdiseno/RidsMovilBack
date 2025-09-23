@@ -1,0 +1,54 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+model Tecnico {
+  id        Int   @id @default(autoincrement()) @map("id_tecnico")
+  nombre    String
+  email     String   @unique
+  passwordHash  String   // Hasheado (bcrypt)
+  visitas   Visita[]
+}
+
+model Empresa {
+  id        Int   @id @default(autoincrement()) @map("id_empresa")
+  nombre    String   @unique
+  visitas   Visita[]
+}
+
+enum EstadoVisita {
+  PENDIENTE   // Aún no finaliza
+  COMPLETADA  // Ya terminó y fue registrada
+  CANCELADA   // (Opcional) Si se permite cancelar
+}
+
+model Visita {
+  id              Int    @id @default(autoincrement()) @map("id_visita")
+  empresaId       Int
+  tecnicoId       Int
+  solicitante     String
+  realizado       String
+  inicio          DateTime
+  fin             DateTime
+  confImpresoras  Boolean   @default(false)
+  confTelefonos   Boolean   @default(false)
+  confPiePagina   Boolean   @default(false)
+  otros           Boolean   @default(false)
+  otrosDetalle    String?
+  status          EstadoVisita   @default(PENDIENTE)
+  // Relaciones
+  empresa         Empresa   @relation(fields: [empresaId], references: [id])
+  tecnico         Tecnico   @relation(fields: [tecnicoId], references: [id])
+}

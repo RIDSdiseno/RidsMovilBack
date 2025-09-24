@@ -7,6 +7,7 @@ CREATE TABLE "public"."Tecnico" (
     "nombre" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "passwordHash" TEXT NOT NULL,
+    "status" BOOLEAN NOT NULL DEFAULT true,
 
     CONSTRAINT "Tecnico_pkey" PRIMARY KEY ("id_tecnico")
 );

@@ -19,7 +19,10 @@ model Tecnico {
   nombre    String
   email     String   @unique
   passwordHash  String   // Hasheado (bcrypt)
+  status        Boolean @default(true)
   visitas   Visita[]
+  // relación con refresh tokens
+  refreshTokens RefreshToken[]
 }
 
 model Empresa {
@@ -41,7 +44,7 @@ model Visita {
   solicitante     String
   realizado       String
   inicio          DateTime
-  fin             DateTime
+  fin             DateTime?
   confImpresoras  Boolean   @default(false)
   confTelefonos   Boolean   @default(false)
   confPiePagina   Boolean   @default(false)
@@ -51,4 +54,21 @@ model Visita {
   // Relaciones
   empresa         Empresa   @relation(fields: [empresaId], references: [id])
   tecnico         Tecnico   @relation(fields: [tecnicoId], references: [id])
+}
+
+model RefreshToken {
+  id                Int       @id @default(autoincrement())
+  userId            Int
+  rtHash            String // SHA-256 del RT (hex) ⬅️ lookup determinístico
+  createdAt         DateTime  @default(now())
+  expiresAt         DateTime
+  revokedAt         DateTime? // si fue rotado o forzado logout
+  replacedByTokenId Int? // rotación: apunta al nuevo RT
+  userAgent         String? // opcional: auditoría
+  ip                String? // opcional: auditoría
+
+  user Tecnico @relation(fields: [userId], references: [id])
+
+  @@index([rtHash]) // lookup rápido por hash del RT
+  @@index([userId])
 }

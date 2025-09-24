@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { EstadoVisita, PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import type { Secret } from "jsonwebtoken";
@@ -220,3 +220,99 @@ export const createManyempresa = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Error al insertar empresa" });
   }
 };
+
+
+//POST Auth/inicio_visita
+export const crearVisita = async (req: Request, res: Response) => {
+  try {
+    const { empresaId, tecnicoId, solicitante, realizado } = req.body;
+
+    // Validaciones básicas
+    if (!empresaId || !tecnicoId) {
+      return res.status(400).json({ error: "empresaId y tecnicoId son obligatorios" });
+    }
+
+    // Crear la visita
+    const nuevaVisita = await prisma.visita.create({
+      data: {
+        empresaId,
+        tecnicoId,
+        solicitante: solicitante?.trim() ?? '',
+        realizado: realizado?.trim() ?? '',
+        inicio: new Date(),     // se setea al iniciar
+        fin: new Date(),        // puedes dejarlo como null si lo haces en 2 pasos y el modelo lo permite
+        status: EstadoVisita.PENDIENTE,
+      },
+      select: {
+        id: true,
+        empresaId: true,
+        tecnicoId: true,
+        inicio: true,
+        fin: true,
+        status: true
+      }
+    });
+
+    return res.status(201).json({ visita: nuevaVisita });
+
+  } catch (error) {
+    console.error("Error al crear visita:", error);
+    return res.status(500).json({ error: "Error interno al crear la visita" });
+  }
+};
+
+//PUT Auth/completar_visita
+export const completarVisita = async (req: Request, res: Response) => {
+  try {
+    const visitaId = Number(req.params.id);
+    const {
+      confImpresoras,
+      confTelefonos,
+      confPiePagina,
+      otros,
+      otrosDetalle
+    } = req.body;
+
+    if (isNaN(visitaId)) {
+      return res.status(400).json({ error: "ID de visita inválido" });
+    }
+
+    // Verifica si la visita existe
+    const visitaExistente = await prisma.visita.findUnique({ where: { id: visitaId } });
+    if (!visitaExistente) {
+      return res.status(404).json({ error: "Visita no encontrada" });
+    }
+
+    // Actualiza los campos del formulario + marca la hora de finalización
+    const visitaActualizada = await prisma.visita.update({
+      where: { id: visitaId },
+      data: {
+        confImpresoras: Boolean(confImpresoras),
+        confTelefonos: Boolean(confTelefonos),
+        confPiePagina: Boolean(confPiePagina),
+        otros: Boolean(otros),
+        otrosDetalle: otrosDetalle?.trim() || null,
+        fin: new Date(),
+        status: EstadoVisita.COMPLETADA
+      },
+      select: {
+        id: true,
+        inicio: true,
+        fin: true,
+        status: true,
+        confImpresoras: true,
+        confTelefonos: true,
+        confPiePagina: true,
+        otros: true,
+        otrosDetalle: true
+      }
+    });
+
+    return res.status(200).json({ visita: visitaActualizada });
+
+  } catch (error) {
+    console.error("Error al actualizar visita:", error);
+    return res.status(500).json({ error: "Error interno al completar la visita" });
+  }
+};
+

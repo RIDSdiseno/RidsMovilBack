@@ -23,8 +23,8 @@ r.post("/createcliente",createCliente)
 
 
 //Funcionalidad de visitas
-r.post("/crear_visita",authGuard,crearVisita)
-r.put("/finalizar_visita",authGuard,completarVisita)
+r.post("/crear_visita",crearVisita)
+r.put("/finalizar_visita/:id",completarVisita)
 
 
 

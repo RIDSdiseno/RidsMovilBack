@@ -395,57 +395,70 @@ export const createManyempresa = async (req: Request, res: Response) => {
 };
 
 
-//POST Auth/inicio_visita
 export const crearVisita = async (req: Request, res: Response) => {
   try {
-    const { empresaId, tecnicoId, solicitante, realizado } = req.body;
+    console.log("Datos recibidos para crear la visita:", req.body);
+    const { empresaId, tecnicoId } = req.body;
 
-    // Validaciones básicas
+    // Validación básica
     if (!empresaId || !tecnicoId) {
       return res.status(400).json({ error: "empresaId y tecnicoId son obligatorios" });
     }
 
-    // Crear la visita
+    // Convertir 'empresaId' y 'tecnicoId' a números (en caso de que se pasen como cadenas)
+    const empresaIdInt = Number(empresaId);
+    const tecnicoIdInt = Number(tecnicoId);
+
+    // Verificar que 'empresaId' y 'tecnicoId' sean números válidos
+    if (isNaN(empresaIdInt) || isNaN(tecnicoIdInt)) {
+      return res.status(400).json({ error: "Los IDs deben ser números válidos" });
+    }
+
+    // Crear la visita sin incluir los campos 'realizado' y 'solicitante' durante la creación
     const nuevaVisita = await prisma.visita.create({
       data: {
-        empresaId,
-        tecnicoId,
-        solicitante: solicitante?.trim() ?? '',
-        realizado: realizado?.trim() ?? '',
-        inicio: new Date(),     // se setea al iniciar
-        fin: new Date(),        // puedes dejarlo como null si lo haces en 2 pasos y el modelo lo permite
-        status: EstadoVisita.PENDIENTE,
+        empresaId: empresaIdInt,  // Usar 'empresaId' como número
+        tecnicoId: tecnicoIdInt,  // Usar 'tecnicoId' como número
+        solicitante: 'No especificado', // 'solicitante' se deja vacío inicialmente
+        realizado: 'No especificado', // 'realizado' se deja vacío inicialmente
+        inicio: new Date(),
+        status: EstadoVisita.PENDIENTE,  // 'fin' no se incluye en la creación
       },
       select: {
         id: true,
         empresaId: true,
         tecnicoId: true,
         inicio: true,
-        fin: true,
+        fin: false,
         status: true
       }
     });
 
     return res.status(201).json({ visita: nuevaVisita });
 
-  } catch (error) {
-    console.error("Error al crear visita:", error);
-    return res.status(500).json({ error: "Error interno al crear la visita" });
+  } catch (error: any) {
+    console.error('Error al crear la visita:', error);
+    return res.status(500).json({ error: `Error interno al crear la visita: ${error.message || error}` });
   }
 };
+
 
 //PUT Auth/completar_visita
 export const completarVisita = async (req: Request, res: Response) => {
   try {
-    const visitaId = Number(req.params.id);
+    console.log("Datos recibidos para completar la visita:", req.body);
+    const visitaId = Number(req.params.id);  // Obtener ID de la visita desde los parámetros de la URL
     const {
       confImpresoras,
       confTelefonos,
       confPiePagina,
       otros,
-      otrosDetalle
+      otrosDetalle,
+      solicitante,
+      realizado
     } = req.body;
 
+    // Verificar si visitaId es un número válido
     if (isNaN(visitaId)) {
       return res.status(400).json({ error: "ID de visita inválido" });
     }
@@ -456,17 +469,35 @@ export const completarVisita = async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Visita no encontrada" });
     }
 
-    // Actualiza los campos del formulario + marca la hora de finalización
+    // Validar que los campos opcionales (booleanos) sean de tipo booleano
+    const confImpresorasBool = Boolean(confImpresoras);
+    const confTelefonosBool = Boolean(confTelefonos);
+    const confPiePaginaBool = Boolean(confPiePagina);
+    const otrosBool = Boolean(otros);
+
+    // Validar 'otrosDetalle' solo si 'otros' es verdadero
+    let otrosDetalleValidado = null;
+    if (otrosBool && otrosDetalle) {
+      // Si el campo 'otros' está marcado, aseguramos que 'otrosDetalle' no esté vacío
+      otrosDetalleValidado = otrosDetalle?.trim();
+      if (!otrosDetalleValidado) {
+        return res.status(400).json({ error: "'otrosDetalle' no puede estar vacío si 'otros' está seleccionado" });
+      }
+    }
+
+    // Actualizar los campos de la visita incluyendo 'realizado' y 'solicitante'
     const visitaActualizada = await prisma.visita.update({
       where: { id: visitaId },
       data: {
-        confImpresoras: Boolean(confImpresoras),
-        confTelefonos: Boolean(confTelefonos),
-        confPiePagina: Boolean(confPiePagina),
-        otros: Boolean(otros),
-        otrosDetalle: otrosDetalle?.trim() || null,
-        fin: new Date(),
-        status: EstadoVisita.COMPLETADA
+        confImpresoras: confImpresorasBool,
+        confTelefonos: confTelefonosBool,
+        confPiePagina: confPiePaginaBool,
+        otros: otrosBool,
+        otrosDetalle: otrosDetalleValidado, // Solo se guarda si 'otros' es verdadero
+        solicitante: solicitante?.trim() || 'No especificado',  // Actualizamos 'solicitante'
+        realizado: realizado?.trim() || 'No especificado',  // Actualizamos 'realizado'
+        fin: new Date(),  // Fecha de finalización actual
+        status: EstadoVisita.COMPLETADA // Establecemos el estado como 'COMPLETADA'
       },
       select: {
         id: true,
@@ -477,15 +508,19 @@ export const completarVisita = async (req: Request, res: Response) => {
         confTelefonos: true,
         confPiePagina: true,
         otros: true,
-        otrosDetalle: true
+        otrosDetalle: true,
+        solicitante: true,  // Asegúrate de que 'solicitante' esté incluido en la respuesta
+        realizado: true, // También devolvemos el campo 'realizado'
       }
     });
 
     return res.status(200).json({ visita: visitaActualizada });
 
-  } catch (error) {
-    console.error("Error al actualizar visita:", error);
-    return res.status(500).json({ error: "Error interno al completar la visita" });
+  } catch (error: any) {
+    console.error("Error al completar visita:", error);
+    return res.status(500).json({ error: `Error interno al completar la visita: ${error.message || error}` });
   }
 };
+
+
 

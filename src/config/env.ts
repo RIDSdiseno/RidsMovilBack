@@ -3,7 +3,7 @@ import 'dotenv/config';
 export const env = {
   NODE_ENV: process.env.NODE_ENV || 'development',
   PORT: Number(process.env.PORT || 3000),
-  CORS_ORIGIN: (process.env.CORS_ORIGIN || 'http://localhost:5173').split(','), //ACA MODIFICAR PORT DE FRONT
+  CORS_ORIGIN: (process.env.CORS_ORIGIN || 'http://localhost:8100').split(','), //ACA MODIFICAR PORT DE FRONT
   JWT_SECRET: process.env.JWT_SECRET || 'change_me',
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '1d',
   DATABASE_URL: process.env.DATABASE_URL || '',

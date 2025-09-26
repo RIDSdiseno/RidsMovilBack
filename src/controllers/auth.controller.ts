@@ -123,6 +123,53 @@ export const registerUser = async(req:Request,res:Response)=>{
   
 };
 
+//GET /Auth/getAllClientes
+export const getAllClientes = async(req:Request,res:Response)=>{
+  try{
+    const clientes = await prisma.empresa.findMany({
+      orderBy:{nombre:"asc"},
+    });
+    return res.json(clientes);
+  }catch(e){
+    console.error("Error al obtener categorias: ",JSON.stringify(e));
+    return res.status(500).json({error: "Error interno"});
+  }
+};
+
+//DELETE /Auth/deleteCliente
+export const deleteCliente = async (req: Request, res: Response) => {
+  const { id } = req.body; // Ahora lees del body
+  if (!id) return res.status(400).json({ error: 'ID requerido' });
+
+  try {
+    await prisma.empresa.delete({ where: { id: Number(id) } });
+    return res.status(204).send();
+  } catch (e: any) {
+    if (e.code === "P2025") {
+      return res.status(404).json({ error: "Cliente no encontrado" });
+    }
+    return res.status(500).json({ error: "Error interno" });
+  }
+};
+
+//POST /Auth/createCliente
+export const createCliente = async(req:Request,res:Response)=>{
+  const {nombre} = req.body;
+
+  if(!nombre){
+    return res.status(400).json({error: "El nombre de cliente es obligatorio"});
+  }
+  
+  try{
+    const cliente = await prisma.empresa.create({data: {nombre}});
+    return res.status(201).json(cliente);
+  }catch(e){
+    console.error("Error al crear cliente: ",JSON.stringify(e));
+    return res.status(500).json({error: "Error interno"})
+  }
+}
+
+
 //POST /auth/login
 export const login = async (req: Request, res: Response) => {
   try {
@@ -197,6 +244,132 @@ export const login = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Error interno" });
   }
 };
+
+
+export const getAllUsers = async (_req:Request,res:Response)=>{
+  try{
+    const users = await prisma.tecnico.findMany({
+      select:{
+        id:true,
+        nombre:true,
+        email:true,
+        status:true
+      },
+    });
+    return res.json({ users });
+  }catch(error){
+    console.error("Error al obtener usuarios: ",JSON.stringify(error));
+    return res.status(500).json({error: "Error interno del servidor"});
+  }
+};
+
+// POST /auth/logout
+export const logout = async (req: Request, res: Response) => {
+  try {
+    const rt = (req as any).cookies?.rt as string | undefined;
+    if (rt) {
+      const digest = hashRT(rt);
+      const row = await prisma.refreshToken.findFirst({ where: { rtHash: digest } });
+      if (row && !row.revokedAt) {
+        await prisma.refreshToken.update({
+          where: { id: row.id },
+          data: { revokedAt: new Date() },
+        });
+      }
+    }
+    clearRefreshCookie(res);
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error("logout error:", error);
+    return res.status(500).json({ error: "Error interno" });
+  }
+};
+
+// POST /auth/refresh
+// Valida por COOKIE httpOnly `rt`, rota el RT y devuelve nuevo Access Token
+export const refresh = async (req: Request, res: Response) => {
+  try {
+    const rt = (req as any).cookies?.rt as string | undefined;
+    if (!rt) return res.status(401).json({ error: "Sin refresh token" });
+
+    const digest = hashRT(rt);
+    const row = await prisma.refreshToken.findFirst({
+      where: { rtHash: digest },
+      include: { user: true },
+    });
+
+    if (!row) {
+      clearRefreshCookie(res);
+      return res.status(401).json({ error: "Refresh inválido" });
+    }
+
+    if (row.revokedAt) {
+      await prisma.refreshToken.updateMany({
+        where: { userId: row.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      clearRefreshCookie(res);
+      return res.status(401).json({ error: "Refresh revocado" });
+    }
+
+    if (row.expiresAt.getTime() <= Date.now()) {
+      clearRefreshCookie(res);
+      return res.status(401).json({ error: "Refresh expirado" });
+    }
+
+    if (!row.user.status) {
+      await prisma.refreshToken.update({
+        where: { id: row.id },
+        data: { revokedAt: new Date() },
+      });
+      clearRefreshCookie(res);
+      return res.status(403).json({ error: "Usuario deshabilitado" });
+    }
+
+    const rememberParam = parseRemember(req.query.remember);
+    const days = rememberParam ? REFRESH_REMEMBER_DAYS : REFRESH_DAYS;
+
+    // ROTACIÓN: revocar actual y emitir nuevo
+    const newRt = generateRT();
+    const newDigest = hashRT(newRt);
+
+    // userAgent / ip como string | null
+    const ua: string | null = req.get("user-agent") ?? null;
+    const ipAddr: string | null = (req.ip ?? req.socket?.remoteAddress ?? null) as string | null;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.refreshToken.update({
+        where: { id: row.id },
+        data: { revokedAt: new Date() },
+      });
+      await tx.refreshToken.create({
+        data: {
+          userId: row.userId,
+          rtHash: newDigest,
+          expiresAt: addDays(days),
+          userAgent: ua,   // string | null
+          ip: ipAddr,      // string | null
+          replacedByTokenId: row.id,
+        },
+      });
+    });
+
+    setRefreshCookie(res, newRt, days);
+
+    const at = signAccessToken({
+      id: row.user.id,
+      email: row.user.email,
+      nombreUsuario: row.user.nombre,
+    });
+
+    return res.json({ token: at, remember: rememberParam });
+  } catch (e) {
+    console.error("refresh error:", e);
+    clearRefreshCookie(res);
+    return res.status(401).json({ error: "Refresh inválido" });
+  }
+};
+
 
 //Carga masiva de empresa
 export const createManyempresa = async (req: Request, res: Response) => {

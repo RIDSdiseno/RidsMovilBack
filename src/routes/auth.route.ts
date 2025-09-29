@@ -2,7 +2,8 @@ import { Router } from "express";
 import { login, registerUser,createManyempresa, crearVisita, 
 completarVisita, logout, refresh, getAllUsers, 
 createCliente, getAllClientes, 
-deleteCliente} from "../controllers/auth.controller";
+deleteCliente,
+obtenerHistorialPorTecnico} from "../controllers/auth.controller";
 import { authGuard } from "../middlewares/auth.middleware";
 
 const r = Router();
@@ -17,14 +18,15 @@ r.post("/refresh", refresh);
 r.get("/usuarios",getAllUsers);
 r.get("/clientes",getAllClientes)
 r.delete("/deletecliente/:id",deleteCliente)
+r.get("/historial/:id",authGuard,obtenerHistorialPorTecnico)
 //para cargar "masivamente" las empresas
 r.post("/carga",authGuard,createManyempresa)
 r.post("/createcliente",createCliente)
 
 
 //Funcionalidad de visitas
-r.post("/crear_visita",crearVisita)
-r.put("/finalizar_visita/:id",completarVisita)
+r.post("/crear_visita",authGuard,crearVisita)
+r.put("/finalizar_visita/:id",authGuard,completarVisita)
 
 
 

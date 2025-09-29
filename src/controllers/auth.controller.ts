@@ -447,7 +447,8 @@ export const crearVisita = async (req: Request, res: Response) => {
 export const completarVisita = async (req: Request, res: Response) => {
   try {
     console.log("Datos recibidos para completar la visita:", req.body);
-    const visitaId = Number(req.params.id);  // Obtener ID de la visita desde los parámetros de la URL
+    const visitaId = Number(req.params.id);
+
     const {
       confImpresoras,
       confTelefonos,
@@ -458,34 +459,32 @@ export const completarVisita = async (req: Request, res: Response) => {
       realizado
     } = req.body;
 
-    // Verificar si visitaId es un número válido
     if (isNaN(visitaId)) {
       return res.status(400).json({ error: "ID de visita inválido" });
     }
 
-    // Verifica si la visita existe
-    const visitaExistente = await prisma.visita.findUnique({ where: { id: visitaId } });
+    const visitaExistente = await prisma.visita.findUnique({
+      where: { id: visitaId },
+    });
+
     if (!visitaExistente) {
       return res.status(404).json({ error: "Visita no encontrada" });
     }
 
-    // Validar que los campos opcionales (booleanos) sean de tipo booleano
     const confImpresorasBool = Boolean(confImpresoras);
     const confTelefonosBool = Boolean(confTelefonos);
     const confPiePaginaBool = Boolean(confPiePagina);
     const otrosBool = Boolean(otros);
 
-    // Validar 'otrosDetalle' solo si 'otros' es verdadero
     let otrosDetalleValidado = null;
     if (otrosBool && otrosDetalle) {
-      // Si el campo 'otros' está marcado, aseguramos que 'otrosDetalle' no esté vacío
       otrosDetalleValidado = otrosDetalle?.trim();
       if (!otrosDetalleValidado) {
         return res.status(400).json({ error: "'otrosDetalle' no puede estar vacío si 'otros' está seleccionado" });
       }
     }
 
-    // Actualizar los campos de la visita incluyendo 'realizado' y 'solicitante'
+    // 1. Actualizar la visita
     const visitaActualizada = await prisma.visita.update({
       where: { id: visitaId },
       data: {
@@ -493,32 +492,64 @@ export const completarVisita = async (req: Request, res: Response) => {
         confTelefonos: confTelefonosBool,
         confPiePagina: confPiePaginaBool,
         otros: otrosBool,
-        otrosDetalle: otrosDetalleValidado, // Solo se guarda si 'otros' es verdadero
-        solicitante: solicitante?.trim() || 'No especificado',  // Actualizamos 'solicitante'
-        realizado: realizado?.trim() || 'No especificado',  // Actualizamos 'realizado'
-        fin: new Date(),  // Fecha de finalización actual
-        status: EstadoVisita.COMPLETADA // Establecemos el estado como 'COMPLETADA'
+        otrosDetalle: otrosDetalleValidado,
+        solicitante: solicitante?.trim() || 'No especificado',
+        realizado: realizado?.trim() || 'No especificado',
+        fin: new Date(),
+        status: EstadoVisita.COMPLETADA,
       },
       select: {
         id: true,
+        tecnicoId: true,
+        solicitante: true,
+        realizado: true,
         inicio: true,
         fin: true,
         status: true,
-        confImpresoras: true,
-        confTelefonos: true,
-        confPiePagina: true,
-        otros: true,
-        otrosDetalle: true,
-        solicitante: true,  // Asegúrate de que 'solicitante' esté incluido en la respuesta
-        realizado: true, // También devolvemos el campo 'realizado'
       }
     });
 
-    return res.status(200).json({ visita: visitaActualizada });
+    // 2. Crear historial con los datos actualizados
+    await prisma.historial.create({
+      data: {
+        tecnicoId: visitaActualizada.tecnicoId,
+        solicitante: visitaActualizada.solicitante,
+        inicio: visitaActualizada.inicio,
+        fin: visitaActualizada.fin!, // Aseguramos que no sea null
+        realizado: visitaActualizada.realizado,
+      }
+    });
+
+    return res.status(200).json({
+      message: "Visita completada y registrada en historial",
+      visita: visitaActualizada,
+    });
 
   } catch (error: any) {
     console.error("Error al completar visita:", error);
     return res.status(500).json({ error: `Error interno al completar la visita: ${error.message || error}` });
+  }
+};
+
+
+// GET /api/historial/:tecnicoId
+export const obtenerHistorialPorTecnico = async (req: Request, res: Response) => {
+  const tecnicoId = Number(req.params.id);
+
+  if (isNaN(tecnicoId)) {
+    return res.status(400).json({ error: "ID de técnico inválido" });
+  }
+
+  try {
+    const historial = await prisma.historial.findMany({
+      where: { tecnicoId },
+      orderBy: { fin: 'desc' }
+    });
+
+    return res.json({ historial });
+  } catch (error: any) {
+    console.error("Error al obtener historial:", error);
+    return res.status(500).json({ error: "Error interno al obtener el historial" });
   }
 };
 

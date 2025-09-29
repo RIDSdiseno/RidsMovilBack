@@ -21,6 +21,7 @@ model Tecnico {
   passwordHash  String   // Hasheado (bcrypt)
   status        Boolean @default(true)
   visitas   Visita[]
+  historial Historial[]
   // relación con refresh tokens
   refreshTokens RefreshToken[]
 }
@@ -29,6 +30,7 @@ model Empresa {
   id        Int   @id @default(autoincrement()) @map("id_empresa")
   nombre    String   @unique
   visitas   Visita[]
+  solicitantes Solicitante[]
 }
 
 enum EstadoVisita {
@@ -71,4 +73,28 @@ model RefreshToken {
 
   @@index([rtHash]) // lookup rápido por hash del RT
   @@index([userId])
+}
+
+
+model Solicitante {
+  id         Int      @id @default(autoincrement()) @map("id_solicitante")
+  nombre     String
+  empresaId  Int
+  empresa    Empresa  @relation(fields: [empresaId], references: [id])
+
+  @@index([empresaId])
+}
+
+model Historial {
+  id          Int       @id @default(autoincrement()) @map("id_historial")
+  tecnicoId   Int
+  solicitante String
+  inicio      DateTime
+  fin         DateTime
+  realizado   String
+  creadoEn    DateTime  @default(now())
+
+  tecnico     Tecnico   @relation(fields: [tecnicoId], references: [id])
+
+  @@index([tecnicoId])
 }

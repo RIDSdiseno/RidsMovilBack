@@ -10,7 +10,9 @@ export const app = express();
 
 app.use(cors({
     origin: env.CORS_ORIGIN || '*',
+    methods: ['GET','POST','PUT','DELETE'],
     credentials: false,
+    allowedHeaders: ['Content-Type','Authorization']
 }));
 
 app.use(cookieParser());                             // 👈 DEBE ir antes de las rutas

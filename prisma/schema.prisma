@@ -81,6 +81,7 @@ model Solicitante {
   nombre     String
   empresaId  Int
   empresa    Empresa  @relation(fields: [empresaId], references: [id])
+  equipos Equipo[]
 
   @@index([empresaId])
 }
@@ -97,4 +98,20 @@ model Historial {
   tecnico     Tecnico   @relation(fields: [tecnicoId], references: [id])
 
   @@index([tecnicoId])
+}
+
+model Equipo{
+  id                  Int @id @default(autoincrement()) @map("id_equipo")
+  idSolicitante       Int
+  serial              String
+  marca               String
+  modelo              String
+  procesador          String
+  ram                 String
+  disco               String
+  propiedad           String
+
+  solicitante Solicitante @relation(fields: [idSolicitante], references: [id])
+
+  @@index([idSolicitante])
 }

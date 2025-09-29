@@ -9,8 +9,8 @@ import { errorHandler } from './middlewares/error.middleware.js';
 export const app = express();
 
 app.use(cors({
-    origin: env.CORS_ORIGIN,
-    credentials: true,
+    origin: env.CORS_ORIGIN || '*',
+    credentials: false,
 }));
 
 app.use(cookieParser());                             // 👈 DEBE ir antes de las rutas

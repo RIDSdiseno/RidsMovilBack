@@ -510,7 +510,8 @@ export const completarVisita = async (req: Request, res: Response) => {
     confPiePagina: confPiePaginaBool,
     otros: otrosBool,
     otrosDetalle: otrosDetalleValidado,
-    solicitanteId,  // Usamos 'undefined' si no se encontró el solicitante
+    solicitanteId,
+    solicitante,  // Usamos 'undefined' si no se encontró el solicitante
     realizado: realizado?.trim() || 'No especificado',
     fin: new Date(),
     status: EstadoVisita.COMPLETADA,

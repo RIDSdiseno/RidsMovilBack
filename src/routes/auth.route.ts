@@ -3,7 +3,8 @@ import { login, registerUser,createManyempresa, crearVisita,
 completarVisita, logout, refresh, getAllUsers, 
 createCliente, getAllClientes, 
 deleteCliente,
-obtenerHistorialPorTecnico} from "../controllers/auth.controller";
+obtenerHistorialPorTecnico,
+createManySolicitante} from "../controllers/auth.controller";
 import { authGuard } from "../middlewares/auth.middleware";
 
 const r = Router();
@@ -22,6 +23,7 @@ r.get("/historial/:id",authGuard,obtenerHistorialPorTecnico)
 //para cargar "masivamente" las empresas
 r.post("/carga",authGuard,createManyempresa)
 r.post("/createcliente",createCliente)
+r.post("/crearsolicitante",createManySolicitante)
 
 
 //Funcionalidad de visitas

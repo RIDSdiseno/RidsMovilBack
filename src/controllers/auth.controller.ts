@@ -554,4 +554,28 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
 };
 
 
+//Carga masiva de solicitantes por empresa
+export const createManySolicitante = async (req: Request, res: Response) => {
+  const { solicitantes } = req.body;
 
+  if (!Array.isArray(solicitantes) || solicitantes.length === 0) {
+    return res.status(400).json({ error: 'Debes enviar un arreglo de solicitantes' });
+  }
+
+  try {
+    const result = await prisma.solicitante.createMany({
+      data: solicitantes.map((s: { nombre: string; empresaId: number }) => ({
+        nombre: s.nombre,
+        empresaId: s.empresaId
+      })),
+      skipDuplicates: true, // evita error si ya existe uno con mismos datos únicos
+    });
+
+    return res.status(201).json({
+      message: `Se agregaron ${result.count} solicitante(s)`,
+    });
+  } catch (error: any) {
+    console.error('Error al insertar solicitantes:', error);
+    return res.status(500).json({ error: 'Error al insertar solicitantes' });
+  }
+};

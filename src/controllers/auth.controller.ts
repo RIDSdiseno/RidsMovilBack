@@ -579,3 +579,44 @@ export const createManySolicitante = async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Error al insertar solicitantes' });
   }
 };
+
+
+export const createManyEquipos = async (req: Request, res: Response) => {
+  const { equipos } = req.body;
+
+  if (!Array.isArray(equipos) || equipos.length === 0) {
+    return res.status(400).json({ error: 'Debes enviar un arreglo de equipos' });
+  }
+
+  try {
+    const result = await prisma.equipo.createMany({
+      data: equipos.map((e: {
+        idSolicitante: number,
+        serial: string,
+        marca: string,
+        modelo: string,
+        procesador: string,
+        ram: string,
+        disco: string,
+        propiedad: string
+      }) => ({
+        idSolicitante: e.idSolicitante,
+        serial: e.serial,
+        marca: e.marca,
+        modelo: e.modelo,
+        procesador: e.procesador,
+        ram: e.ram,
+        disco: e.disco,
+        propiedad: e.propiedad
+      })),
+      skipDuplicates: true // opcional, evita insertar duplicados si hay constraint únicos
+    });
+
+    return res.status(201).json({
+      message: `Se agregaron ${result.count} equipo(s)`,
+    });
+  } catch (error: any) {
+    console.error('Error al insertar equipos:', error);
+    return res.status(500).json({ error: 'Error al insertar equipos' });
+  }
+};

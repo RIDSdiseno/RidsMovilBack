@@ -23,7 +23,7 @@ r.get("/clientes",getAllClientes)
 r.delete("/deletecliente/:id",deleteCliente)
 r.get("/historial/:id",authGuard,obtenerHistorialPorTecnico)
 //para cargar "masivamente" las empresas
-r.post("/carga",authGuard,createManyempresa)
+r.post("/carga",createManyempresa)
 r.post("/createcliente",createCliente)
 r.post("/crearsolicitante",createManySolicitante)
 r.post("/crearequipos",createManyEquipos)

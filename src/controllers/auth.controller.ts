@@ -386,7 +386,7 @@ export const createManyempresa = async (req: Request, res: Response) => {
     });
 
     return res.status(201).json({
-      message: `Se agregaron ${result.count} comuna(s)`,
+      message: `Se agregaron ${result.count} empresas`,
     });
   } catch (error: any) {
     console.error("Error al insertar empresa:", error);

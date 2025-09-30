@@ -622,15 +622,25 @@ export const createManyEquipos = async (req: Request, res: Response) => {
 };
 
 //GET /api/auth/getSolicitante
-export const getSolicitantes = async (_req: Request, res: Response) => {
+export const getSolicitantes = async (req: Request, res: Response) => {
   try {
+    const empresaId = req.query.empresaId;
+
+    if (!empresaId) {
+      return res.status(400).json({ error: "Falta el parámetro empresaId" });
+    }
+
     const solicitantes = await prisma.solicitante.findMany({
+      where: {
+        empresaId: Number(empresaId),
+      },
       select: {
         id: true,
         nombre: true,
-        empresaId: true
+        empresaId: true,
       },
     });
+
     return res.json({ solicitantes });
   } catch (error) {
     console.error("Error al obtener solicitantes:", JSON.stringify(error));

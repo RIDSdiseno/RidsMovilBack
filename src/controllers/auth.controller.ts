@@ -443,7 +443,6 @@ export const crearVisita = async (req: Request, res: Response) => {
 };
 
 
-//PUT Auth/completar_visita
 export const completarVisita = async (req: Request, res: Response) => {
   try {
     console.log("Datos recibidos para completar la visita:", req.body);
@@ -455,7 +454,7 @@ export const completarVisita = async (req: Request, res: Response) => {
       confPiePagina,
       otros,
       otrosDetalle,
-      solicitante,
+      solicitante,  // Este es el nombre o identificador del solicitante
       realizado
     } = req.body;
 
@@ -484,36 +483,56 @@ export const completarVisita = async (req: Request, res: Response) => {
       }
     }
 
-    // 1. Actualizar la visita
-    const visitaActualizada = await prisma.visita.update({
-      where: { id: visitaId },
-      data: {
-        confImpresoras: confImpresorasBool,
-        confTelefonos: confTelefonosBool,
-        confPiePagina: confPiePaginaBool,
-        otros: otrosBool,
-        otrosDetalle: otrosDetalleValidado,
-        solicitante: solicitante?.trim() || 'No especificado',
-        realizado: realizado?.trim() || 'No especificado',
-        fin: new Date(),
-        status: EstadoVisita.COMPLETADA,
-      },
-      select: {
-        id: true,
-        tecnicoId: true,
-        solicitante: true,
-        realizado: true,
-        inicio: true,
-        fin: true,
-        status: true,
-      }
-    });
+    // 1. Buscar el ID del solicitante (si no lo hemos recibido directamente como ID, buscarlo por nombre)
+    let solicitanteId: number | undefined = undefined;
 
-    // 2. Crear historial con los datos actualizados
+    if (solicitante) {
+  const solicitanteEncontrado = await prisma.solicitante.findFirst({
+    where: {
+      nombre: solicitante.trim()  // Usar el nombre directamente aquí
+    },
+    select: { id: true }
+  });
+
+  if (solicitanteEncontrado) {
+    solicitanteId = solicitanteEncontrado.id;
+  } else {
+    return res.status(400).json({ error: "Solicitante no encontrado" });
+  }
+}
+
+    // 2. Actualizar la visita con los nuevos datos
+    const visitaActualizada = await prisma.visita.update({
+  where: { id: visitaId },
+  data: {
+    confImpresoras: confImpresorasBool,
+    confTelefonos: confTelefonosBool,
+    confPiePagina: confPiePaginaBool,
+    otros: otrosBool,
+    otrosDetalle: otrosDetalleValidado,
+    solicitanteId,  // Usamos 'undefined' si no se encontró el solicitante
+    realizado: realizado?.trim() || 'No especificado',
+    fin: new Date(),
+    status: EstadoVisita.COMPLETADA,
+  },
+  select: {
+    id: true,
+    tecnicoId: true,
+    solicitanteId: true,
+    solicitante: true,
+    realizado: true,
+    inicio: true,
+    fin: true,
+    status: true,
+  }
+});
+
+    // 3. Crear historial con los datos actualizados
     await prisma.historial.create({
       data: {
         tecnicoId: visitaActualizada.tecnicoId,
-        solicitante: visitaActualizada.solicitante,
+        solicitanteId: visitaActualizada.solicitanteId!,  // Usamos solicitanteId aquí
+        solicitante: visitaActualizada.solicitante,  // El nombre del solicitante, si lo necesitas
         inicio: visitaActualizada.inicio,
         fin: visitaActualizada.fin!, // Aseguramos que no sea null
         realizado: visitaActualizada.realizado,
@@ -532,26 +551,45 @@ export const completarVisita = async (req: Request, res: Response) => {
 };
 
 
+
+
+
+
 // GET /api/historial/:tecnicoId
 export const obtenerHistorialPorTecnico = async (req: Request, res: Response) => {
   const tecnicoId = Number(req.params.id);
 
+  // Validar si el ID del técnico es válido
   if (isNaN(tecnicoId)) {
     return res.status(400).json({ error: "ID de técnico inválido" });
   }
 
   try {
+    // Obtener historial con la relación solicitante y la empresa de cada solicitante
     const historial = await prisma.historial.findMany({
-      where: { tecnicoId },
-      orderBy: { fin: 'desc' }
+      where: {
+        tecnicoId: tecnicoId  // Filtrar por el ID del técnico
+      },
+      orderBy: {
+        fin: 'desc'  // Ordenar por fecha de fin, de más reciente a más antiguo
+      },
+      include: {
+        cliente: {  // Aquí usamos 'cliente' ya que es el nombre de la relación en el modelo
+          include: {
+            empresa: true  // Incluir la empresa asociada al solicitante
+          }
+        }
+      }
     });
 
+    // Retornar el historial con la información adicional de la empresa
     return res.json({ historial });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error al obtener historial:", error);
     return res.status(500).json({ error: "Error interno al obtener el historial" });
   }
 };
+
 
 
 //Carga masiva de solicitantes por empresa

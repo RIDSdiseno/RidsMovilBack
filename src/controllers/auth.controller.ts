@@ -620,3 +620,20 @@ export const createManyEquipos = async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Error al insertar equipos' });
   }
 };
+
+//GET /api/auth/getSolicitante
+export const getSolicitantes = async (_req: Request, res: Response) => {
+  try {
+    const solicitantes = await prisma.solicitante.findMany({
+      select: {
+        id: true,
+        nombre: true,
+        empresaId: true
+      },
+    });
+    return res.json({ solicitantes });
+  } catch (error) {
+    console.error("Error al obtener solicitantes:", JSON.stringify(error));
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+};

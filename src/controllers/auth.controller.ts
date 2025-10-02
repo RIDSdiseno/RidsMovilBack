@@ -565,6 +565,7 @@ export const completarVisita = async (req: Request, res: Response) => {
         solicitante: visitaActualizada.solicitante,  // El nombre del solicitante, si lo necesitas
         inicio: visitaActualizada.inicio,
         fin: visitaActualizada.fin!, // Aseguramos que no sea null
+        realizado: otrosDetalle,
         ccleaner: visitaActualizada.ccleaner,
         actualizaciones: visitaActualizada.actualizaciones,
         antivirus: visitaActualizada.antivirus,

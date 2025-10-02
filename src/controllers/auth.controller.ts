@@ -420,7 +420,6 @@ export const crearVisita = async (req: Request, res: Response) => {
         empresaId: empresaIdInt,  // Usar 'empresaId' como número
         tecnicoId: tecnicoIdInt,  // Usar 'tecnicoId' como número
         solicitante: 'No especificado', // 'solicitante' se deja vacío inicialmente
-        realizado: 'No especificado', // 'realizado' se deja vacío inicialmente
         inicio: new Date(),
         status: EstadoVisita.PENDIENTE,  // 'fin' no se incluye en la creación
       },
@@ -455,7 +454,14 @@ export const completarVisita = async (req: Request, res: Response) => {
       otros,
       otrosDetalle,
       solicitante,  // Este es el nombre o identificador del solicitante
-      realizado
+      ccleaner,
+      actualizaciones,
+      antivirus,
+      estadoDisco,
+      licenciaWindows,
+      licenciaOffice,
+      rendimientoEquipo,
+      mantenimientoReloj
     } = req.body;
 
     if (isNaN(visitaId)) {
@@ -470,10 +476,19 @@ export const completarVisita = async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Visita no encontrada" });
     }
 
+    // Convertir los campos booleanos
     const confImpresorasBool = Boolean(confImpresoras);
     const confTelefonosBool = Boolean(confTelefonos);
     const confPiePaginaBool = Boolean(confPiePagina);
     const otrosBool = Boolean(otros);
+    const ccleanerBool = Boolean(ccleaner);
+    const actualizacionesBool = Boolean(actualizaciones);
+    const antivirusBool = Boolean(antivirus);
+    const estadoDiscoBool = Boolean(estadoDisco);
+    const licenciaWindowsBool = Boolean(licenciaWindows);
+    const licenciaOfficeBool = Boolean(licenciaOffice);
+    const rendimientoEquipoBool = Boolean(rendimientoEquipo);
+    const mantenimientoRelojBool = Boolean(mantenimientoReloj);
 
     let otrosDetalleValidado = null;
     if (otrosBool && otrosDetalle) {
@@ -487,46 +502,60 @@ export const completarVisita = async (req: Request, res: Response) => {
     let solicitanteId: number | undefined = undefined;
 
     if (solicitante) {
-  const solicitanteEncontrado = await prisma.solicitante.findFirst({
-    where: {
-      nombre: solicitante.trim()  // Usar el nombre directamente aquí
-    },
-    select: { id: true }
-  });
+      const solicitanteEncontrado = await prisma.solicitante.findFirst({
+        where: {
+          nombre: solicitante.trim()  // Usar el nombre directamente aquí
+        },
+        select: { id: true }
+      });
 
-  if (solicitanteEncontrado) {
-    solicitanteId = solicitanteEncontrado.id;
-  } else {
-    return res.status(400).json({ error: "Solicitante no encontrado" });
-  }
-}
+      if (solicitanteEncontrado) {
+        solicitanteId = solicitanteEncontrado.id;
+      } else {
+        return res.status(400).json({ error: "Solicitante no encontrado" });
+      }
+    }
 
     // 2. Actualizar la visita con los nuevos datos
     const visitaActualizada = await prisma.visita.update({
-  where: { id: visitaId },
-  data: {
-    confImpresoras: confImpresorasBool,
-    confTelefonos: confTelefonosBool,
-    confPiePagina: confPiePaginaBool,
-    otros: otrosBool,
-    otrosDetalle: otrosDetalleValidado,
-    solicitanteId,
-    solicitante,  // Usamos 'undefined' si no se encontró el solicitante
-    realizado: realizado?.trim() || 'No especificado',
-    fin: new Date(),
-    status: EstadoVisita.COMPLETADA,
-  },
-  select: {
-    id: true,
-    tecnicoId: true,
-    solicitanteId: true,
-    solicitante: true,
-    realizado: true,
-    inicio: true,
-    fin: true,
-    status: true,
-  }
-});
+      where: { id: visitaId },
+      data: {
+        confImpresoras: confImpresorasBool,
+        confTelefonos: confTelefonosBool,
+        confPiePagina: confPiePaginaBool,
+        otros: otrosBool,
+        otrosDetalle: otrosDetalleValidado,
+        solicitanteId,
+        solicitante,  // Usamos 'undefined' si no se encontró el solicitante
+        ccleaner: ccleanerBool,
+        actualizaciones: actualizacionesBool,
+        antivirus: antivirusBool,
+        estadoDisco: estadoDiscoBool,
+        licenciaWindows: licenciaWindowsBool,
+        licenciaOffice: licenciaOfficeBool,
+        rendimientoEquipo: rendimientoEquipoBool,
+        mantenimientoReloj: mantenimientoRelojBool,
+        fin: new Date(),
+        status: EstadoVisita.COMPLETADA,
+      },
+      select: {
+        id: true,
+        tecnicoId: true,
+        solicitanteId: true,
+        solicitante: true,
+        inicio: true,
+        fin: true,
+        status: true,
+        ccleaner: true,
+        actualizaciones: true,
+        antivirus: true,
+        estadoDisco: true,
+        licenciaWindows: true,
+        licenciaOffice: true,
+        rendimientoEquipo: true,
+        mantenimientoReloj: true,
+      }
+    });
 
     // 3. Crear historial con los datos actualizados
     await prisma.historial.create({
@@ -536,7 +565,14 @@ export const completarVisita = async (req: Request, res: Response) => {
         solicitante: visitaActualizada.solicitante,  // El nombre del solicitante, si lo necesitas
         inicio: visitaActualizada.inicio,
         fin: visitaActualizada.fin!, // Aseguramos que no sea null
-        realizado: visitaActualizada.realizado,
+        ccleaner: visitaActualizada.ccleaner,
+        actualizaciones: visitaActualizada.actualizaciones,
+        antivirus: visitaActualizada.antivirus,
+        estadoDisco: visitaActualizada.estadoDisco,
+        licenciaWindows: visitaActualizada.licenciaWindows,
+        licenciaOffice: visitaActualizada.licenciaOffice,
+        rendimientoEquipo: visitaActualizada.rendimientoEquipo,
+        mantenimientoReloj: visitaActualizada.mantenimientoReloj,
       }
     });
 
@@ -550,11 +586,6 @@ export const completarVisita = async (req: Request, res: Response) => {
     return res.status(500).json({ error: `Error interno al completar la visita: ${error.message || error}` });
   }
 };
-
-
-
-
-
 
 // GET /api/historial/:tecnicoId
 export const obtenerHistorialPorTecnico = async (req: Request, res: Response) => {

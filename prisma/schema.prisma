@@ -40,27 +40,38 @@ enum EstadoVisita {
 }
 
 model Visita {
-  id              Int    @id @default(autoincrement()) @map("id_visita")
-  empresaId       Int
-  tecnicoId       Int
-  solicitanteId   Int?        // Este campo es el que hará referencia al ID del solicitante
-  solicitante     String
-  realizado       String
-  inicio          DateTime
-  fin             DateTime?
-  confImpresoras  Boolean   @default(false)
-  confTelefonos   Boolean   @default(false)
-  confPiePagina   Boolean   @default(false)
-  otros           Boolean   @default(false)
-  otrosDetalle    String?
-  status          EstadoVisita   @default(PENDIENTE)
-  // Relaciones
-  empresa         Empresa   @relation(fields: [empresaId], references: [id])
-  tecnico         Tecnico   @relation(fields: [tecnicoId], references: [id])
-  solicitanteRel  Solicitante? @relation(fields: [solicitanteId], references: [id]) // Relación con el 
+  id                    Int       @id @default(autoincrement()) @map("id_visita")
+  empresaId             Int
+  tecnicoId             Int
+  solicitanteId         Int?      // Este campo es el que hará referencia al ID del solicitante
+  solicitante           String
+  inicio                DateTime
+  fin                   DateTime?
+  confImpresoras        Boolean   @default(false)
+  confTelefonos         Boolean   @default(false)
+  confPiePagina         Boolean   @default(false)
+  otros                 Boolean   @default(false)
+  otrosDetalle          String?
+  status                EstadoVisita @default(PENDIENTE)
   
+  // Nuevos campos booleanos
+  ccleaner              Boolean   @default(false)
+  actualizaciones       Boolean   @default(false)
+  antivirus             Boolean   @default(false)
+  estadoDisco           Boolean   @default(false)
+  licenciaWindows       Boolean   @default(false)
+  licenciaOffice        Boolean   @default(false)
+  rendimientoEquipo     Boolean   @default(false)
+  mantenimientoReloj    Boolean   @default(false)
+
+  // Relaciones
+  empresa               Empresa   @relation(fields: [empresaId], references: [id])
+  tecnico               Tecnico   @relation(fields: [tecnicoId], references: [id])
+  solicitanteRel        Solicitante? @relation(fields: [solicitanteId], references: [id])
+
   @@index([tecnicoId])
 }
+
 
 model RefreshToken {
   id                Int       @id @default(autoincrement())
@@ -93,20 +104,27 @@ model Solicitante {
 }
 
 model Historial {
-  id          Int       @id @default(autoincrement()) @map("id_historial")
-  tecnicoId   Int
-  solicitanteId Int
-  solicitante String
-  inicio      DateTime
-  fin         DateTime
-  realizado   String
-  creadoEn    DateTime  @default(now())
+  id                Int       @id @default(autoincrement())
+  tecnicoId         Int
+  solicitanteId     Int
+  solicitante       String
+  inicio            DateTime
+  fin               DateTime
+  realizado         String?
+  ccleaner          Boolean   @default(false)
+  actualizaciones   Boolean   @default(false)
+  antivirus         Boolean   @default(false)
+  estadoDisco       Boolean   @default(false)
+  licenciaWindows   Boolean   @default(false)
+  licenciaOffice    Boolean   @default(false)
+  rendimientoEquipo Boolean   @default(false)
+  mantenimientoReloj Boolean  @default(false)
 
-  tecnico     Tecnico   @relation(fields: [tecnicoId], references: [id])
-  cliente Solicitante @relation(fields: [solicitanteId],references: [id])
-
-  @@index([tecnicoId])
+  // Relaciones
+  tecnico           Tecnico   @relation(fields: [tecnicoId], references: [id])
+  cliente         Solicitante @relation(fields: [solicitanteId], references: [id])
 }
+
 
 model Equipo{
   id                  Int @id @default(autoincrement()) @map("id_equipo")

@@ -734,19 +734,19 @@ export const getSolicitantes = async (req: Request, res: Response) => {
 
 export const updateSolicitante = async (req: Request, res: Response) => {
   try {
-    const solicitantes = req.body; // Debería ser un array de objetos solicitantes
+    const solicitantes = req.body; // Asegurarse de que sea un array de solicitantes
 
     // Verifica si el cuerpo de la solicitud es un array
     if (!Array.isArray(solicitantes)) {
       return res.status(400).json({ error: "Debe proporcionar un array de solicitantes a actualizar." });
     }
 
-    // Itera sobre el array de solicitantes
+    // Itera sobre cada solicitante
     for (const solicitante of solicitantes) {
       const { id_solicitante, email, telefono } = solicitante;
 
-      // Verificación de parámetros obligatorios
-      if (!id_solicitante || !email || !telefono) {
+      // Asegúrate de que los parámetros necesarios estén presentes
+      if (!id_solicitante || !email) {
         return res.status(400).json({ error: "Faltan parámetros necesarios en uno de los solicitantes." });
       }
 
@@ -759,12 +759,15 @@ export const updateSolicitante = async (req: Request, res: Response) => {
         return res.status(404).json({ error: `Solicitante con ID ${id_solicitante} no encontrado.` });
       }
 
+      // Si el teléfono está vacío, déjalo como una cadena vacía
+      const telefonoFinal = telefono === "" ? "" : telefono;
+
       // Actualizar el solicitante
       const updatedSolicitante = await prisma.solicitante.update({
         where: { id_solicitante: id_solicitante },
         data: {
           email: email,
-          telefono: telefono,
+          telefono: telefonoFinal, // Si está vacío, se mantiene vacío
         },
       });
 
@@ -776,6 +779,7 @@ export const updateSolicitante = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Error interno del servidor" });
   }
 };
+
 
 
 //GET Auth/getAllEquipos

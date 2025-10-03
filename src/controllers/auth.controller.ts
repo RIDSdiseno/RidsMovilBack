@@ -692,27 +692,18 @@ export const createManyEquipos = async (req: Request, res: Response) => {
   }
 };
 
-// GET /api/auth/getSolicitante
+//GET /api/auth/solicitantes
 export const getSolicitantes = async (req: Request, res: Response) => {
   try {
     const empresaId = req.query.empresaId;
 
-    // Verifica que el parámetro empresaId esté presente
     if (!empresaId) {
       return res.status(400).json({ error: "Falta el parámetro empresaId" });
     }
 
-    // Asegúrate de que el parámetro empresaId sea un número válido
-    const empresaIdNumber = Number(empresaId);
-
-    if (isNaN(empresaIdNumber)) {
-      return res.status(400).json({ error: "El parámetro empresaId debe ser un número válido" });
-    }
-
-    // Consulta en la base de datos con el empresaId convertido a número
     const solicitantes = await prisma.solicitante.findMany({
       where: {
-        empresaId: empresaIdNumber,
+        empresaId: Number(empresaId),
       },
       select: {
         id_solicitante: true,
@@ -721,7 +712,6 @@ export const getSolicitantes = async (req: Request, res: Response) => {
       },
     });
 
-    // Devuelve los solicitantes encontrados
     return res.json({ solicitantes });
   } catch (error) {
     console.error("Error al obtener solicitantes:", JSON.stringify(error));

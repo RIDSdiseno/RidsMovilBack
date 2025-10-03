@@ -113,7 +113,7 @@ export const registerUser = async(req:Request,res:Response)=>{
         passwordHash,
         status: true
       },
-      select: {id:true,nombre:true,email:true},
+      select: {id_tecnico:true,nombre:true,email:true},
     });
     return res.status(201).json({ user:newUser });
   } catch(error){
@@ -142,7 +142,7 @@ export const deleteCliente = async (req: Request, res: Response) => {
   if (!id) return res.status(400).json({ error: 'ID requerido' });
 
   try {
-    await prisma.empresa.delete({ where: { id: Number(id) } });
+    await prisma.empresa.delete({ where: { id_empresa: Number(id) } });
     return res.status(204).send();
   } catch (e: any) {
     if (e.code === "P2025") {
@@ -187,7 +187,7 @@ export const login = async (req: Request, res: Response) => {
     const user = await prisma.tecnico.findUnique({
       where: { email: emailNorm },
       select: {
-        id: true,
+        id_tecnico: true,
         nombre: true,
         email: true,
         passwordHash: true,
@@ -208,7 +208,7 @@ export const login = async (req: Request, res: Response) => {
 
     // 1) Access Token (corto)
     const at = signAccessToken({
-      id: user.id,
+      id: user.id_tecnico,
       email: user.email,
       nombreUsuario: user.nombre,
     });
@@ -226,7 +226,7 @@ export const login = async (req: Request, res: Response) => {
 
     await prisma.refreshToken.create({
       data: {
-        userId: user.id,
+        userId: user.id_tecnico,
         rtHash: rtDigest,
         expiresAt: addDays(days),
         userAgent, // string | null
@@ -250,7 +250,7 @@ export const getAllUsers = async (_req:Request,res:Response)=>{
   try{
     const users = await prisma.tecnico.findMany({
       select:{
-        id:true,
+        id_tecnico:true,
         nombre:true,
         email:true,
         status:true
@@ -357,7 +357,7 @@ export const refresh = async (req: Request, res: Response) => {
     setRefreshCookie(res, newRt, days);
 
     const at = signAccessToken({
-      id: row.user.id,
+      id: row.user.id_tecnico,
       email: row.user.email,
       nombreUsuario: row.user.nombre,
     });
@@ -424,7 +424,7 @@ export const crearVisita = async (req: Request, res: Response) => {
         status: EstadoVisita.PENDIENTE,  // 'fin' no se incluye en la creación
       },
       select: {
-        id: true,
+        id_visita: true,
         empresaId: true,
         tecnicoId: true,
         inicio: true,
@@ -469,7 +469,7 @@ export const completarVisita = async (req: Request, res: Response) => {
     }
 
     const visitaExistente = await prisma.visita.findUnique({
-      where: { id: visitaId },
+      where: { id_visita: visitaId },
     });
 
     if (!visitaExistente) {
@@ -506,11 +506,11 @@ export const completarVisita = async (req: Request, res: Response) => {
         where: {
           nombre: solicitante.trim()  // Usar el nombre directamente aquí
         },
-        select: { id: true }
+        select: { id_solicitante: true }
       });
 
       if (solicitanteEncontrado) {
-        solicitanteId = solicitanteEncontrado.id;
+        solicitanteId = solicitanteEncontrado.id_solicitante;
       } else {
         return res.status(400).json({ error: "Solicitante no encontrado" });
       }
@@ -518,7 +518,7 @@ export const completarVisita = async (req: Request, res: Response) => {
 
     // 2. Actualizar la visita con los nuevos datos
     const visitaActualizada = await prisma.visita.update({
-      where: { id: visitaId },
+      where: { id_visita: visitaId },
       data: {
         confImpresoras: confImpresorasBool,
         confTelefonos: confTelefonosBool,
@@ -539,7 +539,7 @@ export const completarVisita = async (req: Request, res: Response) => {
         status: EstadoVisita.COMPLETADA,
       },
       select: {
-        id: true,
+        id_visita: true,
         tecnicoId: true,
         solicitanteId: true,
         solicitante: true,
@@ -607,7 +607,7 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
         fin: 'desc'  // Ordenar por fecha de fin, de más reciente a más antiguo
       },
       include: {
-        cliente: {  // Aquí usamos 'cliente' ya que es el nombre de la relación en el modelo
+        solicitanteRef: {  // Aquí usamos 'cliente' ya que es el nombre de la relación en el modelo
           include: {
             empresa: true  // Incluir la empresa asociada al solicitante
           }
@@ -706,7 +706,7 @@ export const getSolicitantes = async (req: Request, res: Response) => {
         empresaId: Number(empresaId),
       },
       select: {
-        id: true,
+        id_solicitante: true,
         nombre: true,
         empresaId: true,
       },
@@ -718,3 +718,45 @@ export const getSolicitantes = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Error interno del servidor" });
   }
 };
+
+
+
+
+
+
+export const updateSolicitante = async (req: Request, res: Response) => {
+  try {
+    const { id_solicitante, email, telefono } = req.body; // Recibimos los parámetros del cuerpo de la solicitud.
+
+    // Validación básica para asegurarse de que los campos necesarios están presentes
+    if (!id_solicitante || !email || !telefono) {
+      return res.status(400).json({ error: "Faltan parámetros necesarios (id_solicitante, email, telefono)" });
+    }
+
+    // Verificar si el solicitante existe en la base de datos utilizando id_solicitante
+    const solicitanteExistente = await prisma.solicitante.findUnique({
+      where: { id_solicitante }, // Usa el campo id_solicitante como clave primaria
+    });
+
+    // Si el solicitante no existe
+    if (!solicitanteExistente) {
+      return res.status(404).json({ error: "Solicitante no encontrado" });
+    }
+
+    // Actualizar los datos del solicitante con el nuevo email y telefono
+    const updatedSolicitante = await prisma.solicitante.update({
+      where: { id_solicitante }, // Usamos id_solicitante como identificador único
+      data: {
+        email,  // Actualiza el email
+        telefono, // Actualiza el telefono
+      },
+    });
+
+    // Retorna la respuesta con el solicitante actualizado
+    return res.json({ message: "Solicitante actualizado correctamente", updatedSolicitante });
+  } catch (error) {
+    console.error("Error al actualizar solicitante: ", JSON.stringify(error));
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+

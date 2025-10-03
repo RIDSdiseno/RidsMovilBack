@@ -734,9 +734,9 @@ export const getSolicitantes = async (req: Request, res: Response) => {
 
 export const updateSolicitante = async (req: Request, res: Response) => {
   try {
-    const { id_solicitante, email, telefono } = req.body;
+    const { id_solicitante, email, telefono } = req.body; // Suponiendo que el id_solicitante, email y telefono vienen en el cuerpo de la solicitud.
 
-    // Validación de parámetros
+    // Validación básica para asegurarse de que los campos necesarios están presentes
     if (!id_solicitante || !email || !telefono) {
       return res.status(400).json({ error: "Faltan parámetros necesarios (id_solicitante, email, telefono)" });
     }
@@ -750,29 +750,22 @@ export const updateSolicitante = async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Solicitante no encontrado" });
     }
 
-    // Actualizar el solicitante en la base de datos
+    // Actualizar los datos del solicitante
     const updatedSolicitante = await prisma.solicitante.update({
       where: { id_solicitante: id_solicitante },
       data: {
         email: email,
-        telefono: telefono,
+        telefono: telefono, // Asegúrate de que este campo exista en tu modelo Prisma
       },
     });
 
-    // Retorno exitoso
+    // Retornar la respuesta con los datos actualizados
     return res.json({ message: "Solicitante actualizado correctamente", updatedSolicitante });
-
-  } catch (error:any) {
-    console.error("Error en la actualización del solicitante:", error);  // Agregar más detalles aquí
-    return res.status(500).json({
-      error: "Error interno del servidor",
-      message: error.message || "No se pudo procesar la solicitud",
-      details: error.stack || "No se proporcionaron detalles del error",
-    });
+  } catch (error) {
+    console.error("Error al actualizar solicitante: ", JSON.stringify(error));
+    return res.status(500).json({ error: "Error interno del servidor" });
   }
 };
-
-
 
 //GET Auth/getAllEquipos
 export const getAllEquipos = async(req:Request,res:Response)=>{

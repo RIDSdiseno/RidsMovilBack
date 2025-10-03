@@ -732,7 +732,7 @@ export const getSolicitantes = async (req: Request, res: Response) => {
 };
 
 
-export const updateSolicitantes = async (req: Request, res: Response) => {
+export const updateSolicitante = async (req: Request, res: Response) => {
   try {
     const solicitantes = req.body; // Suponiendo que el cuerpo de la solicitud es un array de objetos solicitantes
 

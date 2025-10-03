@@ -692,18 +692,18 @@ export const createManyEquipos = async (req: Request, res: Response) => {
   }
 };
 
-//GET /api/auth/solicitantes
+// Ruta en el servidor que maneja la solicitud de solicitantes
 export const getSolicitantes = async (req: Request, res: Response) => {
   try {
-    const empresaId = req.query.empresaId;
+    const empresaId = Number(req.query.empresaId);
 
     if (!empresaId) {
-      return res.status(400).json({ error: "Falta el parámetro empresaId" });
+      return res.status(400).json({ error: 'Falta el parámetro empresaId' });
     }
 
     const solicitantes = await prisma.solicitante.findMany({
       where: {
-        empresaId: Number(empresaId),
+        empresaId: empresaId, // Asegúrate de que el parámetro esté siendo utilizado correctamente
       },
       select: {
         id_solicitante: true,
@@ -714,10 +714,11 @@ export const getSolicitantes = async (req: Request, res: Response) => {
 
     return res.json({ solicitantes });
   } catch (error) {
-    console.error("Error al obtener solicitantes:", JSON.stringify(error));
-    return res.status(500).json({ error: "Error interno del servidor" });
+    console.error('Error al obtener solicitantes:', error);
+    return res.status(500).json({ error: 'Error interno del servidor' });
   }
 };
+
 
 
 

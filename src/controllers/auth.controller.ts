@@ -734,7 +734,7 @@ export const getSolicitantes = async (req: Request, res: Response) => {
 
 export const updateSolicitante = async (req: Request, res: Response) => {
   try {
-    const {solicitantes} = req.body; // Suponiendo que el cuerpo de la solicitud es un array de objetos solicitantes
+    const { solicitantes } = req.body; // Suponiendo que el cuerpo de la solicitud es un array de objetos solicitantes
 
     // Validación básica: Asegurarse de que el cuerpo contiene al menos un solicitante
     if (!Array.isArray(solicitantes) || solicitantes.length === 0) {
@@ -743,12 +743,12 @@ export const updateSolicitante = async (req: Request, res: Response) => {
 
     // Usar transacciones para realizar todas las actualizaciones de forma atómica
     const updatedSolicitantes = await prisma.$transaction(
-      solicitantes.map(solicitante => {
+      solicitantes.map((solicitante: { id_solicitante: number, email: string, telefono: string }) => {
         return prisma.solicitante.update({
           where: { id_solicitante: solicitante.id_solicitante },
           data: {
-            email: solicitante.email,
-            telefono: solicitante.telefono,
+            email: solicitante.email || "", // Si el email está vacío, se actualiza con un string vacío
+            telefono: solicitante.telefono || "", // Lo mismo para el teléfono
           },
         });
       })
@@ -764,7 +764,6 @@ export const updateSolicitante = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Error interno del servidor" });
   }
 };
-
 
 //GET Auth/getAllEquipos
 export const getAllEquipos = async(req:Request,res:Response)=>{

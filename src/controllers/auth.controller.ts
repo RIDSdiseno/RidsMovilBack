@@ -734,12 +734,14 @@ export const getSolicitantes = async (req: Request, res: Response) => {
 
 export const updateSolicitante = async (req: Request, res: Response) => {
   try {
-    const solicitantes = req.body; // Asegurarse de que sea un array de solicitantes
+    const solicitantes = req.body; // Asegúrate de que sea un array de solicitantes
 
     // Verifica si el cuerpo de la solicitud es un array
     if (!Array.isArray(solicitantes)) {
       return res.status(400).json({ error: "Debe proporcionar un array de solicitantes a actualizar." });
     }
+
+    const updatedSolicitantes = []; // Para almacenar los solicitantes actualizados
 
     // Itera sobre cada solicitante
     for (const solicitante of solicitantes) {
@@ -771,15 +773,20 @@ export const updateSolicitante = async (req: Request, res: Response) => {
         },
       });
 
-      // Enviar la respuesta si todo va bien
-      res.json({ message: "Solicitantes actualizados correctamente", updatedSolicitante });
+      // Agregar el solicitante actualizado al array
+      updatedSolicitantes.push(updatedSolicitante);
     }
+
+    // Enviar la respuesta con todos los solicitantes actualizados
+    res.json({
+      message: "Solicitantes actualizados correctamente",
+      updatedSolicitantes,
+    });
   } catch (error) {
     console.error("Error al actualizar solicitantes: ", error);
     return res.status(500).json({ error: "Error interno del servidor" });
   }
 };
-
 
 
 //GET Auth/getAllEquipos

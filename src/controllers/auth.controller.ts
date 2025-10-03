@@ -734,7 +734,7 @@ export const getSolicitantes = async (req: Request, res: Response) => {
 
 export const updateSolicitante = async (req: Request, res: Response) => {
   try {
-    const solicitantes = req.body; // Suponiendo que el cuerpo de la solicitud es un array de objetos solicitantes
+    const {solicitantes} = req.body; // Suponiendo que el cuerpo de la solicitud es un array de objetos solicitantes
 
     // Validación básica: Asegurarse de que el cuerpo contiene al menos un solicitante
     if (!Array.isArray(solicitantes) || solicitantes.length === 0) {

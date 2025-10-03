@@ -402,6 +402,7 @@ export const crearVisita = async (req: Request, res: Response) => {
 
     // Validación básica
     if (!empresaId || !tecnicoId) {
+      console.log(empresaId,tecnicoId)
       return res.status(400).json({ error: "empresaId y tecnicoId son obligatorios" });
     }
 
@@ -697,13 +698,22 @@ export const getSolicitantes = async (req: Request, res: Response) => {
   try {
     const empresaId = req.query.empresaId;
 
+    // Verificar que el parámetro 'empresaId' esté presente
     if (!empresaId) {
       return res.status(400).json({ error: "Falta el parámetro empresaId" });
     }
 
+    // Convertir 'empresaId' a número y validar
+    const empresaIdNumber = Number(empresaId);
+
+    if (isNaN(empresaIdNumber)) {
+      return res.status(400).json({ error: "El parámetro empresaId debe ser un número válido" });
+    }
+
+    // Realizar la consulta con el 'empresaId' validado
     const solicitantes = await prisma.solicitante.findMany({
       where: {
-        empresaId: Number(empresaId),
+        empresaId: empresaIdNumber, // Usamos el 'empresaId' convertido a número
       },
       select: {
         id_solicitante: true,
@@ -714,10 +724,11 @@ export const getSolicitantes = async (req: Request, res: Response) => {
 
     return res.json({ solicitantes });
   } catch (error) {
-    console.error("Error al obtener solicitantes:", JSON.stringify(error));
+    console.error("Error al obtener solicitantes:", error);
     return res.status(500).json({ error: "Error interno del servidor" });
   }
 };
+
 
 export const updateSolicitante = async (req: Request, res: Response) => {
   try {

@@ -30,8 +30,7 @@ model Solicitante {
   tickets        FreshdeskTicket[]
   requesterMaps  FreshdeskRequesterMap[]
 
-  @@unique([empresaId, email])
-  @@unique([empresaId, telefono])
+  @@unique([telefono,email])
   @@index([empresaId])
 }
 

@@ -734,11 +734,11 @@ export const getSolicitantes = async (req: Request, res: Response) => {
 
 export const updateSolicitante = async (req: Request, res: Response) => {
   try {
-    const { id_solicitante, email, telefono } = req.body; // Suponiendo que el id_solicitante, email y telefono vienen en el cuerpo de la solicitud.
+    const { id_solicitante, email, telefono, empresaId } = req.body;
 
-    // Validación básica para asegurarse de que los campos necesarios están presentes
-    if (!id_solicitante || !email || !telefono) {
-      return res.status(400).json({ error: "Faltan parámetros necesarios (id_solicitante, email, telefono)" });
+    // Validación básica de los parámetros
+    if (!id_solicitante || !email || !telefono || !empresaId) {
+      return res.status(400).json({ error: "Faltan parámetros necesarios" });
     }
 
     // Verificar si el solicitante existe en la base de datos
@@ -750,22 +750,44 @@ export const updateSolicitante = async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Solicitante no encontrado" });
     }
 
-    // Actualizar los datos del solicitante
-    const updatedSolicitante = await prisma.solicitante.update({
-      where: { id_solicitante: id_solicitante },
-      data: {
+    // Verificar si ya existe otro solicitante con el mismo email y empresaId, pero que no sea el solicitante actual
+    const solicitanteConMismoEmailYEmpresa = await prisma.solicitante.findFirst({
+      where: {
         email: email,
-        telefono: telefono, // Asegúrate de que este campo exista en tu modelo Prisma
+        empresaId: empresaId,
+        NOT: { id_solicitante: id_solicitante }, // Asegurarse de que no sea el mismo solicitante
       },
     });
 
-    // Retornar la respuesta con los datos actualizados
-    return res.json({ message: "Solicitante actualizado correctamente", updatedSolicitante });
-  } catch (error) {
-    console.error("Error al actualizar solicitante: ", JSON.stringify(error));
-    return res.status(500).json({ error: "Error interno del servidor" });
+    if (solicitanteConMismoEmailYEmpresa) {
+      return res.status(400).json({
+        error: "Ya existe un solicitante con el mismo email en esta empresa.",
+      });
+    }
+
+    // Proceder con la actualización si no hay conflictos
+    const updatedSolicitante = await prisma.solicitante.update({
+      where: { id_solicitante: id_solicitante },
+      data: {
+        email,
+        telefono,
+      },
+    });
+
+    return res.json({
+      message: "Solicitante actualizado correctamente",
+      updatedSolicitante,
+    });
+  } catch (error:any) {
+    console.error("Error al actualizar solicitante:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor",
+      message: error.message || "No se pudo procesar la solicitud",
+      details: error.stack || "No se proporcionaron detalles del error",
+    });
   }
 };
+
 
 //GET Auth/getAllEquipos
 export const getAllEquipos = async(req:Request,res:Response)=>{

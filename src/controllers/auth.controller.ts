@@ -719,11 +719,6 @@ export const getSolicitantes = async (req: Request, res: Response) => {
   }
 };
 
-
-
-
-
-
 export const updateSolicitante = async (req: Request, res: Response) => {
   try {
     const { id_solicitante, email, telefono } = req.body; // Recibimos los parámetros del cuerpo de la solicitud.

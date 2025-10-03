@@ -27,7 +27,7 @@ r.post("/carga",createManyempresa)
 r.post("/createcliente",createCliente)
 r.post("/crearsolicitante",createManySolicitante)
 r.post("/crearequipos",createManyEquipos)
-r.get("/solicitantes",getSolicitantes)
+r.get("/solicitantes/:id",getSolicitantes)
 
 
 //Funcionalidad de visitas

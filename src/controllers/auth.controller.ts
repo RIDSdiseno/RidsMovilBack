@@ -732,59 +732,36 @@ export const getSolicitantes = async (req: Request, res: Response) => {
 };
 
 
-export const updateSolicitante = async (req: Request, res: Response) => {
+export const updateSolicitantes = async (req: Request, res: Response) => {
   try {
-    const { id_solicitante, email, telefono, empresaId } = req.body;
+    const solicitantes = req.body; // Suponiendo que el cuerpo de la solicitud es un array de objetos solicitantes
 
-    // Validación básica de los parámetros
-    if (!id_solicitante || !email || !telefono || !empresaId) {
-      return res.status(400).json({ error: "Faltan parámetros necesarios" });
+    // Validación básica: Asegurarse de que el cuerpo contiene al menos un solicitante
+    if (!Array.isArray(solicitantes) || solicitantes.length === 0) {
+      return res.status(400).json({ error: "Debe proporcionar un array de solicitantes a actualizar." });
     }
 
-    // Verificar si el solicitante existe en la base de datos
-    const solicitanteExistente = await prisma.solicitante.findUnique({
-      where: { id_solicitante: id_solicitante },
-    });
+    // Usar transacciones para realizar todas las actualizaciones de forma atómica
+    const updatedSolicitantes = await prisma.$transaction(
+      solicitantes.map(solicitante => {
+        return prisma.solicitante.update({
+          where: { id_solicitante: solicitante.id_solicitante },
+          data: {
+            email: solicitante.email,
+            telefono: solicitante.telefono,
+          },
+        });
+      })
+    );
 
-    if (!solicitanteExistente) {
-      return res.status(404).json({ error: "Solicitante no encontrado" });
-    }
-
-    // Verificar si ya existe otro solicitante con el mismo email y empresaId, pero que no sea el solicitante actual
-    const solicitanteConMismoEmailYEmpresa = await prisma.solicitante.findFirst({
-      where: {
-        email: email,
-        empresaId: empresaId,
-        NOT: { id_solicitante: id_solicitante }, // Asegurarse de que no sea el mismo solicitante
-      },
-    });
-
-    if (solicitanteConMismoEmailYEmpresa) {
-      return res.status(400).json({
-        error: "Ya existe un solicitante con el mismo email en esta empresa.",
-      });
-    }
-
-    // Proceder con la actualización si no hay conflictos
-    const updatedSolicitante = await prisma.solicitante.update({
-      where: { id_solicitante: id_solicitante },
-      data: {
-        email,
-        telefono,
-      },
-    });
-
+    // Retornar una respuesta con los solicitantes actualizados
     return res.json({
-      message: "Solicitante actualizado correctamente",
-      updatedSolicitante,
+      message: `${updatedSolicitantes.length} solicitantes actualizados correctamente.`,
+      updatedSolicitantes,
     });
-  } catch (error:any) {
-    console.error("Error al actualizar solicitante:", error);
-    return res.status(500).json({
-      error: "Error interno del servidor",
-      message: error.message || "No se pudo procesar la solicitud",
-      details: error.stack || "No se proporcionaron detalles del error",
-    });
+  } catch (error) {
+    console.error("Error al actualizar solicitantes: ", JSON.stringify(error));
+    return res.status(500).json({ error: "Error interno del servidor" });
   }
 };
 

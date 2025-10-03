@@ -6,7 +6,8 @@ deleteCliente,
 obtenerHistorialPorTecnico,
 createManySolicitante,
 createManyEquipos,
-getSolicitantes} from "../controllers/auth.controller";
+getSolicitantes,
+getAllEquipos} from "../controllers/auth.controller";
 import { authGuard } from "../middlewares/auth.middleware";
 
 const r = Router();
@@ -29,6 +30,7 @@ r.post("/crearsolicitante",createManySolicitante)
 r.post("/crearequipos",createManyEquipos)
 r.get("/solicitantes",getSolicitantes)
 
+r.get("/equipos",getAllEquipos)
 
 //Funcionalidad de visitas
 r.post("/crear_visita",authGuard,crearVisita)

@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import type { Secret } from "jsonwebtoken";
 import crypto from "crypto";
+import { error } from "console";
 
 const prisma = new PrismaClient
 /* =========================
@@ -438,6 +439,7 @@ export const crearVisita = async (req: Request, res: Response) => {
 
   } catch (error: any) {
     console.error('Error al crear la visita:', error);
+    
     return res.status(500).json({ error: `Error interno al crear la visita: ${error.message || error}` });
   }
 };
@@ -764,3 +766,29 @@ export const updateSolicitante = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Error interno del servidor" });
   }
 };
+
+//GET Auth/getAllEquipos
+export const getAllEquipos = async(req:Request,res:Response)=>{
+try{
+    const equipos = await prisma.equipo.findMany({
+      select: {
+        id_equipo:true,
+        serial:true,
+        marca:true,
+        modelo:true,
+        procesador:true,
+        ram:true,
+        disco:true,
+        propiedad:true,
+      }
+    });
+    return res.json({equipos});
+}
+catch(e){
+  console.error("Error al obtener equipos", JSON.stringify(e));
+  return res.status(500).json({error: "Error interno del servidor"})
+}
+
+
+
+}

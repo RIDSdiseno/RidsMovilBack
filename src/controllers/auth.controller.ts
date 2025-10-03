@@ -750,7 +750,7 @@ export const updateSolicitante = async (req: Request, res: Response) => {
             email: solicitante.email || "", // Si el email está vacío, se actualiza con un string vacío
             telefono: solicitante.telefono || "", // Lo mismo para el teléfono
           },
-        });
+        })
       })
     );
 
@@ -761,7 +761,7 @@ export const updateSolicitante = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("Error al actualizar solicitantes: ", JSON.stringify(error));
-    return res.status(500).json({ error: "Error interno del servidor" });
+    return res.status(500).json({ error: JSON.stringify(error) });
   }
 };
 

@@ -692,18 +692,18 @@ export const createManyEquipos = async (req: Request, res: Response) => {
   }
 };
 
-// Ruta en el servidor que maneja la solicitud de solicitantes
+//GET /api/auth/getSolicitante
 export const getSolicitantes = async (req: Request, res: Response) => {
   try {
-    const empresaId = Number(req.query.empresaId);
+    const empresaId = req.query.empresaId;
 
     if (!empresaId) {
-      return res.status(400).json({ error: 'Falta el parámetro empresaId' });
+      return res.status(400).json({ error: "Falta el parámetro empresaId" });
     }
 
     const solicitantes = await prisma.solicitante.findMany({
       where: {
-        empresaId: empresaId, // Asegúrate de que el parámetro esté siendo utilizado correctamente
+        empresaId: Number(empresaId),
       },
       select: {
         id_solicitante: true,
@@ -714,44 +714,42 @@ export const getSolicitantes = async (req: Request, res: Response) => {
 
     return res.json({ solicitantes });
   } catch (error) {
-    console.error('Error al obtener solicitantes:', error);
-    return res.status(500).json({ error: 'Error interno del servidor' });
+    console.error("Error al obtener solicitantes:", JSON.stringify(error));
+    return res.status(500).json({ error: "Error interno del servidor" });
   }
 };
 
 export const updateSolicitante = async (req: Request, res: Response) => {
   try {
-    const { id_solicitante, email, telefono } = req.body; // Recibimos los parámetros del cuerpo de la solicitud.
+    const { id_solicitante, email, telefono } = req.body; // Suponiendo que el id_solicitante, email y telefono vienen en el cuerpo de la solicitud.
 
     // Validación básica para asegurarse de que los campos necesarios están presentes
     if (!id_solicitante || !email || !telefono) {
       return res.status(400).json({ error: "Faltan parámetros necesarios (id_solicitante, email, telefono)" });
     }
 
-    // Verificar si el solicitante existe en la base de datos utilizando id_solicitante
+    // Verificar si el solicitante existe en la base de datos
     const solicitanteExistente = await prisma.solicitante.findUnique({
-      where: { id_solicitante }, // Usa el campo id_solicitante como clave primaria
+      where: { id_solicitante: id_solicitante },
     });
 
-    // Si el solicitante no existe
     if (!solicitanteExistente) {
       return res.status(404).json({ error: "Solicitante no encontrado" });
     }
 
-    // Actualizar los datos del solicitante con el nuevo email y telefono
+    // Actualizar los datos del solicitante
     const updatedSolicitante = await prisma.solicitante.update({
-      where: { id_solicitante }, // Usamos id_solicitante como identificador único
+      where: { id_solicitante: id_solicitante },
       data: {
-        email,  // Actualiza el email
-        telefono, // Actualiza el telefono
+        email: email,
+        telefono: telefono, // Asegúrate de que este campo exista en tu modelo Prisma
       },
     });
 
-    // Retorna la respuesta con el solicitante actualizado
+    // Retornar la respuesta con los datos actualizados
     return res.json({ message: "Solicitante actualizado correctamente", updatedSolicitante });
   } catch (error) {
     console.error("Error al actualizar solicitante: ", JSON.stringify(error));
     return res.status(500).json({ error: "Error interno del servidor" });
   }
 };
-

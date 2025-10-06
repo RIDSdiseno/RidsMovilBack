@@ -8,8 +8,8 @@ createManySolicitante,
 createManyEquipos,
 getSolicitantes,
 getAllEquipos,
-updateSolicitante} from "../controllers/auth.controller";
-getSolicitantes, actualizarEquipo } from "../controllers/auth.controller";
+updateSolicitante,
+actualizarEquipo} from "../controllers/auth.controller";
 import { authGuard } from "../middlewares/auth.middleware";
 
 const r = Router();

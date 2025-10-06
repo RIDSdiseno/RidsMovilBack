@@ -37,6 +37,7 @@ r.get("/equipos",getAllEquipos)
 //Funcionalidad de visitas
 r.post("/crear_visita",authGuard,crearVisita)
 r.put("/finalizar_visita/:id",authGuard,completarVisita)
+r.put("/equipos/:id")
 
 
 

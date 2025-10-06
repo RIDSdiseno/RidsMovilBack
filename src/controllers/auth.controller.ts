@@ -92,48 +92,48 @@ function clearRefreshCookie(res: Response) {
 ========================= */
 
 //POST Auth/register
-export const registerUser = async(req:Request,res:Response)=>{
-  try{
+export const registerUser = async (req: Request, res: Response) => {
+  try {
     const { nombre, email, password } = req.body;
 
     //validaciones basicas
-    if(!nombre || !email || !password ){
-      return res.status(400).json({ error: "Todos los campos son obligatorios"})
+    if (!nombre || !email || !password) {
+      return res.status(400).json({ error: "Todos los campos son obligatorios" })
     }
 
     //Se normaliza el email
     const emailNorm = String(email).trim().toLowerCase();
-    const existing = await prisma.tecnico.findUnique({ where: {email: emailNorm}});
-    if(existing) return res.status(409).json({ error: "Usuario ya existe" });
+    const existing = await prisma.tecnico.findUnique({ where: { email: emailNorm } });
+    if (existing) return res.status(409).json({ error: "Usuario ya existe" });
 
-    const passwordHash = await bcrypt.hash(password,10);
+    const passwordHash = await bcrypt.hash(password, 10);
     const newUser = await prisma.tecnico.create({
-      data:{
+      data: {
         nombre,
         email: emailNorm,
         passwordHash,
         status: true
       },
-      select: {id_tecnico:true,nombre:true,email:true},
+      select: { id_tecnico: true, nombre: true, email: true },
     });
-    return res.status(201).json({ user:newUser });
-  } catch(error){
+    return res.status(201).json({ user: newUser });
+  } catch (error) {
     console.error("Register error", error);
-    return res.status(500).json({error: "Error interno" });
+    return res.status(500).json({ error: "Error interno" });
   }
-  
+
 };
 
 //GET /Auth/getAllClientes
-export const getAllClientes = async(req:Request,res:Response)=>{
-  try{
+export const getAllClientes = async (req: Request, res: Response) => {
+  try {
     const clientes = await prisma.empresa.findMany({
-      orderBy:{nombre:"asc"},
+      orderBy: { nombre: "asc" },
     });
     return res.json(clientes);
-  }catch(e){
-    console.error("Error al obtener categorias: ",JSON.stringify(e));
-    return res.status(500).json({error: "Error interno"});
+  } catch (e) {
+    console.error("Error al obtener categorias: ", JSON.stringify(e));
+    return res.status(500).json({ error: "Error interno" });
   }
 };
 
@@ -154,19 +154,19 @@ export const deleteCliente = async (req: Request, res: Response) => {
 };
 
 //POST /Auth/createCliente
-export const createCliente = async(req:Request,res:Response)=>{
-  const {nombre} = req.body;
+export const createCliente = async (req: Request, res: Response) => {
+  const { nombre } = req.body;
 
-  if(!nombre){
-    return res.status(400).json({error: "El nombre de cliente es obligatorio"});
+  if (!nombre) {
+    return res.status(400).json({ error: "El nombre de cliente es obligatorio" });
   }
-  
-  try{
-    const cliente = await prisma.empresa.create({data: {nombre}});
+
+  try {
+    const cliente = await prisma.empresa.create({ data: { nombre } });
     return res.status(201).json(cliente);
-  }catch(e){
-    console.error("Error al crear cliente: ",JSON.stringify(e));
-    return res.status(500).json({error: "Error interno"})
+  } catch (e) {
+    console.error("Error al crear cliente: ", JSON.stringify(e));
+    return res.status(500).json({ error: "Error interno" })
   }
 }
 
@@ -247,20 +247,20 @@ export const login = async (req: Request, res: Response) => {
 };
 
 
-export const getAllUsers = async (_req:Request,res:Response)=>{
-  try{
+export const getAllUsers = async (_req: Request, res: Response) => {
+  try {
     const users = await prisma.tecnico.findMany({
-      select:{
-        id_tecnico:true,
-        nombre:true,
-        email:true,
-        status:true
+      select: {
+        id_tecnico: true,
+        nombre: true,
+        email: true,
+        status: true
       },
     });
     return res.json({ users });
-  }catch(error){
-    console.error("Error al obtener usuarios: ",JSON.stringify(error));
-    return res.status(500).json({error: "Error interno del servidor"});
+  } catch (error) {
+    console.error("Error al obtener usuarios: ", JSON.stringify(error));
+    return res.status(500).json({ error: "Error interno del servidor" });
   }
 };
 
@@ -403,7 +403,7 @@ export const crearVisita = async (req: Request, res: Response) => {
 
     // Validación básica
     if (!empresaId || !tecnicoId) {
-      console.log(empresaId,tecnicoId)
+      console.log(empresaId, tecnicoId)
       return res.status(400).json({ error: "empresaId y tecnicoId son obligatorios" });
     }
 
@@ -439,7 +439,7 @@ export const crearVisita = async (req: Request, res: Response) => {
 
   } catch (error: any) {
     console.error('Error al crear la visita:', error);
-    
+
     return res.status(500).json({ error: `Error interno al crear la visita: ${error.message || error}` });
   }
 };
@@ -794,23 +794,57 @@ export const updateSolicitante = async (req: Request, res: Response) => {
   }
 };
 
+// Exportar actualizarEquipo fuera de getSolicitantes
+export const actualizarEquipo = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { disco, procesador, ram } = req.body;
 
+  try {
+    const equipoActualizado = await prisma.equipo.update({
+      where: { id_equipo: Number(id) },
+      data: {
+        disco,
+        procesador,
+        ram,
+      },
+    });
+
+    return res.status(200).json({
+      message: "Equipo Actualizado",
+      equipo: equipoActualizado,
+    });
+
+  } catch (error) {
+    console.error("Error al actualizar equipo", error);
+    return res.status(500).json({ error: "Error al actualizar equipo" });
+  }
+};
 
 //GET Auth/getAllEquipos
-export const getAllEquipos = async(req:Request,res:Response)=>{
-try{
+export const getAllEquipos = async (req: Request, res: Response) => {
+  try {
     const equipos = await prisma.equipo.findMany({
       select: {
-        id_equipo:true,
-        serial:true,
-        marca:true,
-        modelo:true,
-        procesador:true,
-        ram:true,
-        disco:true,
-        propiedad:true,
+        id_equipo: true,
+        serial: true,
+        marca: true,
+        modelo: true,
+        procesador: true,
+        ram: true,
+        disco: true,
+        propiedad: true,
       }
     });
+    return res.json({ equipos });
+  }
+  catch (e) {
+    console.error("Error al obtener equipos", JSON.stringify(e));
+    return res.status(500).json({ error: "Error interno del servidor" })
+  }
+
+
+
+}
     return res.json({equipos});
 }
 catch(e){

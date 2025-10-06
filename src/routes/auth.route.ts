@@ -8,7 +8,8 @@ createManySolicitante,
 createManyEquipos,
 getSolicitantes,
 getAllEquipos,
-updateSolicitante} from "../controllers/auth.controller";
+updateSolicitante,
+actualizarEquipo} from "../controllers/auth.controller";
 import { authGuard } from "../middlewares/auth.middleware";
 
 const r = Router();
@@ -37,7 +38,7 @@ r.get("/equipos",getAllEquipos)
 //Funcionalidad de visitas
 r.post("/crear_visita",authGuard,crearVisita)
 r.put("/finalizar_visita/:id",authGuard,completarVisita)
-r.put("/equipos/:id")
+r.put('/equipos/:id', actualizarEquipo)
 
 
 

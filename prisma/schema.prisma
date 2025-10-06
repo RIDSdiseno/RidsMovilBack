@@ -20,7 +20,7 @@ model Empresa {
 model Solicitante {
   id_solicitante Int                     @id @default(autoincrement()) @map("id_solicitante")
   nombre         String
-  email          String?
+  email          String?                 @unique
   telefono       String?
   empresaId      Int
   empresa        Empresa                 @relation(fields: [empresaId], references: [id_empresa])
@@ -30,7 +30,6 @@ model Solicitante {
   tickets        FreshdeskTicket[]
   requesterMaps  FreshdeskRequesterMap[]
 
-  @@unique([email])
   @@index([empresaId])
 }
 
@@ -68,7 +67,6 @@ model DetalleEquipo {
 }
 
 model Historial {
-  id                 Int         @id @default(autoincrement()) @map("id_historial")
   tecnicoId          Int
   solicitante        String
   inicio             DateTime
@@ -83,6 +81,7 @@ model Historial {
   licenciaWindows    Boolean     @default(false)
   mantenimientoReloj Boolean     @default(false)
   rendimientoEquipo  Boolean     @default(false)
+  id                 Int         @id @default(autoincrement()) @map("id_historial")
   tecnico            Tecnico     @relation(fields: [tecnicoId], references: [id_tecnico])
   solicitanteRef     Solicitante @relation("Solicitante_Historial", fields: [solicitanteId], references: [id_solicitante])
 
@@ -150,7 +149,7 @@ model Visita {
 
 /// Mapea company_id de Freshdesk y/o dominio de correo → tu Empresa
 model FreshdeskCompanyMap {
-  companyId Int     @id
+  companyId BigInt  @id
   empresaId Int
   domain    String?
   empresa   Empresa @relation(fields: [empresaId], references: [id_empresa])
@@ -161,7 +160,7 @@ model FreshdeskCompanyMap {
 
 /// Mapa estable para enlazar requester (contacto de FD) → Solicitante local
 model FreshdeskRequesterMap {
-  requesterId   Int         @id
+  requesterId   BigInt      @id
   solicitanteId Int
   empresaId     Int
   solicitante   Solicitante @relation(fields: [solicitanteId], references: [id_solicitante])
@@ -172,7 +171,7 @@ model FreshdeskRequesterMap {
 
 /// Ticket de Freshdesk ligado a tu Empresa y al Solicitante que lo creó
 model FreshdeskTicket {
-  id             Int          @id
+  id             BigInt       @id
   subject        String
   status         Int
   priority       Int
@@ -184,6 +183,7 @@ model FreshdeskTicket {
   capturedAt     DateTime?
   empresaId      Int?
   solicitanteId  Int?
+  ticketOrgId    Int?
   empresa        Empresa?     @relation(fields: [empresaId], references: [id_empresa])
   solicitante    Solicitante? @relation(fields: [solicitanteId], references: [id_solicitante])
 
@@ -191,6 +191,24 @@ model FreshdeskTicket {
   @@index([solicitanteId])
   @@index([requesterEmail])
   @@index([createdAt])
+  @@index([ticketOrgId])
+}
+
+model FdSourceMap {
+  id          Int     @id @default(autoincrement())
+  companyId   BigInt? @unique
+  domain      String? @unique
+  ticketOrgId Int
+
+  @@index([ticketOrgId])
+}
+
+model TicketOrg {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime
 }
 
 enum EstadoVisita {

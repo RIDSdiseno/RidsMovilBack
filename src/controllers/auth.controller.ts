@@ -845,13 +845,7 @@ export const getAllEquipos = async (req: Request, res: Response) => {
 
 
 }
-    return res.json({equipos});
-}
-catch(e){
-  console.error("Error al obtener equipos", JSON.stringify(e));
-  return res.status(500).json({error: "Error interno del servidor"})
-}
-}
+    
 export const actualizarEquipo = async (req: Request, res: Response) => {
   try {
     const equipoId = Number(req.params.id);

@@ -794,31 +794,7 @@ export const updateSolicitante = async (req: Request, res: Response) => {
   }
 };
 
-// Exportar actualizarEquipo fuera de getSolicitantes
-export const actualizarEquipo = async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const { disco, procesador, ram } = req.body;
 
-  try {
-    const equipoActualizado = await prisma.equipo.update({
-      where: { id_equipo: Number(id) },
-      data: {
-        disco,
-        procesador,
-        ram,
-      },
-    });
-
-    return res.status(200).json({
-      message: "Equipo Actualizado",
-      equipo: equipoActualizado,
-    });
-
-  } catch (error) {
-    console.error("Error al actualizar equipo", error);
-    return res.status(500).json({ error: "Error al actualizar equipo" });
-  }
-};
 
 //GET Auth/getAllEquipos
 export const getAllEquipos = async (req: Request, res: Response) => {
@@ -846,25 +822,20 @@ export const getAllEquipos = async (req: Request, res: Response) => {
 
 }
     
+
 export const actualizarEquipo = async (req: Request, res: Response) => {
   try {
-    const equipoId = Number(req.params.id);
-    if (Number.isNaN(equipoId)) {
-      return res.status(400).json({ error: "ID de equipo inválido" });
-    }
+    const id = Number(req.params.id);
+    if (Number.isNaN(id)) return res.status(400).json({ error: "ID inválido" });
 
-    // Verificar existencia para devolver 404 (y no un 500 genérico)
-    const existe = await prisma.equipo.findUnique({
-      where: { id_equipo: equipoId },
-      select: { id_equipo: true },
-    });
-    if (!existe) {
-      return res.status(404).json({ error: "Equipo no encontrado" });
-    }
-
-    // Tomar solo los campos permitidos y normalizarlos
+    // Solo aceptar estas 3 llaves
     const { disco, procesador, ram } = req.body ?? {};
-
+    const keys = Object.keys(req.body || {});
+    const allowed = new Set(["disco", "procesador", "ram"]);
+    const extras = keys.filter(k => !allowed.has(k));
+    if (extras.length) {
+      return res.status(400).json({ error: `Campos no permitidos: ${extras.join(", ")}` });
+    }
     if (
       typeof disco === "undefined" &&
       typeof procesador === "undefined" &&
@@ -873,47 +844,36 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "No hay campos para actualizar" });
     }
 
-    // Construir el objeto data SOLO con los campos presentes.
-    // Si llega string vacío => lo guardamos como null (para “borrar” el valor).
+    // normaliza a string o deja undefined (NO null)
+    const norm = (v: any): string | undefined => {
+      if (typeof v === "undefined") return undefined;
+      const t = String(v).trim();
+      // Si quieres "vaciar" el campo, decide: o guardas "" o no actualizas.
+      return t; // o: return t.length ? t : ""; // si quieres permitir vacío
+    };
+
     const data: Prisma.EquipoUpdateInput = {};
+    const vDisco = norm(disco);
+    const vProc  = norm(procesador);
+    const vRam   = norm(ram);
 
-    if (typeof disco !== "undefined") {
-      const v = String(disco).trim();
-      (data as any).disco = v.length ? v : null;
-    }
-    if (typeof procesador !== "undefined") {
-      const v = String(procesador).trim();
-      (data as any).procesador = v.length ? v : null;
-    }
-    if (typeof ram !== "undefined") {
-      const v = String(ram).trim();
-      (data as any).ram = v.length ? v : null;
-    }
+    if (typeof vDisco !== "undefined") data.disco = vDisco;            // o { set: vDisco }
+    if (typeof vProc  !== "undefined") data.procesador = vProc;        // o { set: vProc }
+    if (typeof vRam   !== "undefined") data.ram = vRam;                // o { set: vRam }
 
-    const equipoActualizado = await prisma.equipo.update({
-      where: { id_equipo: equipoId },
+    const updated = await prisma.equipo.update({
+      where: { id_equipo: id },
       data,
       select: {
-        id_equipo: true,
-        marca: true,
-        modelo: true,
-        serial: true,
-        disco: true,
-        procesador: true,
-        ram: true,
+        id_equipo: true, marca: true, modelo: true, serial: true,
+        disco: true, procesador: true, ram: true,
       },
     });
 
-    return res.status(200).json({
-      message: "Equipo Actualizado",
-      equipo: equipoActualizado,
-    });
-  } catch (error: any) {
-    // Manejo específico por si alguien intenta actualizar un registro inexistente
-    if (error?.code === "P2025") {
-      return res.status(404).json({ error: "Equipo no encontrado" });
-    }
-    console.error("Error al actualizar equipo:", error);
+    return res.status(200).json({ message: "Equipo Actualizado", equipo: updated });
+  } catch (e: any) {
+    if (e?.code === "P2025") return res.status(404).json({ error: "Equipo no encontrado" });
+    console.error("Error al actualizar equipo:", e);
     return res.status(500).json({ error: "Error al actualizar equipo" });
   }
 };

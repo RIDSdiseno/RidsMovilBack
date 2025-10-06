@@ -686,3 +686,34 @@ export const getSolicitantes = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Error interno del servidor" });
   }
 };
+
+// Exportar actualizarEquipo fuera de getSolicitantes
+export const actualizarEquipo = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { disco, procesador, ram } = req.body;
+
+  try {
+    const equipoExistente = await prisma.equipo.findUnique({
+      where: { id: Number(id) },
+    });
+    if (!equipoExistente) {
+      return res.status(404).json({ error: "Equipo no encontrado" });
+    }
+
+    const equipoActualizado = await prisma.equipo.update({
+      where: { id: Number(id) },
+      data: {
+        disco,
+        procesador,
+        ram,
+      },
+    });
+    return res.status(200).json({
+      message: "Equipo Actualizado",
+      equipo: equipoActualizado,
+    });
+  } catch (error) {
+    console.error("Error al actualizar equipo", error);
+    return res.status(500).json({ error: "Error al actualizar equipo" });
+  }
+};

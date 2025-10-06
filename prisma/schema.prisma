@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,113 +7,163 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
 model Tecnico {
-  id        Int   @id @default(autoincrement()) @map("id_tecnico")
-  nombre    String
-  email     String   @unique
-  passwordHash  String   // Hasheado (bcrypt)
-  status        Boolean @default(true)
-  visitas   Visita[]
-  historial Historial[]
-  // relación con refresh tokens
-  refreshTokens RefreshToken[]
+  id           Int     @id @default(autoincrement()) @map("id_tecnico")
+  nombre       String
+  email        String  @unique
+  passwordHash String
+  status       Boolean @default(true)
 }
 
 model Empresa {
-  id        Int   @id @default(autoincrement()) @map("id_empresa")
-  nombre    String   @unique
-  visitas   Visita[]
-  solicitantes Solicitante[]
-}
-
-enum EstadoVisita {
-  PENDIENTE   // Aún no finaliza
-  COMPLETADA  // Ya terminó y fue registrada
-  CANCELADA   // (Opcional) Si se permite cancelar
+  id     Int    @id @default(autoincrement()) @map("id_empresa")
+  nombre String @unique
 }
 
 model Visita {
-  id              Int    @id @default(autoincrement()) @map("id_visita")
-  empresaId       Int
-  tecnicoId       Int
-  solicitanteId   Int?        // Este campo es el que hará referencia al ID del solicitante
-  solicitante     String
-  realizado       String
-  inicio          DateTime
-  fin             DateTime?
-  confImpresoras  Boolean   @default(false)
-  confTelefonos   Boolean   @default(false)
-  confPiePagina   Boolean   @default(false)
-  otros           Boolean   @default(false)
-  otrosDetalle    String?
-  status          EstadoVisita   @default(PENDIENTE)
-  // Relaciones
-  empresa         Empresa   @relation(fields: [empresaId], references: [id])
-  tecnico         Tecnico   @relation(fields: [tecnicoId], references: [id])
-  solicitanteRel  Solicitante? @relation(fields: [solicitanteId], references: [id]) // Relación con el 
-  
+  id                 Int          @id @default(autoincrement()) @map("id_visita")
+  empresaId          Int
+  tecnicoId          Int
+  solicitante        String
+  inicio             DateTime
+  fin                DateTime?
+  confImpresoras     Boolean      @default(false)
+  confTelefonos      Boolean      @default(false)
+  confPiePagina      Boolean      @default(false)
+  otros              Boolean      @default(false)
+  otrosDetalle       String?
+  status             EstadoVisita @default(PENDIENTE)
+  solicitanteId      Int?
+  actualizaciones    Boolean      @default(false)
+  antivirus          Boolean      @default(false)
+  ccleaner           Boolean      @default(false)
+  estadoDisco        Boolean      @default(false)
+  licenciaOffice     Boolean      @default(false)
+  licenciaWindows    Boolean      @default(false)
+  mantenimientoReloj Boolean      @default(false)
+  rendimientoEquipo  Boolean      @default(false)
+
   @@index([tecnicoId])
+  @@index([empresaId])
+  @@index([solicitanteId])
 }
 
 model RefreshToken {
   id                Int       @id @default(autoincrement())
   userId            Int
-  rtHash            String // SHA-256 del RT (hex) ⬅️ lookup determinístico
+  rtHash            String
   createdAt         DateTime  @default(now())
   expiresAt         DateTime
-  revokedAt         DateTime? // si fue rotado o forzado logout
-  replacedByTokenId Int? // rotación: apunta al nuevo RT
-  userAgent         String? // opcional: auditoría
-  ip                String? // opcional: auditoría
+  revokedAt         DateTime?
+  replacedByTokenId Int?
+  userAgent         String?
+  ip                String?
 
-  user Tecnico @relation(fields: [userId], references: [id])
-
-  @@index([rtHash]) // lookup rápido por hash del RT
+  @@index([rtHash])
   @@index([userId])
 }
 
-
 model Solicitante {
-  id         Int      @id @default(autoincrement()) @map("id_solicitante")
-  nombre     String
-  empresaId  Int
-  empresa    Empresa  @relation(fields: [empresaId], references: [id])
-  equipos Equipo[]
-  historial Historial[]
-  visita Visita[]
+  id        Int     @id @default(autoincrement()) @map("id_solicitante")
+  nombre    String
+  email     String? @unique
+  telefono  String?
+  empresaId Int
 
   @@index([empresaId])
 }
 
 model Historial {
-  id          Int       @id @default(autoincrement()) @map("id_historial")
-  tecnicoId   Int
-  solicitanteId Int
-  solicitante String
-  inicio      DateTime
-  fin         DateTime
-  realizado   String
-  creadoEn    DateTime  @default(now())
+  tecnicoId          Int
+  solicitante        String
+  inicio             DateTime
+  fin                DateTime
+  realizado          String?
+  solicitanteId      Int
+  actualizaciones    Boolean  @default(false)
+  antivirus          Boolean  @default(false)
+  ccleaner           Boolean  @default(false)
+  estadoDisco        Boolean  @default(false)
+  licenciaOffice     Boolean  @default(false)
+  licenciaWindows    Boolean  @default(false)
+  mantenimientoReloj Boolean  @default(false)
+  rendimientoEquipo  Boolean  @default(false)
+  id_historial       Int      @id @default(autoincrement())
 
-  tecnico     Tecnico   @relation(fields: [tecnicoId], references: [id])
-  cliente Solicitante @relation(fields: [solicitanteId],references: [id])
-
+  @@index([solicitanteId])
   @@index([tecnicoId])
 }
 
-model Equipo{
-  id                  Int @id @default(autoincrement()) @map("id_equipo")
-  idSolicitante       Int
-  serial              String
-  marca               String
-  modelo              String
-  procesador          String
-  ram                 String
-  disco               String
-  propiedad           String
-
-  solicitante Solicitante @relation(fields: [idSolicitante], references: [id])
+model Equipo {
+  id            Int    @id @default(autoincrement()) @map("id_equipo")
+  idSolicitante Int
+  serial        String  
+  marca         String
+  modelo        String
+  procesador    String
+  ram           String
+  disco         String
+  propiedad     String
 
   @@index([idSolicitante])
+}
+
+model DetalleEquipo {
+  id_detalle_equipo Int       @id @default(autoincrement())
+  idEquipo          Int
+  macWifi           String?
+  so                String?
+  tipoDd            String?
+  estadoAlm         String?
+  office            String?
+  correo            String?
+  teamViewer        String?
+  claveTv           String?
+  revisado          DateTime?
+
+  @@index([idEquipo])
+}
+
+model FreshdeskCompanyMap {
+  companyId BigInt  @id
+  empresaId Int
+  domain    String?
+
+  @@index([domain])
+  @@index([empresaId])
+}
+
+model FreshdeskRequesterMap {
+  requesterId   BigInt @id
+  solicitanteId Int
+  empresaId     Int
+
+  @@index([empresaId])
+  @@index([solicitanteId])
+}
+
+model FreshdeskTicket {
+  id             BigInt    @id
+  subject        String
+  status         Int
+  priority       Int
+  type           String?
+  requesterEmail String?
+  createdAt      DateTime
+  updatedAt      DateTime
+  source         String?
+  capturedAt     DateTime?
+  empresaId      Int?
+  solicitanteId  Int?
+
+  @@index([createdAt])
+  @@index([empresaId])
+  @@index([requesterEmail])
+  @@index([solicitanteId])
+}
+
+enum EstadoVisita {
+  PENDIENTE
+  COMPLETADA
+  CANCELADA
 }

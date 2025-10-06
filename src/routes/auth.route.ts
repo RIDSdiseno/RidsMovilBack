@@ -6,6 +6,9 @@ deleteCliente,
 obtenerHistorialPorTecnico,
 createManySolicitante,
 createManyEquipos,
+getSolicitantes,
+getAllEquipos,
+updateSolicitante} from "../controllers/auth.controller";
 getSolicitantes, actualizarEquipo } from "../controllers/auth.controller";
 import { authGuard } from "../middlewares/auth.middleware";
 
@@ -28,7 +31,9 @@ r.post("/createcliente",createCliente)
 r.post("/crearsolicitante",createManySolicitante)
 r.post("/crearequipos",createManyEquipos)
 r.get("/solicitantes",getSolicitantes)
+r.put("/updateSolicitante",updateSolicitante)
 
+r.get("/equipos",getAllEquipos)
 
 //Funcionalidad de visitas
 r.post("/crear_visita",authGuard,crearVisita)

@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import type { Secret } from "jsonwebtoken";
 import crypto from "crypto";
+import { error } from "console";
 
 const prisma = new PrismaClient
 /* =========================
@@ -113,7 +114,7 @@ export const registerUser = async(req:Request,res:Response)=>{
         passwordHash,
         status: true
       },
-      select: {id:true,nombre:true,email:true},
+      select: {id_tecnico:true,nombre:true,email:true},
     });
     return res.status(201).json({ user:newUser });
   } catch(error){
@@ -142,7 +143,7 @@ export const deleteCliente = async (req: Request, res: Response) => {
   if (!id) return res.status(400).json({ error: 'ID requerido' });
 
   try {
-    await prisma.empresa.delete({ where: { id: Number(id) } });
+    await prisma.empresa.delete({ where: { id_empresa: Number(id) } });
     return res.status(204).send();
   } catch (e: any) {
     if (e.code === "P2025") {
@@ -187,7 +188,7 @@ export const login = async (req: Request, res: Response) => {
     const user = await prisma.tecnico.findUnique({
       where: { email: emailNorm },
       select: {
-        id: true,
+        id_tecnico: true,
         nombre: true,
         email: true,
         passwordHash: true,
@@ -208,7 +209,7 @@ export const login = async (req: Request, res: Response) => {
 
     // 1) Access Token (corto)
     const at = signAccessToken({
-      id: user.id,
+      id: user.id_tecnico,
       email: user.email,
       nombreUsuario: user.nombre,
     });
@@ -226,7 +227,7 @@ export const login = async (req: Request, res: Response) => {
 
     await prisma.refreshToken.create({
       data: {
-        userId: user.id,
+        userId: user.id_tecnico,
         rtHash: rtDigest,
         expiresAt: addDays(days),
         userAgent, // string | null
@@ -250,7 +251,7 @@ export const getAllUsers = async (_req:Request,res:Response)=>{
   try{
     const users = await prisma.tecnico.findMany({
       select:{
-        id:true,
+        id_tecnico:true,
         nombre:true,
         email:true,
         status:true
@@ -357,7 +358,7 @@ export const refresh = async (req: Request, res: Response) => {
     setRefreshCookie(res, newRt, days);
 
     const at = signAccessToken({
-      id: row.user.id,
+      id: row.user.id_tecnico,
       email: row.user.email,
       nombreUsuario: row.user.nombre,
     });
@@ -402,6 +403,7 @@ export const crearVisita = async (req: Request, res: Response) => {
 
     // Validación básica
     if (!empresaId || !tecnicoId) {
+      console.log(empresaId,tecnicoId)
       return res.status(400).json({ error: "empresaId y tecnicoId son obligatorios" });
     }
 
@@ -420,12 +422,11 @@ export const crearVisita = async (req: Request, res: Response) => {
         empresaId: empresaIdInt,  // Usar 'empresaId' como número
         tecnicoId: tecnicoIdInt,  // Usar 'tecnicoId' como número
         solicitante: 'No especificado', // 'solicitante' se deja vacío inicialmente
-        realizado: 'No especificado', // 'realizado' se deja vacío inicialmente
         inicio: new Date(),
         status: EstadoVisita.PENDIENTE,  // 'fin' no se incluye en la creación
       },
       select: {
-        id: true,
+        id_visita: true,
         empresaId: true,
         tecnicoId: true,
         inicio: true,
@@ -438,6 +439,7 @@ export const crearVisita = async (req: Request, res: Response) => {
 
   } catch (error: any) {
     console.error('Error al crear la visita:', error);
+    
     return res.status(500).json({ error: `Error interno al crear la visita: ${error.message || error}` });
   }
 };
@@ -455,7 +457,14 @@ export const completarVisita = async (req: Request, res: Response) => {
       otros,
       otrosDetalle,
       solicitante,  // Este es el nombre o identificador del solicitante
-      realizado
+      ccleaner,
+      actualizaciones,
+      antivirus,
+      estadoDisco,
+      licenciaWindows,
+      licenciaOffice,
+      rendimientoEquipo,
+      mantenimientoReloj
     } = req.body;
 
     if (isNaN(visitaId)) {
@@ -463,17 +472,26 @@ export const completarVisita = async (req: Request, res: Response) => {
     }
 
     const visitaExistente = await prisma.visita.findUnique({
-      where: { id: visitaId },
+      where: { id_visita: visitaId },
     });
 
     if (!visitaExistente) {
       return res.status(404).json({ error: "Visita no encontrada" });
     }
 
+    // Convertir los campos booleanos
     const confImpresorasBool = Boolean(confImpresoras);
     const confTelefonosBool = Boolean(confTelefonos);
     const confPiePaginaBool = Boolean(confPiePagina);
     const otrosBool = Boolean(otros);
+    const ccleanerBool = Boolean(ccleaner);
+    const actualizacionesBool = Boolean(actualizaciones);
+    const antivirusBool = Boolean(antivirus);
+    const estadoDiscoBool = Boolean(estadoDisco);
+    const licenciaWindowsBool = Boolean(licenciaWindows);
+    const licenciaOfficeBool = Boolean(licenciaOffice);
+    const rendimientoEquipoBool = Boolean(rendimientoEquipo);
+    const mantenimientoRelojBool = Boolean(mantenimientoReloj);
 
     let otrosDetalleValidado = null;
     if (otrosBool && otrosDetalle) {
@@ -487,46 +505,60 @@ export const completarVisita = async (req: Request, res: Response) => {
     let solicitanteId: number | undefined = undefined;
 
     if (solicitante) {
-  const solicitanteEncontrado = await prisma.solicitante.findFirst({
-    where: {
-      nombre: solicitante.trim()  // Usar el nombre directamente aquí
-    },
-    select: { id: true }
-  });
+      const solicitanteEncontrado = await prisma.solicitante.findFirst({
+        where: {
+          nombre: solicitante.trim()  // Usar el nombre directamente aquí
+        },
+        select: { id_solicitante: true }
+      });
 
-  if (solicitanteEncontrado) {
-    solicitanteId = solicitanteEncontrado.id;
-  } else {
-    return res.status(400).json({ error: "Solicitante no encontrado" });
-  }
-}
+      if (solicitanteEncontrado) {
+        solicitanteId = solicitanteEncontrado.id_solicitante;
+      } else {
+        return res.status(400).json({ error: "Solicitante no encontrado" });
+      }
+    }
 
     // 2. Actualizar la visita con los nuevos datos
     const visitaActualizada = await prisma.visita.update({
-  where: { id: visitaId },
-  data: {
-    confImpresoras: confImpresorasBool,
-    confTelefonos: confTelefonosBool,
-    confPiePagina: confPiePaginaBool,
-    otros: otrosBool,
-    otrosDetalle: otrosDetalleValidado,
-    solicitanteId,
-    solicitante,  // Usamos 'undefined' si no se encontró el solicitante
-    realizado: realizado?.trim() || 'No especificado',
-    fin: new Date(),
-    status: EstadoVisita.COMPLETADA,
-  },
-  select: {
-    id: true,
-    tecnicoId: true,
-    solicitanteId: true,
-    solicitante: true,
-    realizado: true,
-    inicio: true,
-    fin: true,
-    status: true,
-  }
-});
+      where: { id_visita: visitaId },
+      data: {
+        confImpresoras: confImpresorasBool,
+        confTelefonos: confTelefonosBool,
+        confPiePagina: confPiePaginaBool,
+        otros: otrosBool,
+        otrosDetalle: otrosDetalleValidado,
+        solicitanteId,
+        solicitante,  // Usamos 'undefined' si no se encontró el solicitante
+        ccleaner: ccleanerBool,
+        actualizaciones: actualizacionesBool,
+        antivirus: antivirusBool,
+        estadoDisco: estadoDiscoBool,
+        licenciaWindows: licenciaWindowsBool,
+        licenciaOffice: licenciaOfficeBool,
+        rendimientoEquipo: rendimientoEquipoBool,
+        mantenimientoReloj: mantenimientoRelojBool,
+        fin: new Date(),
+        status: EstadoVisita.COMPLETADA,
+      },
+      select: {
+        id_visita: true,
+        tecnicoId: true,
+        solicitanteId: true,
+        solicitante: true,
+        inicio: true,
+        fin: true,
+        status: true,
+        ccleaner: true,
+        actualizaciones: true,
+        antivirus: true,
+        estadoDisco: true,
+        licenciaWindows: true,
+        licenciaOffice: true,
+        rendimientoEquipo: true,
+        mantenimientoReloj: true,
+      }
+    });
 
     // 3. Crear historial con los datos actualizados
     await prisma.historial.create({
@@ -536,7 +568,15 @@ export const completarVisita = async (req: Request, res: Response) => {
         solicitante: visitaActualizada.solicitante,  // El nombre del solicitante, si lo necesitas
         inicio: visitaActualizada.inicio,
         fin: visitaActualizada.fin!, // Aseguramos que no sea null
-        realizado: visitaActualizada.realizado,
+        realizado: otrosDetalle,
+        ccleaner: visitaActualizada.ccleaner,
+        actualizaciones: visitaActualizada.actualizaciones,
+        antivirus: visitaActualizada.antivirus,
+        estadoDisco: visitaActualizada.estadoDisco,
+        licenciaWindows: visitaActualizada.licenciaWindows,
+        licenciaOffice: visitaActualizada.licenciaOffice,
+        rendimientoEquipo: visitaActualizada.rendimientoEquipo,
+        mantenimientoReloj: visitaActualizada.mantenimientoReloj,
       }
     });
 
@@ -550,11 +590,6 @@ export const completarVisita = async (req: Request, res: Response) => {
     return res.status(500).json({ error: `Error interno al completar la visita: ${error.message || error}` });
   }
 };
-
-
-
-
-
 
 // GET /api/historial/:tecnicoId
 export const obtenerHistorialPorTecnico = async (req: Request, res: Response) => {
@@ -575,7 +610,7 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
         fin: 'desc'  // Ordenar por fecha de fin, de más reciente a más antiguo
       },
       include: {
-        cliente: {  // Aquí usamos 'cliente' ya que es el nombre de la relación en el modelo
+        solicitanteRef: {  // Aquí usamos 'cliente' ya que es el nombre de la relación en el modelo
           include: {
             empresa: true  // Incluir la empresa asociada al solicitante
           }
@@ -665,16 +700,25 @@ export const getSolicitantes = async (req: Request, res: Response) => {
   try {
     const empresaId = req.query.empresaId;
 
+    // Verificar que el parámetro 'empresaId' esté presente
     if (!empresaId) {
       return res.status(400).json({ error: "Falta el parámetro empresaId" });
     }
 
+    // Convertir 'empresaId' a número y validar
+    const empresaIdNumber = Number(empresaId);
+
+    if (isNaN(empresaIdNumber)) {
+      return res.status(400).json({ error: "El parámetro empresaId debe ser un número válido" });
+    }
+
+    // Realizar la consulta con el 'empresaId' validado
     const solicitantes = await prisma.solicitante.findMany({
       where: {
-        empresaId: Number(empresaId),
+        empresaId: empresaIdNumber, // Usamos el 'empresaId' convertido a número
       },
       select: {
-        id: true,
+        id_solicitante: true,
         nombre: true,
         empresaId: true,
       },
@@ -682,7 +726,70 @@ export const getSolicitantes = async (req: Request, res: Response) => {
 
     return res.json({ solicitantes });
   } catch (error) {
-    console.error("Error al obtener solicitantes:", JSON.stringify(error));
+    console.error("Error al obtener solicitantes:", error);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+
+export const updateSolicitante = async (req: Request, res: Response) => {
+  try {
+    const solicitantes = req.body;
+
+    if (!Array.isArray(solicitantes)) {
+      return res.status(400).json({ error: "Debe proporcionar un array de solicitantes a actualizar." });
+    }
+
+    const updatedSolicitantes = [];
+
+    for (const solicitante of solicitantes) {
+      const { id_solicitante, email, telefono } = solicitante;
+
+      if (!id_solicitante || !email) {
+        return res.status(400).json({ error: "Faltan parámetros necesarios en uno de los solicitantes." });
+      }
+
+      // Verificar si el email ya está registrado en otro solicitante
+      const emailExistente = await prisma.solicitante.findFirst({
+        where: { email: email, NOT: { id_solicitante: id_solicitante } },
+      });
+
+      if (emailExistente) {
+        return res.status(400).json({ error: `El email ${email} ya está en uso por otro solicitante.` });
+      }
+
+      const solicitanteExistente = await prisma.solicitante.findUnique({
+        where: { id_solicitante: id_solicitante },
+      });
+
+      if (!solicitanteExistente) {
+        return res.status(404).json({ error: `Solicitante con ID ${id_solicitante} no encontrado.` });
+      }
+
+      const telefonoFinal = telefono === "" ? "" : telefono;
+
+      try {
+        const updatedSolicitante = await prisma.solicitante.update({
+          where: { id_solicitante: id_solicitante },
+          data: {
+            email: email,
+            telefono: telefonoFinal,
+          },
+        });
+
+        updatedSolicitantes.push(updatedSolicitante);
+      } catch (error) {
+        console.error("Error al actualizar solicitante con ID:", id_solicitante, error);
+        return res.status(500).json({ error: `Error al actualizar solicitante con ID ${id_solicitante}` });
+      }
+    }
+
+    return res.json({
+      message: "Solicitantes actualizados correctamente",
+      updatedSolicitantes,
+    });
+  } catch (error) {
+    console.error("Error en el proceso de actualización de solicitantes:", error);
     return res.status(500).json({ error: "Error interno del servidor" });
   }
 };
@@ -717,3 +824,31 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Error al actualizar equipo" });
   }
 };
+
+
+
+//GET Auth/getAllEquipos
+export const getAllEquipos = async(req:Request,res:Response)=>{
+try{
+    const equipos = await prisma.equipo.findMany({
+      select: {
+        id_equipo:true,
+        serial:true,
+        marca:true,
+        modelo:true,
+        procesador:true,
+        ram:true,
+        disco:true,
+        propiedad:true,
+      }
+    });
+    return res.json({equipos});
+}
+catch(e){
+  console.error("Error al obtener equipos", JSON.stringify(e));
+  return res.status(500).json({error: "Error interno del servidor"})
+}
+
+
+
+}

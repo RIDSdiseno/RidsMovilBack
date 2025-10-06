@@ -20,7 +20,7 @@ model Empresa {
 model Solicitante {
   id_solicitante Int                     @id @default(autoincrement()) @map("id_solicitante")
   nombre         String
-  email          String?                 @unique
+  email          String?                 
   telefono       String?
   empresaId      Int
   empresa        Empresa                 @relation(fields: [empresaId], references: [id_empresa])
@@ -171,27 +171,29 @@ model FreshdeskRequesterMap {
 
 /// Ticket de Freshdesk ligado a tu Empresa y al Solicitante que lo creó
 model FreshdeskTicket {
-  id             BigInt       @id
-  subject        String
-  status         Int
-  priority       Int
-  type           String?
-  requesterEmail String?
-  createdAt      DateTime
-  updatedAt      DateTime
-  source         String?
-  capturedAt     DateTime?
-  empresaId      Int?
-  solicitanteId  Int?
-  ticketOrgId    Int?
-  empresa        Empresa?     @relation(fields: [empresaId], references: [id_empresa])
-  solicitante    Solicitante? @relation(fields: [solicitanteId], references: [id_solicitante])
+  id                BigInt       @id
+  subject           String
+  status            Int
+  priority          Int
+  type              String?
+  requesterEmail    String?
+  createdAt         DateTime
+  updatedAt         DateTime
+  source            String?
+  capturedAt        DateTime?
+  empresaId         Int?
+  solicitanteId     Int?
+  ticketOrgId       Int?
+  ticketRequesterId Int?
+  empresa           Empresa?     @relation(fields: [empresaId], references: [id_empresa])
+  solicitante       Solicitante? @relation(fields: [solicitanteId], references: [id_solicitante])
 
   @@index([empresaId])
   @@index([solicitanteId])
   @@index([requesterEmail])
   @@index([createdAt])
   @@index([ticketOrgId])
+  @@index([ticketRequesterId])
 }
 
 model FdSourceMap {
@@ -209,6 +211,19 @@ model TicketOrg {
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime
+}
+
+model TicketRequester {
+  id            Int      @id @default(autoincrement())
+  name          String
+  email         String?  @unique
+  phone         String?
+  fdRequesterId BigInt?  @unique
+  ticketOrgId   Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime
+
+  @@index([ticketOrgId])
 }
 
 enum EstadoVisita {

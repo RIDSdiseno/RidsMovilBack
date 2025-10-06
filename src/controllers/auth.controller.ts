@@ -754,10 +754,6 @@ export const updateSolicitante = async (req: Request, res: Response) => {
         where: { email: email, NOT: { id_solicitante: id_solicitante } },
       });
 
-      if (emailExistente) {
-        return res.status(400).json({ error: `El email ${email} ya está en uso por otro solicitante.` });
-      }
-
       const solicitanteExistente = await prisma.solicitante.findUnique({
         where: { id_solicitante: id_solicitante },
       });

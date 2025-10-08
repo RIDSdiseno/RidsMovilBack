@@ -907,8 +907,7 @@ export const createManyDetalle = async (req:Request,res:Response)=>{
     }));
 
     const result = await prisma.detalleEquipo.createMany({
-      data,
-      skipDuplicates: true, // requiere UNIQUE en tu schema para que tenga efecto
+      data
     });
 
     return res.status(201).json({ message: `Se agregaron ${result.count} detalle(s)` });

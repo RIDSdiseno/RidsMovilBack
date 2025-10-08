@@ -881,7 +881,7 @@ type DetalleEquipoInput = {
   office?: string | null;
   teamViewer?: string | null;
   claveTv?: string | null;
-  revisado?: string | Date | null;
+  revisado?: string | null;
 };
 
 function normalizeString(v: unknown): string | null {

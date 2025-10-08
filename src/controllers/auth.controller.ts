@@ -879,7 +879,6 @@ type DetalleEquipoInput = {
   tipoDd?: string | null;
   estadoAlm?: string | null;
   office?: string | null;
-  correo?: string | null;
   teamViewer?: string | null;
   claveTv?: string | null;
   revisado?: string | Date | null;
@@ -934,7 +933,6 @@ export const createManyDetalle = async (req: Request, res: Response) => {
           tipoDd: normalizeString(raw.tipoDd),
           estadoAlm: normalizeString(raw.estadoAlm),
           office: normalizeString(raw.office),
-          correo: normalizeString(raw.correo),
           teamViewer: normalizeString(raw.teamViewer),
           claveTv: normalizeString(raw.claveTv),
           revisado: normalizeRevisado(raw.revisado), // ← ahora string | null

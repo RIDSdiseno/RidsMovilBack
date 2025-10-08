@@ -880,7 +880,7 @@ type DetalleEquipoInput = {
   office?: string | null;
   teamViewer?: string | null;
   claveTv?: string | null;
-  revisado?: string | null; // tu modelo usa String?
+  revisado?: string | null; // String? en tu modelo
 };
 
 const toNull = (v: unknown): string | null => {
@@ -892,48 +892,81 @@ const toNull = (v: unknown): string | null => {
   return null;
 };
 
+function toCreateManyInput(d: DetalleEquipoInput): Prisma.DetalleEquipoCreateManyInput {
+  return {
+    idEquipo: Number(d.idEquipo),
+    macWifi:   toNull(d.macWifi),
+    so:        toNull(d.so),
+    tipoDd:    toNull(d.tipoDd),
+    estadoAlm: toNull(d.estadoAlm),
+    office:    toNull(d.office),
+    teamViewer:toNull(d.teamViewer),
+    claveTv:   toNull(d.claveTv),
+    revisado:  toNull(d.revisado),
+  };
+}
+
+// util simple para chunkear
+function chunk<T>(arr: T[], size: number) {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
 export const createManyDetalle = async (req: Request, res: Response) => {
-  // Acepta { detalles: [...] } (igual que tu createManyEquipos)
-  const { detalles } = (req.body ?? {}) as { detalles?: DetalleEquipoInput[] };
-
-  if (!Array.isArray(detalles) || detalles.length === 0) {
-    return res
-      .status(400)
-      .json({ error: "Debes enviar un arreglo 'detalles' con al menos un elemento" });
-  }
-
   try {
-    const data: Prisma.DetalleEquipoCreateManyInput[] = detalles.map((d, idx) => {
-      if (d == null || typeof d !== "object") {
-        throw new Error(`Elemento #${idx + 1} no es un objeto válido`);
-      }
-      if (d.idEquipo == null || Number.isNaN(Number(d.idEquipo))) {
-        throw new Error(`Elemento #${idx + 1} requiere 'idEquipo' numérico`);
-      }
-      return {
-        idEquipo: Number(d.idEquipo),
-        macWifi:   toNull(d.macWifi),
-        so:        toNull(d.so),
-        tipoDd:    toNull(d.tipoDd),
-        estadoAlm: toNull(d.estadoAlm),
-        office:    toNull(d.office),
-        teamViewer:toNull(d.teamViewer),
-        claveTv:   toNull(d.claveTv),
-        revisado:  toNull(d.revisado), // String? en tu modelo
-      };
-    });
+    const { detalles } = (req.body ?? {}) as { detalles?: DetalleEquipoInput[] };
+    const list = Array.isArray(detalles) ? detalles : Array.isArray(req.body) ? (req.body as DetalleEquipoInput[]) : [req.body];
 
-    const result = await prisma.detalleEquipo.createMany({
-      data,
-      // Actívalo solo si tienes algún índice único útil (p.ej. unique por idEquipo si aplica)
-      // skipDuplicates: true,
-    });
+    if (!Array.isArray(list) || list.length === 0) {
+      return res.status(400).json({ error: "Debes enviar un arreglo 'detalles' o un array con al menos un elemento" });
+    }
 
-    return res.status(201).json({
-      message: `Se agregaron ${result.count} detalle(s)`,
-    });
+    // validación mínima
+    for (let i = 0; i < list.length; i++) {
+      const it = list[i];
+      if (!it || typeof it !== "object") throw new Error(`Elemento #${i + 1} no es un objeto válido`);
+      if (it.idEquipo == null || Number.isNaN(Number(it.idEquipo))) {
+        throw new Error(`Elemento #${i + 1} requiere 'idEquipo' numérico`);
+      }
+    }
+
+    const data = list.map(toCreateManyInput);
+
+    try {
+      // intento rápido y eficiente
+      const r = await prisma.detalleEquipo.createMany({ data /*, skipDuplicates: true*/ });
+      return res.status(201).json({ ok: true, message: "Detalles creados", count: r.count });
+    } catch (err: any) {
+      const msg = String(err?.message ?? err);
+      const isProtoError =
+        msg.includes("08P01") || msg.includes("insufficient data left in message") || msg.includes("protocol");
+
+      if (!isProtoError) {
+        // si no es el error de protocolo, re-lanza
+        throw err;
+      }
+
+      // Fallback: insertar por lotes pequeños (p. ej. 50) en transacción
+      const batches = chunk(data, 50);
+      let total = 0;
+      await prisma.$transaction(async (tx) => {
+        for (const batch of batches) {
+          // puedes usar createMany por batch, o fila por fila si quieres ser ultra-defensivo
+          // fila por fila (más robusto si el pooler está muy agresivo):
+          for (const row of batch) {
+            await tx.detalleEquipo.create({ data: row });
+            total++;
+          }
+          // Alternativa (más rápida): await tx.detalleEquipo.createMany({ data: batch });
+          // total += batch.length;
+        }
+      });
+
+      return res.status(201).json({ ok: true, message: "Detalles creados (fallback)", count: total });
+    }
   } catch (error: any) {
     console.error("Error al insertar detalles:", error);
-    return res.status(500).json({ error: error?.message ?? "Error al insertar detalles" });
+    return res.status(500).json({ ok: false, error: error?.message ?? "Error al insertar detalles" });
   }
 };

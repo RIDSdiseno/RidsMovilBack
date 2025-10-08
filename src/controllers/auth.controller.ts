@@ -871,7 +871,6 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
   }
 };
 
-
 type DetalleEquipoInput = {
   idEquipo: number;
   macWifi?: string | null;
@@ -881,76 +880,60 @@ type DetalleEquipoInput = {
   office?: string | null;
   teamViewer?: string | null;
   claveTv?: string | null;
-  revisado?: string | null;
+  revisado?: string | null; // tu modelo usa String?
 };
 
-function normalizeString(v: unknown): string | null {
+const toNull = (v: unknown): string | null => {
   if (v == null) return null;
   if (typeof v === "string") {
     const t = v.trim();
     return t === "" ? null : t;
   }
-  // si quieres convertir números/booleanos a string, añádelo aquí
   return null;
-}
-
-function normalizeRevisado(v: unknown): string | null {
-  if (v == null) return null;
-  if (v instanceof Date) {
-    return isNaN(v.getTime()) ? null : v.toISOString();
-  }
-  if (typeof v === "string") {
-    const t = v.trim();
-    if (t === "") return null;
-    // si ya viene tipo "29-ene" y no quieres transformarlo, se deja tal cual.
-    // si quisieras forzar ISO, parsea aquí y convierte.
-    return t;
-  }
-  return null;
-}
+};
 
 export const createManyDetalle = async (req: Request, res: Response) => {
+  // Acepta { detalles: [...] } (igual que tu createManyEquipos)
+  const { detalles } = (req.body ?? {}) as { detalles?: DetalleEquipoInput[] };
+
+  if (!Array.isArray(detalles) || detalles.length === 0) {
+    return res
+      .status(400)
+      .json({ error: "Debes enviar un arreglo 'detalles' con al menos un elemento" });
+  }
+
   try {
-    const body = Array.isArray(req.body) ? req.body : [req.body];
-
-    const data: Prisma.DetalleEquipoCreateManyInput[] = body.map(
-      (raw: DetalleEquipoInput, idx: number) => {
-        if (!raw || typeof raw !== "object") {
-          throw new Error(`Elemento #${idx + 1} no es un objeto válido`);
-        }
-        if (
-          raw.idEquipo === undefined ||
-          raw.idEquipo === null ||
-          Number.isNaN(Number(raw.idEquipo))
-        ) {
-          throw new Error(`Elemento #${idx + 1} requiere 'idEquipo' numérico`);
-        }
-
-        return {
-          idEquipo: Number(raw.idEquipo),
-          macWifi: normalizeString(raw.macWifi),
-          so: normalizeString(raw.so),
-          tipoDd: normalizeString(raw.tipoDd),
-          estadoAlm: normalizeString(raw.estadoAlm),
-          office: normalizeString(raw.office),
-          teamViewer: normalizeString(raw.teamViewer),
-          claveTv: normalizeString(raw.claveTv),
-          revisado: normalizeRevisado(raw.revisado), // ← ahora string | null
-        };
+    const data: Prisma.DetalleEquipoCreateManyInput[] = detalles.map((d, idx) => {
+      if (d == null || typeof d !== "object") {
+        throw new Error(`Elemento #${idx + 1} no es un objeto válido`);
       }
-    );
+      if (d.idEquipo == null || Number.isNaN(Number(d.idEquipo))) {
+        throw new Error(`Elemento #${idx + 1} requiere 'idEquipo' numérico`);
+      }
+      return {
+        idEquipo: Number(d.idEquipo),
+        macWifi:   toNull(d.macWifi),
+        so:        toNull(d.so),
+        tipoDd:    toNull(d.tipoDd),
+        estadoAlm: toNull(d.estadoAlm),
+        office:    toNull(d.office),
+        teamViewer:toNull(d.teamViewer),
+        claveTv:   toNull(d.claveTv),
+        revisado:  toNull(d.revisado), // String? en tu modelo
+      };
+    });
 
-    const result = await prisma.detalleEquipo.createMany({ data });
+    const result = await prisma.detalleEquipo.createMany({
+      data,
+      // Actívalo solo si tienes algún índice único útil (p.ej. unique por idEquipo si aplica)
+      // skipDuplicates: true,
+    });
+
     return res.status(201).json({
-      ok: true,
-      message: "Detalle(s) creado(s) correctamente",
-      count: result.count,
+      message: `Se agregaron ${result.count} detalle(s)`,
     });
-  } catch (err: any) {
-    console.error(err);
-    return res.status(400).json({
-      ok: false,
-      error: err?.message ?? "Error al crear detalle(s)",
-    });
+  } catch (error: any) {
+    console.error("Error al insertar detalles:", error);
+    return res.status(500).json({ error: error?.message ?? "Error al insertar detalles" });
   }
 };

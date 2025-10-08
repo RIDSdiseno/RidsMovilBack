@@ -20,7 +20,7 @@ model Empresa {
 model Solicitante {
   id_solicitante Int                     @id @default(autoincrement()) @map("id_solicitante")
   nombre         String
-  email          String?                 
+  email          String?
   telefono       String?
   empresaId      Int
   empresa        Empresa                 @relation(fields: [empresaId], references: [id_empresa])
@@ -57,10 +57,9 @@ model DetalleEquipo {
   tipoDd     String?
   estadoAlm  String?
   office     String?
-  correo     String?
   teamViewer String?
   claveTv    String?
-  revisado   DateTime?
+  revisado   String?
   equipo     Equipo?   @relation(fields: [idEquipo], references: [id_equipo])
 
   @@index([idEquipo])
@@ -224,6 +223,19 @@ model TicketRequester {
   updatedAt     DateTime
 
   @@index([ticketOrgId])
+}
+
+model EquipoProducto {
+  id            Int      @id @default(autoincrement())
+  nombre        String
+  descripcion   String?
+  precio        Decimal
+  stock         Int      @default(0)
+  marca         String
+  modelo        String
+  estado        String
+  creadoEn      DateTime @default(now())
+  actualizadoEn DateTime
 }
 
 enum EstadoVisita {

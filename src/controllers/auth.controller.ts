@@ -885,16 +885,29 @@ type DetalleEquipoInput = {
   revisado?: string | Date | null;
 };
 
-// Normaliza a string o null. Nunca devuelve {}.
 function normalizeString(v: unknown): string | null {
   if (v == null) return null;
   if (typeof v === "string") {
     const t = v.trim();
     return t === "" ? null : t;
   }
-  // Si prefieres convertir números a string, descomenta:
-  // if (typeof v === "number") return String(v);
-  return null; // para cualquier tipo no-string
+  // si quieres convertir números/booleanos a string, añádelo aquí
+  return null;
+}
+
+function normalizeRevisado(v: unknown): string | null {
+  if (v == null) return null;
+  if (v instanceof Date) {
+    return isNaN(v.getTime()) ? null : v.toISOString();
+  }
+  if (typeof v === "string") {
+    const t = v.trim();
+    if (t === "") return null;
+    // si ya viene tipo "29-ene" y no quieres transformarlo, se deja tal cual.
+    // si quisieras forzar ISO, parsea aquí y convierte.
+    return t;
+  }
+  return null;
 }
 
 export const createManyDetalle = async (req: Request, res: Response) => {
@@ -914,20 +927,6 @@ export const createManyDetalle = async (req: Request, res: Response) => {
           throw new Error(`Elemento #${idx + 1} requiere 'idEquipo' numérico`);
         }
 
-        let revisado: Date | undefined;
-        if (raw.revisado != null) {
-          const d =
-            typeof raw.revisado === "string"
-              ? new Date(raw.revisado)
-              : raw.revisado;
-          if (isNaN(d.getTime())) {
-            throw new Error(
-              `Elemento #${idx + 1} tiene 'revisado' inválido (usa ISO 8601)`
-            );
-          }
-          revisado = d;
-        }
-
         return {
           idEquipo: Number(raw.idEquipo),
           macWifi: normalizeString(raw.macWifi),
@@ -938,7 +937,7 @@ export const createManyDetalle = async (req: Request, res: Response) => {
           correo: normalizeString(raw.correo),
           teamViewer: normalizeString(raw.teamViewer),
           claveTv: normalizeString(raw.claveTv),
-          revisado, // puede quedar undefined y Prisma lo acepta
+          revisado: normalizeRevisado(raw.revisado), // ← ahora string | null
         };
       }
     );

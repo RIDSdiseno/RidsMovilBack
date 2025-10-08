@@ -9,7 +9,8 @@ createManyEquipos,
 getSolicitantes,
 getAllEquipos,
 updateSolicitante,
-actualizarEquipo} from "../controllers/auth.controller";
+actualizarEquipo,
+createManyDetalle} from "../controllers/auth.controller";
 import { authGuard } from "../middlewares/auth.middleware";
 
 const r = Router();
@@ -32,6 +33,8 @@ r.post("/crearsolicitante",createManySolicitante)
 r.post("/crearequipos",createManyEquipos)
 r.get("/solicitantes",getSolicitantes)
 r.put("/updateSolicitante",updateSolicitante)
+r.post("/detalles",createManyDetalle)
+
 
 r.get("/equipos",getAllEquipos)
 

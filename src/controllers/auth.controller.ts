@@ -813,9 +813,6 @@ export const getAllEquipos = async (req: Request, res: Response) => {
     console.error("Error al obtener equipos", JSON.stringify(e));
     return res.status(500).json({ error: "Error interno del servidor" })
   }
-
-
-
 }
     
 
@@ -871,5 +868,92 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
     if (e?.code === "P2025") return res.status(404).json({ error: "Equipo no encontrado" });
     console.error("Error al actualizar equipo:", e);
     return res.status(500).json({ error: "Error al actualizar equipo" });
+  }
+};
+
+
+type DetalleEquipoInput = {
+  idEquipo: number;
+  macWifi?: string | null;
+  so?: string | null;
+  tipoDd?: string | null;
+  estadoAlm?: string | null;
+  office?: string | null;
+  correo?: string | null;
+  teamViewer?: string | null;
+  claveTv?: string | null;
+  revisado?: string | Date | null;
+};
+
+// Normaliza a string o null. Nunca devuelve {}.
+function normalizeString(v: unknown): string | null {
+  if (v == null) return null;
+  if (typeof v === "string") {
+    const t = v.trim();
+    return t === "" ? null : t;
+  }
+  // Si prefieres convertir números a string, descomenta:
+  // if (typeof v === "number") return String(v);
+  return null; // para cualquier tipo no-string
+}
+
+export const createManyDetalle = async (req: Request, res: Response) => {
+  try {
+    const body = Array.isArray(req.body) ? req.body : [req.body];
+
+    const data: Prisma.DetalleEquipoCreateManyInput[] = body.map(
+      (raw: DetalleEquipoInput, idx: number) => {
+        if (!raw || typeof raw !== "object") {
+          throw new Error(`Elemento #${idx + 1} no es un objeto válido`);
+        }
+        if (
+          raw.idEquipo === undefined ||
+          raw.idEquipo === null ||
+          Number.isNaN(Number(raw.idEquipo))
+        ) {
+          throw new Error(`Elemento #${idx + 1} requiere 'idEquipo' numérico`);
+        }
+
+        let revisado: Date | undefined;
+        if (raw.revisado != null) {
+          const d =
+            typeof raw.revisado === "string"
+              ? new Date(raw.revisado)
+              : raw.revisado;
+          if (isNaN(d.getTime())) {
+            throw new Error(
+              `Elemento #${idx + 1} tiene 'revisado' inválido (usa ISO 8601)`
+            );
+          }
+          revisado = d;
+        }
+
+        return {
+          idEquipo: Number(raw.idEquipo),
+          macWifi: normalizeString(raw.macWifi),
+          so: normalizeString(raw.so),
+          tipoDd: normalizeString(raw.tipoDd),
+          estadoAlm: normalizeString(raw.estadoAlm),
+          office: normalizeString(raw.office),
+          correo: normalizeString(raw.correo),
+          teamViewer: normalizeString(raw.teamViewer),
+          claveTv: normalizeString(raw.claveTv),
+          revisado, // puede quedar undefined y Prisma lo acepta
+        };
+      }
+    );
+
+    const result = await prisma.detalleEquipo.createMany({ data });
+    return res.status(201).json({
+      ok: true,
+      message: "Detalle(s) creado(s) correctamente",
+      count: result.count,
+    });
+  } catch (err: any) {
+    console.error(err);
+    return res.status(400).json({
+      ok: false,
+      error: err?.message ?? "Error al crear detalle(s)",
+    });
   }
 };

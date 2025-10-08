@@ -914,6 +914,6 @@ export const createManyDetalle = async (req:Request,res:Response)=>{
     return res.status(201).json({ message: `Se agregaron ${result.count} detalle(s)` });
   } catch (e: any) {
     console.error('Error al insertar detalles: ', e);
-    return res.status(500).json({ error: 'Error al insertar equipos' });
+    return res.status(500).json({ error: JSON.stringify(e) });
   }
 };

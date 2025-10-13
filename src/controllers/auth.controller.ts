@@ -447,149 +447,153 @@ export const crearVisita = async (req: Request, res: Response) => {
 
 export const completarVisita = async (req: Request, res: Response) => {
   try {
-    console.log("Datos recibidos para completar la visita:", req.body);
     const visitaId = Number(req.params.id);
+    if (!Number.isFinite(visitaId)) return res.status(400).json({ error: "ID de visita inválido" });
+
+    const v = await prisma.visita.findUnique({ where: { id_visita: visitaId } });
+    if (!v) return res.status(404).json({ error: "Visita no encontrada" });
 
     const {
-      confImpresoras,
-      confTelefonos,
-      confPiePagina,
-      otros,
-      otrosDetalle,
-      solicitante,  // Este es el nombre o identificador del solicitante
-      ccleaner,
-      actualizaciones,
-      antivirus,
-      estadoDisco,
-      licenciaWindows,
-      licenciaOffice,
-      rendimientoEquipo,
-      mantenimientoReloj
-    } = req.body;
+      confImpresoras, confTelefonos, confPiePagina, otros, otrosDetalle,
+      ccleaner, actualizaciones, antivirus, estadoDisco,
+      licenciaWindows, licenciaOffice, rendimientoEquipo, mantenimientoReloj,
+      realizado,
+      solicitantes // ← array de { id_solicitante, nombre } desde el front
+    } = req.body ?? {};
 
-    if (isNaN(visitaId)) {
-      return res.status(400).json({ error: "ID de visita inválido" });
+    // Normalizar booleans
+    const toB = (x:any)=>Boolean(x);
+    const payloadFlags = {
+      confImpresoras: toB(confImpresoras),
+      confTelefonos: toB(confTelefonos),
+      confPiePagina: toB(confPiePagina),
+      otros: toB(otros),
+      ccleaner: toB(ccleaner),
+      actualizaciones: toB(actualizaciones),
+      antivirus: toB(antivirus),
+      estadoDisco: toB(estadoDisco),
+      licenciaWindows: toB(licenciaWindows),
+      licenciaOffice: toB(licenciaOffice),
+      rendimientoEquipo: toB(rendimientoEquipo),
+      mantenimientoReloj: toB(mantenimientoReloj),
+    };
+
+    let otrosDetalleValidado: string | null = null;
+    if (payloadFlags.otros) {
+      const t = (otrosDetalle ?? '').toString().trim();
+      if (!t) return res.status(400).json({ error: "'otrosDetalle' no puede estar vacío si 'otros' está marcado" });
+      otrosDetalleValidado = t;
     }
 
-    const visitaExistente = await prisma.visita.findUnique({
-      where: { id_visita: visitaId },
-    });
+    // Normalizar solicitantes -> arrays de ids y nombres alineados
+    const arr = Array.isArray(solicitantes) ? solicitantes : [];
+    const ids   = arr.map(s => Number(s?.id_solicitante)).filter(n => Number.isFinite(n)) as number[];
+    const names = arr.map(s => (s?.nombre ?? '').toString().trim());
 
-    if (!visitaExistente) {
-      return res.status(404).json({ error: "Visita no encontrada" });
-    }
+    if (!ids.length) return res.status(400).json({ error: "Debe venir al menos un solicitante" });
 
-    // Convertir los campos booleanos
-    const confImpresorasBool = Boolean(confImpresoras);
-    const confTelefonosBool = Boolean(confTelefonos);
-    const confPiePaginaBool = Boolean(confPiePagina);
-    const otrosBool = Boolean(otros);
-    const ccleanerBool = Boolean(ccleaner);
-    const actualizacionesBool = Boolean(actualizaciones);
-    const antivirusBool = Boolean(antivirus);
-    const estadoDiscoBool = Boolean(estadoDisco);
-    const licenciaWindowsBool = Boolean(licenciaWindows);
-    const licenciaOfficeBool = Boolean(licenciaOffice);
-    const rendimientoEquipoBool = Boolean(rendimientoEquipo);
-    const mantenimientoRelojBool = Boolean(mantenimientoReloj);
+    const now = new Date();
 
-    let otrosDetalleValidado = null;
-    if (otrosBool && otrosDetalle) {
-      otrosDetalleValidado = otrosDetalle?.trim();
-      if (!otrosDetalleValidado) {
-        return res.status(400).json({ error: "'otrosDetalle' no puede estar vacío si 'otros' está seleccionado" });
-      }
-    }
+    const result = await prisma.$transaction(async (tx) => {
+      const updated: any[] = [];
 
-    // 1. Buscar el ID del solicitante (si no lo hemos recibido directamente como ID, buscarlo por nombre)
-    let solicitanteId: number | undefined = undefined;
-
-    if (solicitante) {
-      const solicitanteEncontrado = await prisma.solicitante.findFirst({
-        where: {
-          nombre: solicitante.trim()  // Usar el nombre directamente aquí
+      // 1) actualizar la visita existente con el primer solicitante
+      const u = await tx.visita.update({
+        where: { id_visita: visitaId },
+        data: {
+          ...payloadFlags,
+          otrosDetalle: otrosDetalleValidado,
+          solicitanteId: ids[0],
+          solicitante: names[0] || null,
+          fin: now,
+          status: EstadoVisita.COMPLETADA,
         },
-        select: { id_solicitante: true }
+        select: {
+          id_visita: true, tecnicoId: true, empresaId: true, inicio: true, fin: true,
+          solicitanteId: true, solicitante: true, status: true,
+          ccleaner: true, actualizaciones: true, antivirus: true, estadoDisco: true,
+          licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true,
+        }
+      });
+      updated.push(u);
+
+      // historial de la primera
+      await tx.historial.create({
+        data: {
+          tecnicoId: u.tecnicoId,
+          solicitanteId: u.solicitanteId!,
+          solicitante: u.solicitante,
+          inicio: u.inicio,
+          fin: u.fin!,
+          realizado: (realizado ?? otrosDetalleValidado) ?? null,
+          ccleaner: u.ccleaner,
+          actualizaciones: u.actualizaciones,
+          antivirus: u.antivirus,
+          estadoDisco: u.estadoDisco,
+          licenciaWindows: u.licenciaWindows,
+          licenciaOffice: u.licenciaOffice,
+          rendimientoEquipo: u.rendimientoEquipo,
+          mantenimientoReloj: u.mantenimientoReloj,
+        }
       });
 
-      if (solicitanteEncontrado) {
-        solicitanteId = solicitanteEncontrado.id_solicitante;
-      } else {
-        return res.status(400).json({ error: "Solicitante no encontrado" });
-      }
-    }
+      // 2) crear visitas nuevas para el resto de solicitantes
+      for (let i = 1; i < ids.length; i++) {
+        const nueva = await tx.visita.create({
+          data: {
+            tecnicoId: u.tecnicoId,
+            empresaId: u.empresaId,           // requiere que exista en tu modelo
+            inicio: v.inicio,                 // mismo inicio que la original
+            fin: now,
+            status: EstadoVisita.COMPLETADA,
+            ...payloadFlags,
+            otrosDetalle: otrosDetalleValidado,
+            solicitanteId: ids[i],
+            solicitante: names[i] || null,
+          },
+          select: {
+            id_visita: true, tecnicoId: true, empresaId: true, inicio: true, fin: true,
+            solicitanteId: true, solicitante: true, status: true,
+            ccleaner: true, actualizaciones: true, antivirus: true, estadoDisco: true,
+            licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true,
+          }
+        });
 
-    // 2. Actualizar la visita con los nuevos datos
-    const visitaActualizada = await prisma.visita.update({
-      where: { id_visita: visitaId },
-      data: {
-        confImpresoras: confImpresorasBool,
-        confTelefonos: confTelefonosBool,
-        confPiePagina: confPiePaginaBool,
-        otros: otrosBool,
-        otrosDetalle: otrosDetalleValidado,
-        solicitanteId,
-        solicitante,  // Usamos 'undefined' si no se encontró el solicitante
-        ccleaner: ccleanerBool,
-        actualizaciones: actualizacionesBool,
-        antivirus: antivirusBool,
-        estadoDisco: estadoDiscoBool,
-        licenciaWindows: licenciaWindowsBool,
-        licenciaOffice: licenciaOfficeBool,
-        rendimientoEquipo: rendimientoEquipoBool,
-        mantenimientoReloj: mantenimientoRelojBool,
-        fin: new Date(),
-        status: EstadoVisita.COMPLETADA,
-      },
-      select: {
-        id_visita: true,
-        tecnicoId: true,
-        solicitanteId: true,
-        solicitante: true,
-        inicio: true,
-        fin: true,
-        status: true,
-        ccleaner: true,
-        actualizaciones: true,
-        antivirus: true,
-        estadoDisco: true,
-        licenciaWindows: true,
-        licenciaOffice: true,
-        rendimientoEquipo: true,
-        mantenimientoReloj: true,
-      }
-    });
+        updated.push(nueva);
 
-    // 3. Crear historial con los datos actualizados
-    await prisma.historial.create({
-      data: {
-        tecnicoId: visitaActualizada.tecnicoId,
-        solicitanteId: visitaActualizada.solicitanteId!,  // Usamos solicitanteId aquí
-        solicitante: visitaActualizada.solicitante,  // El nombre del solicitante, si lo necesitas
-        inicio: visitaActualizada.inicio,
-        fin: visitaActualizada.fin!, // Aseguramos que no sea null
-        realizado: otrosDetalle,
-        ccleaner: visitaActualizada.ccleaner,
-        actualizaciones: visitaActualizada.actualizaciones,
-        antivirus: visitaActualizada.antivirus,
-        estadoDisco: visitaActualizada.estadoDisco,
-        licenciaWindows: visitaActualizada.licenciaWindows,
-        licenciaOffice: visitaActualizada.licenciaOffice,
-        rendimientoEquipo: visitaActualizada.rendimientoEquipo,
-        mantenimientoReloj: visitaActualizada.mantenimientoReloj,
+        await tx.historial.create({
+          data: {
+            tecnicoId: nueva.tecnicoId,
+            solicitanteId: nueva.solicitanteId!,
+            solicitante: nueva.solicitante,
+            inicio: nueva.inicio,
+            fin: nueva.fin!,
+            realizado: (realizado ?? otrosDetalleValidado) ?? null,
+            ccleaner: nueva.ccleaner,
+            actualizaciones: nueva.actualizaciones,
+            antivirus: nueva.antivirus,
+            estadoDisco: nueva.estadoDisco,
+            licenciaWindows: nueva.licenciaWindows,
+            licenciaOffice: nueva.licenciaOffice,
+            rendimientoEquipo: nueva.rendimientoEquipo,
+            mantenimientoReloj: nueva.mantenimientoReloj,
+          }
+        });
       }
+
+      return updated;
     });
 
     return res.status(200).json({
-      message: "Visita completada y registrada en historial",
-      visita: visitaActualizada,
+      message: `Visita(s) completada(s) para ${ids.length} solicitante(s)`,
+      visitas: result,
     });
-
   } catch (error: any) {
     console.error("Error al completar visita:", error);
     return res.status(500).json({ error: `Error interno al completar la visita: ${error.message || error}` });
   }
 };
+
 
 // GET /api/historial/:tecnicoId
 export const obtenerHistorialPorTecnico = async (req: Request, res: Response) => {

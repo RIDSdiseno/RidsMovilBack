@@ -23,6 +23,7 @@ model Solicitante {
   email          String?
   telefono       String?
   empresaId      Int
+  clienteId      Int?                    @unique
   empresa        Empresa                 @relation(fields: [empresaId], references: [id_empresa])
   equipos        Equipo[]
   visitas        Visita[]                @relation("Solicitante_Visita")
@@ -50,7 +51,7 @@ model Equipo {
 }
 
 model DetalleEquipo {
-  id         Int       @id @default(autoincrement()) @map("id_detalle_equipo")
+  id         Int     @id @default(autoincrement()) @map("id_detalle_equipo")
   idEquipo   Int
   macWifi    String?
   so         String?
@@ -60,7 +61,7 @@ model DetalleEquipo {
   teamViewer String?
   claveTv    String?
   revisado   String?
-  equipo     Equipo?   @relation(fields: [idEquipo], references: [id_equipo])
+  equipo     Equipo? @relation(fields: [idEquipo], references: [id_equipo])
 
   @@index([idEquipo])
 }
@@ -238,8 +239,45 @@ model EquipoProducto {
   actualizadoEn DateTime
 }
 
+model Cliente {
+  id       Int    @id @default(autoincrement())
+  rut      String @unique
+  nombre   String
+  telefono String
+  email    String @unique
+}
+
+model detalle_empresas {
+  id         Int    @id @default(autoincrement())
+  rut        String @unique
+  direccion  String
+  telefono   String
+  email      String
+  empresa_id Int    @unique
+}
+
+model detalle_trabajos {
+  id            Int       @id @default(autoincrement())
+  fecha_ingreso DateTime
+  fecha_egreso  DateTime?
+  trabajo       String
+  accesorios    String?
+  prioridad     Prioridad
+  estado        String
+  notas         String?
+  empresa_id    Int?
+  equipo_id     Int?
+  tecnico_id    Int?
+}
+
 enum EstadoVisita {
   PENDIENTE
   COMPLETADA
   CANCELADA
+}
+
+enum Prioridad {
+  baja
+  normal
+  alta
 }

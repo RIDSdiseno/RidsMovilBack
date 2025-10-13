@@ -805,6 +805,11 @@ export const getAllEquipos = async (req: Request, res: Response) => {
         ram: true,
         disco: true,
         propiedad: true,
+        equipo: {                     // 👈 relación con DetalleEquipo
+      select: { tipoDd: true },
+      orderBy: { id: 'desc' },
+      take: 1
+    }
       }
     });
     return res.json({ equipos });
@@ -821,10 +826,10 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) return res.status(400).json({ error: "ID inválido" });
 
-    // Solo aceptar estas 3 llaves
-    const { disco, procesador, ram } = req.body ?? {};
+    // Aceptar ahora estas 4 llaves
+    const { disco, procesador, ram, tipoDd } = req.body ?? {};
     const keys = Object.keys(req.body || {});
-    const allowed = new Set(["disco", "procesador", "ram"]);
+    const allowed = new Set(["disco", "procesador", "ram", "tipoDd"]);
     const extras = keys.filter(k => !allowed.has(k));
     if (extras.length) {
       return res.status(400).json({ error: `Campos no permitidos: ${extras.join(", ")}` });
@@ -832,38 +837,86 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
     if (
       typeof disco === "undefined" &&
       typeof procesador === "undefined" &&
-      typeof ram === "undefined"
+      typeof ram === "undefined" &&
+      typeof tipoDd === "undefined"
     ) {
       return res.status(400).json({ error: "No hay campos para actualizar" });
     }
 
-    // normaliza a string o deja undefined (NO null)
     const norm = (v: any): string | undefined => {
       if (typeof v === "undefined") return undefined;
-      const t = String(v).trim();
-      // Si quieres "vaciar" el campo, decide: o guardas "" o no actualizas.
-      return t; // o: return t.length ? t : ""; // si quieres permitir vacío
+      return String(v).trim();
     };
 
-    const data: Prisma.EquipoUpdateInput = {};
+    // Verifica que el equipo exista (importante si solo viene tipoDd)
+    const existe = await prisma.equipo.findUnique({
+      where: { id_equipo: id },
+      select: { id_equipo: true }
+    });
+    if (!existe) return res.status(404).json({ error: "Equipo no encontrado" });
+
+    const dataEquipo: Prisma.EquipoUpdateInput = {};
     const vDisco = norm(disco);
     const vProc  = norm(procesador);
     const vRam   = norm(ram);
+    const vTipo  = norm(tipoDd);
 
-    if (typeof vDisco !== "undefined") data.disco = vDisco;            // o { set: vDisco }
-    if (typeof vProc  !== "undefined") data.procesador = vProc;        // o { set: vProc }
-    if (typeof vRam   !== "undefined") data.ram = vRam;                // o { set: vRam }
+    if (typeof vDisco !== "undefined") dataEquipo.disco = vDisco;
+    if (typeof vProc  !== "undefined") dataEquipo.procesador = vProc;
+    if (typeof vRam   !== "undefined") dataEquipo.ram = vRam;
 
-    const updated = await prisma.equipo.update({
-      where: { id_equipo: id },
-      data,
-      select: {
-        id_equipo: true, marca: true, modelo: true, serial: true,
-        disco: true, procesador: true, ram: true,
-      },
+    const result = await prisma.$transaction(async (tx) => {
+      // 1) Actualizar Equipo si corresponde
+      const updatedEquipo = (Object.keys(dataEquipo).length > 0)
+        ? await tx.equipo.update({
+            where: { id_equipo: id },
+            data: dataEquipo,
+            select: {
+              id_equipo: true, marca: true, modelo: true, serial: true,
+              disco: true, procesador: true, ram: true,
+            },
+          })
+        : await tx.equipo.findUnique({
+            where: { id_equipo: id },
+            select: {
+              id_equipo: true, marca: true, modelo: true, serial: true,
+              disco: true, procesador: true, ram: true,
+            },
+          });
+
+      // 2) Actualizar/crear DetalleEquipo.tipoDd si vino en el body
+      let detalle: { id: number; tipoDd: string | null } | null = null;
+
+      if (typeof vTipo !== "undefined") {
+        // Tomamos el último detalle (por id desc). Si no hay, lo creamos.
+        const last = await tx.detalleEquipo.findFirst({
+          where: { idEquipo: id },
+          orderBy: { id: "desc" },
+          select: { id: true },
+        });
+
+        if (last) {
+          detalle = await tx.detalleEquipo.update({
+            where: { id: last.id },
+            data: { tipoDd: vTipo },
+            select: { id: true, tipoDd: true },
+          });
+        } else {
+          detalle = await tx.detalleEquipo.create({
+            data: { idEquipo: id, tipoDd: vTipo },
+            select: { id: true, tipoDd: true },
+          });
+        }
+      }
+
+      return { updatedEquipo, detalle };
     });
 
-    return res.status(200).json({ message: "Equipo Actualizado", equipo: updated });
+    return res.status(200).json({
+      message: "Equipo actualizado",
+      equipo: result.updatedEquipo,
+      detalleActualizado: result.detalle, // null si no se envió tipoDd
+    });
   } catch (e: any) {
     if (e?.code === "P2025") return res.status(404).json({ error: "Equipo no encontrado" });
     console.error("Error al actualizar equipo:", e);

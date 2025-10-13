@@ -805,20 +805,29 @@ export const getAllEquipos = async (req: Request, res: Response) => {
         ram: true,
         disco: true,
         propiedad: true,
-        equipo: {                     // 👈 relación con DetalleEquipo
-      select: { tipoDd: true },
-      orderBy: { id: 'desc' },
-      take: 1
-    }
+        equipo: {
+          select: { tipoDd: true },
+          orderBy: { id: 'desc' },
+          take: 1
+        }
       }
     });
-    return res.json({ equipos });
+
+    // 🔹 Aplanar tipoDd (convertir array a valor directo)
+    const equiposMap = equipos.map(eq => ({
+      ...eq,
+      tipoDd: eq.equipo[0]?.tipoDd ?? "S/A", // si no hay detalle, coloca S/A
+    }));
+
+    // 🔹 Eliminar la propiedad 'equipo' para no confundir al front
+    equiposMap.forEach(eq => delete (eq as any).equipo);
+
+    return res.json({ equipos: equiposMap });
+  } catch (e) {
+    console.error("Error al obtener equipos", e);
+    return res.status(500).json({ error: "Error interno del servidor" });
   }
-  catch (e) {
-    console.error("Error al obtener equipos", JSON.stringify(e));
-    return res.status(500).json({ error: "Error interno del servidor" })
-  }
-}
+};
     
 
 export const actualizarEquipo = async (req: Request, res: Response) => {

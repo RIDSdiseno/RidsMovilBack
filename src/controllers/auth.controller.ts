@@ -982,3 +982,55 @@ export const createManyDetalle = async (req:Request,res:Response)=>{
     return res.status(500).json({ error: JSON.stringify(e) });
   }
 };
+
+
+type EquipoInput = {
+  idSolicitante: number;
+  serial: string;
+  marca: string;
+  modelo: string;
+  procesador: string;
+  ram: string;
+  disco: string;
+  propiedad: string;
+};
+
+export const createEquipo = async (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as Partial<EquipoInput>;
+
+  // Validaciones mínimas (ajústalas a tus reglas de negocio)
+  if (typeof body.idSolicitante !== 'number') {
+    return res.status(400).json({ error: 'idSolicitante es requerido y debe ser número' });
+  }
+  if (!body.serial || !body.marca || !body.modelo) {
+    return res.status(400).json({ error: 'serial, marca y modelo son requeridos' });
+  }
+
+  try {
+    const equipo = await prisma.equipo.create({
+      data: {
+        idSolicitante: body.idSolicitante,
+        serial: body.serial.trim(),
+        marca: body.marca.trim(),
+        modelo: body.modelo.trim(),
+        procesador: body.procesador?.trim() ?? '',
+        ram: body.ram?.trim() ?? '',
+        disco: body.disco?.trim() ?? '',
+        propiedad: body.propiedad?.trim() ?? '',
+      },
+    });
+
+    return res.status(201).json({
+      message: 'Equipo creado',
+      equipo, // devolvemos el registro creado para que la UI pueda pintar el resultado
+    });
+  } catch (error: any) {
+    // duplicados (por ejemplo, serial único)
+    if ((error as Prisma.PrismaClientKnownRequestError)?.code === 'P2002') {
+      const fields = (error as Prisma.PrismaClientKnownRequestError).meta?.target;
+      return res.status(409).json({ error: `Ya existe un equipo con ese valor único (${fields})` });
+    }
+    console.error('Error al crear equipo:', error);
+    return res.status(500).json({ error: 'Error al crear equipo' });
+  }
+};

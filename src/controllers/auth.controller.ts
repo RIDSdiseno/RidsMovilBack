@@ -447,149 +447,153 @@ export const crearVisita = async (req: Request, res: Response) => {
 
 export const completarVisita = async (req: Request, res: Response) => {
   try {
-    console.log("Datos recibidos para completar la visita:", req.body);
     const visitaId = Number(req.params.id);
+    if (!Number.isFinite(visitaId)) return res.status(400).json({ error: "ID de visita inválido" });
+
+    const v = await prisma.visita.findUnique({ where: { id_visita: visitaId } });
+    if (!v) return res.status(404).json({ error: "Visita no encontrada" });
 
     const {
-      confImpresoras,
-      confTelefonos,
-      confPiePagina,
-      otros,
-      otrosDetalle,
-      solicitante,  // Este es el nombre o identificador del solicitante
-      ccleaner,
-      actualizaciones,
-      antivirus,
-      estadoDisco,
-      licenciaWindows,
-      licenciaOffice,
-      rendimientoEquipo,
-      mantenimientoReloj
-    } = req.body;
+      confImpresoras, confTelefonos, confPiePagina, otros, otrosDetalle,
+      ccleaner, actualizaciones, antivirus, estadoDisco,
+      licenciaWindows, licenciaOffice, rendimientoEquipo, mantenimientoReloj,
+      realizado,
+      solicitantes // ← array de { id_solicitante, nombre } desde el front
+    } = req.body ?? {};
 
-    if (isNaN(visitaId)) {
-      return res.status(400).json({ error: "ID de visita inválido" });
+    // Normalizar booleans
+    const toB = (x:any)=>Boolean(x);
+    const payloadFlags = {
+      confImpresoras: toB(confImpresoras),
+      confTelefonos: toB(confTelefonos),
+      confPiePagina: toB(confPiePagina),
+      otros: toB(otros),
+      ccleaner: toB(ccleaner),
+      actualizaciones: toB(actualizaciones),
+      antivirus: toB(antivirus),
+      estadoDisco: toB(estadoDisco),
+      licenciaWindows: toB(licenciaWindows),
+      licenciaOffice: toB(licenciaOffice),
+      rendimientoEquipo: toB(rendimientoEquipo),
+      mantenimientoReloj: toB(mantenimientoReloj),
+    };
+
+    let otrosDetalleValidado: string | null = null;
+    if (payloadFlags.otros) {
+      const t = (otrosDetalle ?? '').toString().trim();
+      if (!t) return res.status(400).json({ error: "'otrosDetalle' no puede estar vacío si 'otros' está marcado" });
+      otrosDetalleValidado = t;
     }
 
-    const visitaExistente = await prisma.visita.findUnique({
-      where: { id_visita: visitaId },
-    });
+    // Normalizar solicitantes -> arrays de ids y nombres alineados
+    const arr = Array.isArray(solicitantes) ? solicitantes : [];
+    const ids   = arr.map(s => Number(s?.id_solicitante)).filter(n => Number.isFinite(n)) as number[];
+    const names = arr.map(s => (s?.nombre ?? '').toString().trim());
 
-    if (!visitaExistente) {
-      return res.status(404).json({ error: "Visita no encontrada" });
-    }
+    if (!ids.length) return res.status(400).json({ error: "Debe venir al menos un solicitante" });
 
-    // Convertir los campos booleanos
-    const confImpresorasBool = Boolean(confImpresoras);
-    const confTelefonosBool = Boolean(confTelefonos);
-    const confPiePaginaBool = Boolean(confPiePagina);
-    const otrosBool = Boolean(otros);
-    const ccleanerBool = Boolean(ccleaner);
-    const actualizacionesBool = Boolean(actualizaciones);
-    const antivirusBool = Boolean(antivirus);
-    const estadoDiscoBool = Boolean(estadoDisco);
-    const licenciaWindowsBool = Boolean(licenciaWindows);
-    const licenciaOfficeBool = Boolean(licenciaOffice);
-    const rendimientoEquipoBool = Boolean(rendimientoEquipo);
-    const mantenimientoRelojBool = Boolean(mantenimientoReloj);
+    const now = new Date();
 
-    let otrosDetalleValidado = null;
-    if (otrosBool && otrosDetalle) {
-      otrosDetalleValidado = otrosDetalle?.trim();
-      if (!otrosDetalleValidado) {
-        return res.status(400).json({ error: "'otrosDetalle' no puede estar vacío si 'otros' está seleccionado" });
-      }
-    }
+    const result = await prisma.$transaction(async (tx) => {
+      const updated: any[] = [];
 
-    // 1. Buscar el ID del solicitante (si no lo hemos recibido directamente como ID, buscarlo por nombre)
-    let solicitanteId: number | undefined = undefined;
-
-    if (solicitante) {
-      const solicitanteEncontrado = await prisma.solicitante.findFirst({
-        where: {
-          nombre: solicitante.trim()  // Usar el nombre directamente aquí
+      // 1) actualizar la visita existente con el primer solicitante
+      const u = await tx.visita.update({
+        where: { id_visita: visitaId },
+        data: {
+          ...payloadFlags,
+          otrosDetalle: otrosDetalleValidado,
+          solicitanteId: ids[0],
+          solicitante: names[0] || null,
+          fin: now,
+          status: EstadoVisita.COMPLETADA,
         },
-        select: { id_solicitante: true }
+        select: {
+          id_visita: true, tecnicoId: true, empresaId: true, inicio: true, fin: true,
+          solicitanteId: true, solicitante: true, status: true,
+          ccleaner: true, actualizaciones: true, antivirus: true, estadoDisco: true,
+          licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true,
+        }
+      });
+      updated.push(u);
+
+      // historial de la primera
+      await tx.historial.create({
+        data: {
+          tecnicoId: u.tecnicoId,
+          solicitanteId: u.solicitanteId!,
+          solicitante: u.solicitante,
+          inicio: u.inicio,
+          fin: u.fin!,
+          realizado: (realizado ?? otrosDetalleValidado) ?? null,
+          ccleaner: u.ccleaner,
+          actualizaciones: u.actualizaciones,
+          antivirus: u.antivirus,
+          estadoDisco: u.estadoDisco,
+          licenciaWindows: u.licenciaWindows,
+          licenciaOffice: u.licenciaOffice,
+          rendimientoEquipo: u.rendimientoEquipo,
+          mantenimientoReloj: u.mantenimientoReloj,
+        }
       });
 
-      if (solicitanteEncontrado) {
-        solicitanteId = solicitanteEncontrado.id_solicitante;
-      } else {
-        return res.status(400).json({ error: "Solicitante no encontrado" });
-      }
-    }
+      // 2) crear visitas nuevas para el resto de solicitantes
+      for (let i = 1; i < ids.length; i++) {
+        const nueva = await tx.visita.create({
+          data: {
+            tecnicoId: u.tecnicoId,
+            empresaId: u.empresaId,           // requiere que exista en tu modelo
+            inicio: v.inicio,                 // mismo inicio que la original
+            fin: now,
+            status: EstadoVisita.COMPLETADA,
+            ...payloadFlags,
+            otrosDetalle: otrosDetalleValidado,
+            solicitanteId: ids[i],
+            solicitante: names[i] || null,
+          },
+          select: {
+            id_visita: true, tecnicoId: true, empresaId: true, inicio: true, fin: true,
+            solicitanteId: true, solicitante: true, status: true,
+            ccleaner: true, actualizaciones: true, antivirus: true, estadoDisco: true,
+            licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true,
+          }
+        });
 
-    // 2. Actualizar la visita con los nuevos datos
-    const visitaActualizada = await prisma.visita.update({
-      where: { id_visita: visitaId },
-      data: {
-        confImpresoras: confImpresorasBool,
-        confTelefonos: confTelefonosBool,
-        confPiePagina: confPiePaginaBool,
-        otros: otrosBool,
-        otrosDetalle: otrosDetalleValidado,
-        solicitanteId,
-        solicitante,  // Usamos 'undefined' si no se encontró el solicitante
-        ccleaner: ccleanerBool,
-        actualizaciones: actualizacionesBool,
-        antivirus: antivirusBool,
-        estadoDisco: estadoDiscoBool,
-        licenciaWindows: licenciaWindowsBool,
-        licenciaOffice: licenciaOfficeBool,
-        rendimientoEquipo: rendimientoEquipoBool,
-        mantenimientoReloj: mantenimientoRelojBool,
-        fin: new Date(),
-        status: EstadoVisita.COMPLETADA,
-      },
-      select: {
-        id_visita: true,
-        tecnicoId: true,
-        solicitanteId: true,
-        solicitante: true,
-        inicio: true,
-        fin: true,
-        status: true,
-        ccleaner: true,
-        actualizaciones: true,
-        antivirus: true,
-        estadoDisco: true,
-        licenciaWindows: true,
-        licenciaOffice: true,
-        rendimientoEquipo: true,
-        mantenimientoReloj: true,
-      }
-    });
+        updated.push(nueva);
 
-    // 3. Crear historial con los datos actualizados
-    await prisma.historial.create({
-      data: {
-        tecnicoId: visitaActualizada.tecnicoId,
-        solicitanteId: visitaActualizada.solicitanteId!,  // Usamos solicitanteId aquí
-        solicitante: visitaActualizada.solicitante,  // El nombre del solicitante, si lo necesitas
-        inicio: visitaActualizada.inicio,
-        fin: visitaActualizada.fin!, // Aseguramos que no sea null
-        realizado: otrosDetalle,
-        ccleaner: visitaActualizada.ccleaner,
-        actualizaciones: visitaActualizada.actualizaciones,
-        antivirus: visitaActualizada.antivirus,
-        estadoDisco: visitaActualizada.estadoDisco,
-        licenciaWindows: visitaActualizada.licenciaWindows,
-        licenciaOffice: visitaActualizada.licenciaOffice,
-        rendimientoEquipo: visitaActualizada.rendimientoEquipo,
-        mantenimientoReloj: visitaActualizada.mantenimientoReloj,
+        await tx.historial.create({
+          data: {
+            tecnicoId: nueva.tecnicoId,
+            solicitanteId: nueva.solicitanteId!,
+            solicitante: nueva.solicitante,
+            inicio: nueva.inicio,
+            fin: nueva.fin!,
+            realizado: (realizado ?? otrosDetalleValidado) ?? null,
+            ccleaner: nueva.ccleaner,
+            actualizaciones: nueva.actualizaciones,
+            antivirus: nueva.antivirus,
+            estadoDisco: nueva.estadoDisco,
+            licenciaWindows: nueva.licenciaWindows,
+            licenciaOffice: nueva.licenciaOffice,
+            rendimientoEquipo: nueva.rendimientoEquipo,
+            mantenimientoReloj: nueva.mantenimientoReloj,
+          }
+        });
       }
+
+      return updated;
     });
 
     return res.status(200).json({
-      message: "Visita completada y registrada en historial",
-      visita: visitaActualizada,
+      message: `Visita(s) completada(s) para ${ids.length} solicitante(s)`,
+      visitas: result,
     });
-
   } catch (error: any) {
     console.error("Error al completar visita:", error);
     return res.status(500).json({ error: `Error interno al completar la visita: ${error.message || error}` });
   }
 };
+
 
 // GET /api/historial/:tecnicoId
 export const obtenerHistorialPorTecnico = async (req: Request, res: Response) => {
@@ -805,15 +809,29 @@ export const getAllEquipos = async (req: Request, res: Response) => {
         ram: true,
         disco: true,
         propiedad: true,
+        equipo: {
+          select: { tipoDd: true },
+          orderBy: { id: 'desc' },
+          take: 1
+        }
       }
     });
-    return res.json({ equipos });
+
+    // 🔹 Aplanar tipoDd (convertir array a valor directo)
+    const equiposMap = equipos.map(eq => ({
+      ...eq,
+      tipoDd: eq.equipo[0]?.tipoDd ?? "S/A", // si no hay detalle, coloca S/A
+    }));
+
+    // 🔹 Eliminar la propiedad 'equipo' para no confundir al front
+    equiposMap.forEach(eq => delete (eq as any).equipo);
+
+    return res.json({ equipos: equiposMap });
+  } catch (e) {
+    console.error("Error al obtener equipos", e);
+    return res.status(500).json({ error: "Error interno del servidor" });
   }
-  catch (e) {
-    console.error("Error al obtener equipos", JSON.stringify(e));
-    return res.status(500).json({ error: "Error interno del servidor" })
-  }
-}
+};
     
 
 export const actualizarEquipo = async (req: Request, res: Response) => {
@@ -821,10 +839,10 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) return res.status(400).json({ error: "ID inválido" });
 
-    // Solo aceptar estas 3 llaves
-    const { disco, procesador, ram } = req.body ?? {};
+    // Aceptar ahora estas 4 llaves
+    const { disco, procesador, ram, tipoDd } = req.body ?? {};
     const keys = Object.keys(req.body || {});
-    const allowed = new Set(["disco", "procesador", "ram"]);
+    const allowed = new Set(["disco", "procesador", "ram", "tipoDd"]);
     const extras = keys.filter(k => !allowed.has(k));
     if (extras.length) {
       return res.status(400).json({ error: `Campos no permitidos: ${extras.join(", ")}` });
@@ -832,38 +850,86 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
     if (
       typeof disco === "undefined" &&
       typeof procesador === "undefined" &&
-      typeof ram === "undefined"
+      typeof ram === "undefined" &&
+      typeof tipoDd === "undefined"
     ) {
       return res.status(400).json({ error: "No hay campos para actualizar" });
     }
 
-    // normaliza a string o deja undefined (NO null)
     const norm = (v: any): string | undefined => {
       if (typeof v === "undefined") return undefined;
-      const t = String(v).trim();
-      // Si quieres "vaciar" el campo, decide: o guardas "" o no actualizas.
-      return t; // o: return t.length ? t : ""; // si quieres permitir vacío
+      return String(v).trim();
     };
 
-    const data: Prisma.EquipoUpdateInput = {};
+    // Verifica que el equipo exista (importante si solo viene tipoDd)
+    const existe = await prisma.equipo.findUnique({
+      where: { id_equipo: id },
+      select: { id_equipo: true }
+    });
+    if (!existe) return res.status(404).json({ error: "Equipo no encontrado" });
+
+    const dataEquipo: Prisma.EquipoUpdateInput = {};
     const vDisco = norm(disco);
     const vProc  = norm(procesador);
     const vRam   = norm(ram);
+    const vTipo  = norm(tipoDd);
 
-    if (typeof vDisco !== "undefined") data.disco = vDisco;            // o { set: vDisco }
-    if (typeof vProc  !== "undefined") data.procesador = vProc;        // o { set: vProc }
-    if (typeof vRam   !== "undefined") data.ram = vRam;                // o { set: vRam }
+    if (typeof vDisco !== "undefined") dataEquipo.disco = vDisco;
+    if (typeof vProc  !== "undefined") dataEquipo.procesador = vProc;
+    if (typeof vRam   !== "undefined") dataEquipo.ram = vRam;
 
-    const updated = await prisma.equipo.update({
-      where: { id_equipo: id },
-      data,
-      select: {
-        id_equipo: true, marca: true, modelo: true, serial: true,
-        disco: true, procesador: true, ram: true,
-      },
+    const result = await prisma.$transaction(async (tx) => {
+      // 1) Actualizar Equipo si corresponde
+      const updatedEquipo = (Object.keys(dataEquipo).length > 0)
+        ? await tx.equipo.update({
+            where: { id_equipo: id },
+            data: dataEquipo,
+            select: {
+              id_equipo: true, marca: true, modelo: true, serial: true,
+              disco: true, procesador: true, ram: true,
+            },
+          })
+        : await tx.equipo.findUnique({
+            where: { id_equipo: id },
+            select: {
+              id_equipo: true, marca: true, modelo: true, serial: true,
+              disco: true, procesador: true, ram: true,
+            },
+          });
+
+      // 2) Actualizar/crear DetalleEquipo.tipoDd si vino en el body
+      let detalle: { id: number; tipoDd: string | null } | null = null;
+
+      if (typeof vTipo !== "undefined") {
+        // Tomamos el último detalle (por id desc). Si no hay, lo creamos.
+        const last = await tx.detalleEquipo.findFirst({
+          where: { idEquipo: id },
+          orderBy: { id: "desc" },
+          select: { id: true },
+        });
+
+        if (last) {
+          detalle = await tx.detalleEquipo.update({
+            where: { id: last.id },
+            data: { tipoDd: vTipo },
+            select: { id: true, tipoDd: true },
+          });
+        } else {
+          detalle = await tx.detalleEquipo.create({
+            data: { idEquipo: id, tipoDd: vTipo },
+            select: { id: true, tipoDd: true },
+          });
+        }
+      }
+
+      return { updatedEquipo, detalle };
     });
 
-    return res.status(200).json({ message: "Equipo Actualizado", equipo: updated });
+    return res.status(200).json({
+      message: "Equipo actualizado",
+      equipo: result.updatedEquipo,
+      detalleActualizado: result.detalle, // null si no se envió tipoDd
+    });
   } catch (e: any) {
     if (e?.code === "P2025") return res.status(404).json({ error: "Equipo no encontrado" });
     console.error("Error al actualizar equipo:", e);

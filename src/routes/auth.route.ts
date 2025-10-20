@@ -11,7 +11,8 @@ getAllEquipos,
 updateSolicitante,
 actualizarEquipo,
 createManyDetalle,
-createEquipo} from "../controllers/auth.controller";
+createEquipo,
+createSolicitante} from "../controllers/auth.controller";
 import { authGuard } from "../middlewares/auth.middleware";
 
 const r = Router();
@@ -44,6 +45,7 @@ r.post("/crear_visita",authGuard,crearVisita)
 r.put("/finalizar_visita/:id",authGuard,completarVisita)
 r.put('/equipos/:id', authGuard,actualizarEquipo)
 r.post("/crearequipo",authGuard,createEquipo)
+r.post('/createSolicitante',authGuard,createSolicitante)
 
 
 export default r

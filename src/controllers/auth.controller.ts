@@ -462,7 +462,7 @@ export const completarVisita = async (req: Request, res: Response) => {
     } = req.body ?? {};
 
     // Normalizar booleans
-    const toB = (x:any)=>Boolean(x);
+    const toB = (x: any) => Boolean(x);
     const payloadFlags = {
       confImpresoras: toB(confImpresoras),
       confTelefonos: toB(confTelefonos),
@@ -487,7 +487,7 @@ export const completarVisita = async (req: Request, res: Response) => {
 
     // Normalizar solicitantes -> arrays de ids y nombres alineados
     const arr = Array.isArray(solicitantes) ? solicitantes : [];
-    const ids   = arr.map(s => Number(s?.id_solicitante)).filter(n => Number.isFinite(n)) as number[];
+    const ids = arr.map(s => Number(s?.id_solicitante)).filter(n => Number.isFinite(n)) as number[];
     const names = arr.map(s => (s?.nombre ?? '').toString().trim());
 
     if (!ids.length) return res.status(400).json({ error: "Debe venir al menos un solicitante" });
@@ -832,7 +832,7 @@ export const getAllEquipos = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Error interno del servidor" });
   }
 };
-    
+
 
 export const actualizarEquipo = async (req: Request, res: Response) => {
   try {
@@ -870,32 +870,32 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
 
     const dataEquipo: Prisma.EquipoUpdateInput = {};
     const vDisco = norm(disco);
-    const vProc  = norm(procesador);
-    const vRam   = norm(ram);
-    const vTipo  = norm(tipoDd);
+    const vProc = norm(procesador);
+    const vRam = norm(ram);
+    const vTipo = norm(tipoDd);
 
     if (typeof vDisco !== "undefined") dataEquipo.disco = vDisco;
-    if (typeof vProc  !== "undefined") dataEquipo.procesador = vProc;
-    if (typeof vRam   !== "undefined") dataEquipo.ram = vRam;
+    if (typeof vProc !== "undefined") dataEquipo.procesador = vProc;
+    if (typeof vRam !== "undefined") dataEquipo.ram = vRam;
 
     const result = await prisma.$transaction(async (tx) => {
       // 1) Actualizar Equipo si corresponde
       const updatedEquipo = (Object.keys(dataEquipo).length > 0)
         ? await tx.equipo.update({
-            where: { id_equipo: id },
-            data: dataEquipo,
-            select: {
-              id_equipo: true, marca: true, modelo: true, serial: true,
-              disco: true, procesador: true, ram: true,
-            },
-          })
+          where: { id_equipo: id },
+          data: dataEquipo,
+          select: {
+            id_equipo: true, marca: true, modelo: true, serial: true,
+            disco: true, procesador: true, ram: true,
+          },
+        })
         : await tx.equipo.findUnique({
-            where: { id_equipo: id },
-            select: {
-              id_equipo: true, marca: true, modelo: true, serial: true,
-              disco: true, procesador: true, ram: true,
-            },
-          });
+          where: { id_equipo: id },
+          select: {
+            id_equipo: true, marca: true, modelo: true, serial: true,
+            disco: true, procesador: true, ram: true,
+          },
+        });
 
       // 2) Actualizar/crear DetalleEquipo.tipoDd si vino en el body
       let detalle: { id: number; tipoDd: string | null } | null = null;
@@ -951,14 +951,14 @@ type DetalleEquipoBody = {
 };
 
 
-export const createManyDetalle = async (req:Request,res:Response)=>{
+export const createManyDetalle = async (req: Request, res: Response) => {
   const { detalles } = req.body as { detalles?: DetalleEquipoBody[] };;
 
-  if (!Array.isArray(detalles) || detalles.length === 0){
-    return res.status(400).json({error: 'Debes enviar un arreglo de detalles'})
+  if (!Array.isArray(detalles) || detalles.length === 0) {
+    return res.status(400).json({ error: 'Debes enviar un arreglo de detalles' })
   }
-  
-   try {
+
+  try {
     // (Opcional) Valida/coacciona por si vienen como string desde JSON/CSV/form
     const data: Prisma.DetalleEquipoCreateManyInput[] = detalles.map((e) => ({
       idEquipo: typeof e.idEquipo === 'string' ? Number(e.idEquipo) : e.idEquipo,
@@ -1032,5 +1032,69 @@ export const createEquipo = async (req: Request, res: Response) => {
     }
     console.error('Error al crear equipo:', error);
     return res.status(500).json({ error: 'Error al crear equipo' });
+  }
+};
+
+// POST /auth/createSolicitante 
+export const createSolicitante = async (req: Request, res: Response) => {
+  try {
+    const { nombre, empresaId, email, telefono, clienteId } = req.body;
+
+    // Validaciones mínimas
+    if (!nombre?.trim() || !empresaId) {
+      return res.status(400).json({
+        error: "El nombre y empresaId son obligatorios"
+      });
+    }
+
+    // Preparar datos para crear
+    const data: any = {
+      nombre: nombre.trim(),
+      empresaId: Number(empresaId),
+      email: email?.trim() || null,
+      telefono: telefono?.trim() || null,
+    };
+
+    // Solo incluir clienteId si se proporciona y es válido
+    if (clienteId !== undefined && clienteId !== null && clienteId !== '') {
+      data.clienteId = Number(clienteId);
+    }
+
+    // Crear el solicitante
+    const solicitante = await prisma.solicitante.create({
+      data,
+      include: {
+        empresa: {
+          select: {
+            id_empresa: true,
+            nombre: true
+          }
+        }
+      }
+    });
+
+    return res.status(201).json({
+      message: "Solicitante creado correctamente",
+      solicitante
+    });
+
+  } catch (error: any) {
+    console.error("Error al crear solicitante:", error);
+
+    if (error.code === 'P2002') {
+      const target = error.meta?.target;
+      if (target?.includes('clienteId')) {
+        return res.status(400).json({
+          error: "El clienteId ya está en uso por otro solicitante"
+        });
+      }
+      return res.status(400).json({ error: "Datos duplicados" });
+    }
+
+    if (error.code === 'P2003') {
+      return res.status(400).json({ error: "La empresa no existe" });
+    }
+
+    return res.status(500).json({ error: "Error interno del servidor" });
   }
 };

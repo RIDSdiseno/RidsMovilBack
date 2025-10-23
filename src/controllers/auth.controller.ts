@@ -395,10 +395,11 @@ export const createManyempresa = async (req: Request, res: Response) => {
   }
 };
 
+// En tu backend - modificar la función crearVisita
 export const crearVisita = async (req: Request, res: Response) => {
   try {
     console.log("Datos recibidos para crear la visita:", req.body);
-    const { empresaId, tecnicoId, direccion_visita } = req.body;
+    const { empresaId, tecnicoId, latitud, longitud } = req.body;
 
     if (!empresaId || !tecnicoId) {
       return res.status(400).json({ error: "empresaId y tecnicoId son obligatorios" });
@@ -411,6 +412,9 @@ export const crearVisita = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Los IDs deben ser números válidos" });
     }
 
+    // Guardar coordenadas en formato string "lat,lon"
+    const coordenadas = latitud && longitud ? `${latitud},${longitud}` : null;
+
     const nuevaVisita = await prisma.visita.create({
       data: {
         empresaId: empresaIdInt,
@@ -418,7 +422,7 @@ export const crearVisita = async (req: Request, res: Response) => {
         solicitante: 'No especificado',
         inicio: new Date(),
         status: EstadoVisita.PENDIENTE,
-        direccion_visita: direccion_visita || null
+        direccion_visita: coordenadas // ← Ahora guarda solo coordenadas
       },
       select: {
         id_visita: true,

@@ -631,7 +631,7 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
     return res.json({ historial });
   } catch (error) {
     console.error("Error al obtener historial:", error);
-    return res.status(500).json({ error: "Error interno al obtener el historial" });
+    return res.status(500).json({ error: JSON.stringify(error) });
   }
 };
 

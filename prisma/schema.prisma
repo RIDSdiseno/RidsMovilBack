@@ -89,6 +89,7 @@ model Historial {
   rendimientoEquipo  Boolean     @default(false)
   id                 Int         @id @default(autoincrement()) @map("id_historial")
   direccion_visita   String?
+  direccion_visita   String?
   tecnico            Tecnico     @relation(fields: [tecnicoId], references: [id_tecnico])
   solicitanteRef     Solicitante @relation("Solicitante_Historial", fields: [solicitanteId], references: [id_solicitante])
 
@@ -145,6 +146,7 @@ model Visita {
   licenciaWindows    Boolean      @default(false)
   mantenimientoReloj Boolean      @default(false)
   rendimientoEquipo  Boolean      @default(false)
+  direccion_visita   String?
   direccion_visita   String?
   empresa            Empresa      @relation("Empresa_Visita", fields: [empresaId], references: [id_empresa])
   tecnico            Tecnico      @relation(fields: [tecnicoId], references: [id_tecnico])

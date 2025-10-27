@@ -395,43 +395,42 @@ export const createManyempresa = async (req: Request, res: Response) => {
   }
 };
 
-
+// En tu backend - modificar la función crearVisita
 export const crearVisita = async (req: Request, res: Response) => {
   try {
     console.log("Datos recibidos para crear la visita:", req.body);
-    const { empresaId, tecnicoId } = req.body;
+    const { empresaId, tecnicoId, latitud, longitud } = req.body;
 
-    // Validación básica
     if (!empresaId || !tecnicoId) {
-      console.log(empresaId, tecnicoId)
       return res.status(400).json({ error: "empresaId y tecnicoId son obligatorios" });
     }
 
-    // Convertir 'empresaId' y 'tecnicoId' a números (en caso de que se pasen como cadenas)
     const empresaIdInt = Number(empresaId);
     const tecnicoIdInt = Number(tecnicoId);
 
-    // Verificar que 'empresaId' y 'tecnicoId' sean números válidos
     if (isNaN(empresaIdInt) || isNaN(tecnicoIdInt)) {
       return res.status(400).json({ error: "Los IDs deben ser números válidos" });
     }
 
-    // Crear la visita sin incluir los campos 'realizado' y 'solicitante' durante la creación
+    // Guardar coordenadas en formato string "lat,lon"
+    const coordenadas = latitud && longitud ? `${latitud},${longitud}` : null;
+
     const nuevaVisita = await prisma.visita.create({
       data: {
-        empresaId: empresaIdInt,  // Usar 'empresaId' como número
-        tecnicoId: tecnicoIdInt,  // Usar 'tecnicoId' como número
-        solicitante: 'No especificado', // 'solicitante' se deja vacío inicialmente
+        empresaId: empresaIdInt,
+        tecnicoId: tecnicoIdInt,
+        solicitante: 'No especificado',
         inicio: new Date(),
-        status: EstadoVisita.PENDIENTE,  // 'fin' no se incluye en la creación
+        status: EstadoVisita.PENDIENTE,
+        direccion_visita: coordenadas // ← Ahora guarda solo coordenadas
       },
       select: {
         id_visita: true,
         empresaId: true,
         tecnicoId: true,
         inicio: true,
-        fin: false,
-        status: true
+        status: true,
+        direccion_visita: true
       }
     });
 
@@ -439,11 +438,9 @@ export const crearVisita = async (req: Request, res: Response) => {
 
   } catch (error: any) {
     console.error('Error al crear la visita:', error);
-
     return res.status(500).json({ error: `Error interno al crear la visita: ${error.message || error}` });
   }
 };
-
 
 export const completarVisita = async (req: Request, res: Response) => {
   try {
@@ -458,7 +455,8 @@ export const completarVisita = async (req: Request, res: Response) => {
       ccleaner, actualizaciones, antivirus, estadoDisco,
       licenciaWindows, licenciaOffice, rendimientoEquipo, mantenimientoReloj,
       realizado,
-      solicitantes // ← array de { id_solicitante, nombre } desde el front
+      solicitantes,
+      direccion_visita // ✅ Recibir dirección del body
     } = req.body ?? {};
 
     // Normalizar booleans
@@ -485,7 +483,7 @@ export const completarVisita = async (req: Request, res: Response) => {
       otrosDetalleValidado = t;
     }
 
-    // Normalizar solicitantes -> arrays de ids y nombres alineados
+    // Normalizar solicitantes
     const arr = Array.isArray(solicitantes) ? solicitantes : [];
     const ids = arr.map(s => Number(s?.id_solicitante)).filter(n => Number.isFinite(n)) as number[];
     const names = arr.map(s => (s?.nombre ?? '').toString().trim());
@@ -507,17 +505,19 @@ export const completarVisita = async (req: Request, res: Response) => {
           solicitante: names[0] || null,
           fin: now,
           status: EstadoVisita.COMPLETADA,
+          direccion_visita: direccion_visita || v.direccion_visita // ✅ Usar nueva dirección o mantener existente
         },
         select: {
           id_visita: true, tecnicoId: true, empresaId: true, inicio: true, fin: true,
           solicitanteId: true, solicitante: true, status: true,
           ccleaner: true, actualizaciones: true, antivirus: true, estadoDisco: true,
           licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true,
+          direccion_visita: true // ✅ Incluir dirección en select
         }
       });
       updated.push(u);
 
-      // historial de la primera
+      // ❌ ERROR CORREGIDO: Cambiar `direccion_visita: true` por `direccion_visita: u.direccion_visita`
       await tx.historial.create({
         data: {
           tecnicoId: u.tecnicoId,
@@ -534,6 +534,7 @@ export const completarVisita = async (req: Request, res: Response) => {
           licenciaOffice: u.licenciaOffice,
           rendimientoEquipo: u.rendimientoEquipo,
           mantenimientoReloj: u.mantenimientoReloj,
+          direccion_visita: u.direccion_visita // ✅ CORREGIDO: usar el valor real
         }
       });
 
@@ -542,25 +543,28 @@ export const completarVisita = async (req: Request, res: Response) => {
         const nueva = await tx.visita.create({
           data: {
             tecnicoId: u.tecnicoId,
-            empresaId: u.empresaId,           // requiere que exista en tu modelo
-            inicio: v.inicio,                 // mismo inicio que la original
+            empresaId: u.empresaId,
+            inicio: v.inicio,
             fin: now,
             status: EstadoVisita.COMPLETADA,
             ...payloadFlags,
             otrosDetalle: otrosDetalleValidado,
             solicitanteId: ids[i],
             solicitante: names[i] || null,
+            direccion_visita: direccion_visita || v.direccion_visita // ✅ Agregar dirección también aquí
           },
           select: {
             id_visita: true, tecnicoId: true, empresaId: true, inicio: true, fin: true,
             solicitanteId: true, solicitante: true, status: true,
             ccleaner: true, actualizaciones: true, antivirus: true, estadoDisco: true,
             licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true,
+            direccion_visita: true // ✅ Incluir dirección en select
           }
         });
 
         updated.push(nueva);
 
+        // ❌ ERROR CORREGIDO: Cambiar `direccion_visita: true` por `direccion_visita: nueva.direccion_visita`
         await tx.historial.create({
           data: {
             tecnicoId: nueva.tecnicoId,
@@ -577,6 +581,7 @@ export const completarVisita = async (req: Request, res: Response) => {
             licenciaOffice: nueva.licenciaOffice,
             rendimientoEquipo: nueva.rendimientoEquipo,
             mantenimientoReloj: nueva.mantenimientoReloj,
+            direccion_visita: nueva.direccion_visita // ✅ CORREGIDO: usar el valor real
           }
         });
       }

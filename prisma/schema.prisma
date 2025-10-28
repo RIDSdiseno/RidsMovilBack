@@ -93,8 +93,8 @@ model Historial {
   ecografo           Boolean      @default(false)
   id                 Int         @id @default(autoincrement()) @map("id_historial")
   direccion_visita   String?
-  tecnico            Tecnico     @relation(fields: [tecnicoId], references: [id_tecnico])
-  solicitanteRef     Solicitante @relation("Solicitante_Historial", fields: [solicitanteId], references: [id_solicitante])
+  tecnico            Tecnico      @relation(fields: [tecnicoId], references: [id_tecnico])
+  solicitanteRef     Solicitante? @relation("Solicitante_Historial", fields: [solicitanteId], references: [id_solicitante])
 
   @@index([tecnicoId])
   @@index([solicitanteId])

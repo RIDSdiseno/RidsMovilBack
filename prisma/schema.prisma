@@ -24,6 +24,8 @@ model Solicitante {
   email           String?
   telefono        String?
   empresaId       Int
+  sucursalId      Int?
+  sucursal        Sucursal?               @relation(fields: [sucursalId], references: [id_sucursal])
   clienteId       Int?                    @unique
   googleUserId    String?                 @unique
   isActive        Boolean                 @default(true)

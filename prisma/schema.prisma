@@ -18,22 +18,25 @@ model Empresa {
 }
 
 model Solicitante {
-  id_solicitante Int                     @id @default(autoincrement()) @map("id_solicitante")
-  nombre         String
-  email          String?
-  telefono       String?
-  empresaId      Int
-  clienteId      Int?                    @unique
-  googleUserId   String?                 @unique
-  isActive       Boolean                 @default(true)
-  empresa        Empresa                 @relation(fields: [empresaId], references: [id_empresa])
-  equipos        Equipo[]
-  visitas        Visita[]                @relation("Solicitante_Visita")
-  historiales    Historial[]             @relation("Solicitante_Historial")
-  tickets        FreshdeskTicket[]
-  requesterMaps  FreshdeskRequesterMap[]
+  id_solicitante  Int                     @id @default(autoincrement()) @map("id_solicitante")
+  nombre          String
+  email           String?
+  telefono        String?
+  empresaId       Int
+  clienteId       Int?                    @unique
+  googleUserId    String?                 @unique
+  isActive        Boolean                 @default(true)
+  microsoftUserId String?                 @unique
+  accountType     AccountType?
+  empresa         Empresa                 @relation(fields: [empresaId], references: [id_empresa])
+  equipos         Equipo[]
+  visitas         Visita[]                @relation("Solicitante_Visita")
+  historiales     Historial[]             @relation("Solicitante_Historial")
+  tickets         FreshdeskTicket[]
+  requesterMaps   FreshdeskRequesterMap[]
 
   @@index([empresaId])
+  @@index([accountType])
   @@index([isActive])
 }
 
@@ -274,6 +277,23 @@ model detalle_trabajos {
   tecnico_id    Int?
 }
 
+model MsSku {
+  skuId         String  @id
+  skuPartNumber String
+  displayName   String?
+}
+
+model SolicitanteMsLicense {
+  id            Int       @id @default(autoincrement())
+  solicitanteId Int
+  skuId         String
+  assignedAt    DateTime? @default(now())
+
+  @@unique([solicitanteId, skuId])
+  @@index([skuId])
+  @@index([solicitanteId])
+}
+
 enum EstadoVisita {
   PENDIENTE
   COMPLETADA
@@ -284,4 +304,9 @@ enum Prioridad {
   baja
   normal
   alta
+}
+
+enum AccountType {
+  google
+  microsoft
 }

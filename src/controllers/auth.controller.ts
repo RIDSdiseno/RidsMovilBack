@@ -603,32 +603,54 @@ export const completarVisita = async (req: Request, res: Response) => {
 // GET /api/historial/:tecnicoId
 export const obtenerHistorialPorTecnico = async (req: Request, res: Response) => {
   const tecnicoId = Number(req.params.id);
-
-  // Validar si el ID del técnico es válido
-  if (isNaN(tecnicoId)) {
-    return res.status(400).json({ error: "ID de técnico inválido" });
+  if (Number.isNaN(tecnicoId)) {
+    return res.status(400).json({ error: 'ID de técnico inválido' });
   }
 
   // Consultar el historial del técnico / Ver mensaje de error
   try {
-    const historial = await prisma.historial.findMany({
-      where: { tecnicoId },
-      orderBy: { fin: 'desc' },
-      include: {
-        solicitanteRef: {
-          include: { empresa: true },
-        },
-      },
+    // ⚠️ REVISA AQUÍ: ¿tu modelo se llama Historial, Visita, RegistroVisita...?
+    // En Prisma el nombre del modelo suele ir en PascalCase y NO es el nombre de la tabla.
+    // Ej.: model Visita { ... }  => prisma.visita.findMany(...)
+    const historial = await prisma.visita.findMany({   // ← cambia a prisma.historial si tu modelo REAL se llama "Historial"
+      where: { tecnicoId },                             // ← confirma que el campo es tecnicoId (y no tecnico_id o similar con @map)
+      orderBy: { fin: 'desc' },                         // ← confirma que 'fin' existe (si no, usa 'inicio')
+      select: {
+        id_visita: true,                                // ← ajusta al nombre real de la PK (id, idVisita, etc.)
+        inicio: true,
+        fin: true,
+        direccion_visita: true,                  
+
+        // ⚠️ RELACIONES (actívalas SOLO si existen con esos nombres en el schema)
+        // Si tu relación al solicitante se llama "solicitante" y NO "solicitanteRef", cambia aquí:
+        solicitanteRef: {                               // ← cámbialo a "solicitante" o "cliente" según tu schema
+          select: {
+            nombre: true,
+            empresa: {                                  // ← confirma que desde solicitante existe la relación 'empresa'
+              select: { id_empresa: true, nombre: true }
+            }
+          }
+        }
+      }
     });
 
-    return res.json({ historial });
-  } catch (error: any) {
-    console.error('Error al obtener historial:', error.message || error);
+    // Mapeo defensivo para el front
+    const safe = historial.map((v: any) => ({
+      ...v,
+      nombreCliente: v?.solicitanteRef?.empresa?.nombre ?? 'Empresa desconocida',
+    }));
+
+    return res.json({ historial: safe });
+  } catch (err: any) {
+    console.error('[HISTORIAL] error:', err);
+    // Responde info útil (Stringify completo de Prisma suele ser poco claro)
     return res.status(500).json({
-      error: 'Error interno al obtener el historial',
-      detalle: error.message,
+      message: 'Error consultando historial',
+      name: err?.name,
+      code: err?.code,
+      meta: err?.meta,
     });
-  };
+  }
 };
 
 //Carga masiva de solicitantes por empresa

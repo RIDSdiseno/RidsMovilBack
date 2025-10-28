@@ -9,24 +9,13 @@ datasource db {
 }
 
 model Empresa {
-  id_empresa   Int                   @id @default(autoincrement()) @map("id_empresa")
-  nombre       String                @unique
-  tieneSucursales Boolean               @default(false) //NUEVO CAMPO
-  solicitantes Solicitante[]
-  visitas      Visita[]              @relation("Empresa_Visita")
-  tickets      FreshdeskTicket[]
-  companyMaps  FreshdeskCompanyMap[]
-  sucursales   Sucursal[]            //Relación 1:N
-}
-
-model Sucursal {
-  id_sucursal  Int           @id @default(autoincrement())
-  nombre       String
-  direccion    String?
-  telefono     String?
-  empresaId    Int
-  empresa      Empresa       @relation(fields: [empresaId], references: [id_empresa])
-  solicitantes Solicitante[] //Relación 1:N 
+  id_empresa      Int                   @id @default(autoincrement()) @map("id_empresa")
+  nombre          String                @unique
+  tieneSucursales Boolean               @default(false)
+  solicitantes    Solicitante[]
+  visitas         Visita[]              @relation("Empresa_Visita")
+  tickets         FreshdeskTicket[]
+  companyMaps     FreshdeskCompanyMap[]
 }
 
 model Solicitante {
@@ -42,7 +31,8 @@ model Solicitante {
   isActive        Boolean                 @default(true)
   microsoftUserId String?                 @unique
   accountType     AccountType?
-  empresa         Empresa?                @relation(fields: [empresaId], references: [id_empresa])
+  sucursalId      Int?
+  empresa         Empresa                 @relation(fields: [empresaId], references: [id_empresa])
   equipos         Equipo[]
   visitas         Visita[]                @relation("Solicitante_Visita")
   historiales     Historial[]             @relation("Solicitante_Historial")
@@ -94,15 +84,16 @@ model Historial {
   fin                DateTime
   realizado          String?
   solicitanteId      Int
-  actualizaciones    Boolean      @default(false)
-  antivirus          Boolean      @default(false)
-  ccleaner           Boolean      @default(false)
-  estadoDisco        Boolean      @default(false)
-  licenciaOffice     Boolean      @default(false)
-  licenciaWindows    Boolean      @default(false)
-  mantenimientoReloj Boolean      @default(false)
-  rendimientoEquipo  Boolean      @default(false)
-  id                 Int          @id @default(autoincrement()) @map("id_historial")
+  actualizaciones    Boolean     @default(false)
+  antivirus          Boolean     @default(false)
+  ccleaner           Boolean     @default(false)
+  estadoDisco        Boolean     @default(false)
+  licenciaOffice     Boolean     @default(false)
+  licenciaWindows    Boolean     @default(false)
+  mantenimientoReloj Boolean     @default(false)
+  rendimientoEquipo  Boolean     @default(false)
+  ecografo           Boolean      @default(false)
+  id                 Int         @id @default(autoincrement()) @map("id_historial")
   direccion_visita   String?
   tecnico            Tecnico      @relation(fields: [tecnicoId], references: [id_tecnico])
   solicitanteRef     Solicitante? @relation("Solicitante_Historial", fields: [solicitanteId], references: [id_solicitante])
@@ -160,6 +151,7 @@ model Visita {
   licenciaWindows    Boolean      @default(false)
   mantenimientoReloj Boolean      @default(false)
   rendimientoEquipo  Boolean      @default(false)
+  ecografo           Boolean      @default(false)
   direccion_visita   String?
   empresa            Empresa      @relation("Empresa_Visita", fields: [empresaId], references: [id_empresa])
   tecnico            Tecnico      @relation(fields: [tecnicoId], references: [id_tecnico])
@@ -307,6 +299,14 @@ model SolicitanteMsLicense {
   @@unique([solicitanteId, skuId])
   @@index([skuId])
   @@index([solicitanteId])
+}
+
+model Sucursal {
+  id_sucursal Int     @id @default(autoincrement())
+  nombre      String
+  direccion   String?
+  telefono    String?
+  empresaId   Int
 }
 
 enum EstadoVisita {

@@ -453,7 +453,7 @@ export const completarVisita = async (req: Request, res: Response) => {
     const {
       confImpresoras, confTelefonos, confPiePagina, otros, otrosDetalle,
       ccleaner, actualizaciones, antivirus, estadoDisco,
-      licenciaWindows, licenciaOffice, rendimientoEquipo, mantenimientoReloj,
+      licenciaWindows, licenciaOffice, rendimientoEquipo, mantenimientoReloj, ecografo,
       realizado,
       solicitantes,
       direccion_visita // ✅ Recibir dirección del body
@@ -474,6 +474,7 @@ export const completarVisita = async (req: Request, res: Response) => {
       licenciaOffice: toB(licenciaOffice),
       rendimientoEquipo: toB(rendimientoEquipo),
       mantenimientoReloj: toB(mantenimientoReloj),
+      ecografo: toB(ecografo),
     };
 
     let otrosDetalleValidado: string | null = null;
@@ -511,7 +512,7 @@ export const completarVisita = async (req: Request, res: Response) => {
           id_visita: true, tecnicoId: true, empresaId: true, inicio: true, fin: true,
           solicitanteId: true, solicitante: true, status: true,
           ccleaner: true, actualizaciones: true, antivirus: true, estadoDisco: true,
-          licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true,
+          licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true,ecografo: true,
           direccion_visita: true // ✅ Incluir dirección en select
         }
       });
@@ -534,6 +535,7 @@ export const completarVisita = async (req: Request, res: Response) => {
           licenciaOffice: u.licenciaOffice,
           rendimientoEquipo: u.rendimientoEquipo,
           mantenimientoReloj: u.mantenimientoReloj,
+          ecografo: u.ecografo,
           direccion_visita: u.direccion_visita // ✅ CORREGIDO: usar el valor real
         }
       });
@@ -557,7 +559,7 @@ export const completarVisita = async (req: Request, res: Response) => {
             id_visita: true, tecnicoId: true, empresaId: true, inicio: true, fin: true,
             solicitanteId: true, solicitante: true, status: true,
             ccleaner: true, actualizaciones: true, antivirus: true, estadoDisco: true,
-            licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true,
+            licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true, ecografo: true,
             direccion_visita: true // ✅ Incluir dirección en select
           }
         });
@@ -581,6 +583,7 @@ export const completarVisita = async (req: Request, res: Response) => {
             licenciaOffice: nueva.licenciaOffice,
             rendimientoEquipo: nueva.rendimientoEquipo,
             mantenimientoReloj: nueva.mantenimientoReloj,
+            ecografo: nueva.ecografo,
             direccion_visita: nueva.direccion_visita // ✅ CORREGIDO: usar el valor real
           }
         });

@@ -11,10 +11,22 @@ datasource db {
 model Empresa {
   id_empresa   Int                   @id @default(autoincrement()) @map("id_empresa")
   nombre       String                @unique
+  tieneSucursales Boolean               @default(false) //NUEVO CAMPO
   solicitantes Solicitante[]
   visitas      Visita[]              @relation("Empresa_Visita")
   tickets      FreshdeskTicket[]
   companyMaps  FreshdeskCompanyMap[]
+  sucursales   Sucursal[]            //Relación 1:N
+}
+
+model Sucursal {
+  id_sucursal  Int           @id @default(autoincrement())
+  nombre       String
+  direccion    String?
+  telefono     String?
+  empresaId    Int
+  empresa      Empresa       @relation(fields: [empresaId], references: [id_empresa])
+  solicitantes Solicitante[] //Relación 1:N 
 }
 
 model Solicitante {
@@ -23,6 +35,8 @@ model Solicitante {
   email           String?
   telefono        String?
   empresaId       Int
+  sucursalId      Int?
+  sucursal        Sucursal?               @relation(fields: [sucursalId], references: [id_sucursal])
   clienteId       Int?                    @unique
   googleUserId    String?                 @unique
   isActive        Boolean                 @default(true)
@@ -38,6 +52,7 @@ model Solicitante {
   @@index([empresaId])
   @@index([accountType])
   @@index([isActive])
+  @@index([sucursalId])
 }
 
 model Equipo {

@@ -1115,3 +1115,111 @@ export const createSolicitante = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Error interno del servidor" });
   }
 };
+
+// Method Sucursales
+// POST /api/sucursales
+export const crearSucursal = async (req: Request, res: Response) => {
+  const { nombre, direccion, telefono, empresaId } = req.body;
+
+  if (!empresaId || !nombre) {
+    return res.status(400).json({ error: 'Debe indicar nombre y empresaId' });
+  }
+
+  try {
+    const sucursal = await prisma.sucursal.create({
+      data: { nombre, direccion, telefono, empresaId },
+    });
+
+    // marcar automáticamente a la empresa como que tiene sucursales
+    await prisma.empresa.update({
+      where: { id_empresa: empresaId },
+      data: { tieneSucursales: true },
+    });
+
+    return res.json({ message: 'Sucursal creada correctamente', sucursal });
+  } catch (error) {
+    console.error('Error al crear sucursal:', error);
+    return res.status(500).json({ error: 'Error interno al crear sucursal' });
+  }
+};
+
+// GET /api/sucursales/:id
+export const obtenerSucursalesPorEmpresa = async (req: Request, res: Response) => {
+  const empresaId = Number(req.params.id);
+
+  if (isNaN(empresaId)) {
+    return res.status(400).json({ error: 'ID de empresa inválido' });
+  }
+
+  try {
+    const sucursales = await prisma.sucursal.findMany({
+      where: { empresaId },
+      orderBy: { nombre: 'asc' },
+      include: {
+        solicitantes: {
+          select: { id_solicitante: true, nombre: true, email: true },
+        },
+      },
+    });
+    return res.json({ sucursales });
+  } catch (error) {
+    console.error('Error al obtener sucursales:', error);
+    return res.status(500).json({ error: 'Error interno al obtener sucursales' });
+  }
+};
+
+// POST /api/asignarSolicitanteSucursal
+export const asignarSolicitanteSucursal = async (req: Request, res: Response) => {
+  const { solicitanteId, sucursalId } = req.body;
+
+  if (!solicitanteId || !sucursalId) {
+    return res.status(400).json({ error: 'Debe indicar solicitanteId y sucursalId' });
+  }
+
+  try {
+    // Verificar que la sucursal exista
+    const solicitante = await prisma.sucursal.findUnique({
+      where: { id_sucursal: sucursalId },
+    });
+
+
+    if (!solicitante || !sucursalId) {
+      return res.status(404).json({ error: 'Solicitante o sucursal no encontrado' });
+    }
+    // Actualizar relación
+    const actualizado = await prisma.solicitante.update({
+      where: { id_solicitante: solicitanteId },
+      data: { sucursalId },
+      include: { sucursal: true, empresa: true },
+    });
+
+    return res.json({
+      message: 'Solicitante asignado a sucursal correctamente',
+      solicitante: actualizado,
+    })
+  } catch (error) {
+    console.error('Error al asignar solicitante a sucursal:', error);
+    return res.status(500).json({ error: 'Error interno del servidor' });
+  }
+
+};
+
+// GET /api/empresasConSucursales
+export const obtenerEmpresasConSucursales = async (req: Request, res: Response) => {
+  try {
+    const empresas = await prisma.empresa.findMany({
+      where: { tieneSucursales: true },
+      orderBy: { nombre: 'asc' },
+      include: {
+        sucursales: {
+          select: { id_sucursal: true, nombre: true, direccion: true },
+        },
+      },
+    });
+
+    return res.json({ empresas });
+  } catch (error) {
+    console.error('Error al obtener empresas con sucursales:', error);
+    return res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};

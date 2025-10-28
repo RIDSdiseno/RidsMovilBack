@@ -9,12 +9,13 @@ datasource db {
 }
 
 model Empresa {
-  id_empresa   Int                   @id @default(autoincrement()) @map("id_empresa")
-  nombre       String                @unique
-  solicitantes Solicitante[]
-  visitas      Visita[]              @relation("Empresa_Visita")
-  tickets      FreshdeskTicket[]
-  companyMaps  FreshdeskCompanyMap[]
+  id_empresa      Int                   @id @default(autoincrement()) @map("id_empresa")
+  nombre          String                @unique
+  tieneSucursales Boolean               @default(false)
+  solicitantes    Solicitante[]
+  visitas         Visita[]              @relation("Empresa_Visita")
+  tickets         FreshdeskTicket[]
+  companyMaps     FreshdeskCompanyMap[]
 }
 
 model Solicitante {
@@ -28,6 +29,7 @@ model Solicitante {
   isActive        Boolean                 @default(true)
   microsoftUserId String?                 @unique
   accountType     AccountType?
+  sucursalId      Int?
   empresa         Empresa                 @relation(fields: [empresaId], references: [id_empresa])
   equipos         Equipo[]
   visitas         Visita[]                @relation("Solicitante_Visita")
@@ -38,6 +40,7 @@ model Solicitante {
   @@index([empresaId])
   @@index([accountType])
   @@index([isActive])
+  @@index([sucursalId])
 }
 
 model Equipo {
@@ -87,6 +90,7 @@ model Historial {
   licenciaWindows    Boolean     @default(false)
   mantenimientoReloj Boolean     @default(false)
   rendimientoEquipo  Boolean     @default(false)
+  ecografo           Boolean      @default(false)
   id                 Int         @id @default(autoincrement()) @map("id_historial")
   direccion_visita   String?
   tecnico            Tecnico     @relation(fields: [tecnicoId], references: [id_tecnico])
@@ -145,6 +149,7 @@ model Visita {
   licenciaWindows    Boolean      @default(false)
   mantenimientoReloj Boolean      @default(false)
   rendimientoEquipo  Boolean      @default(false)
+  ecografo           Boolean      @default(false)
   direccion_visita   String?
   empresa            Empresa      @relation("Empresa_Visita", fields: [empresaId], references: [id_empresa])
   tecnico            Tecnico      @relation(fields: [tecnicoId], references: [id_tecnico])
@@ -292,6 +297,14 @@ model SolicitanteMsLicense {
   @@unique([solicitanteId, skuId])
   @@index([skuId])
   @@index([solicitanteId])
+}
+
+model Sucursal {
+  id_sucursal Int     @id @default(autoincrement())
+  nombre      String
+  direccion   String?
+  telefono    String?
+  empresaId   Int
 }
 
 enum EstadoVisita {

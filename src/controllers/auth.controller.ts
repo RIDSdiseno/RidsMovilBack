@@ -599,11 +599,9 @@ export const completarVisita = async (req: Request, res: Response) => {
   }
 };
 
-
-// GET /api/historial/:tecnicoId
+// GET /api/historial/:tecnicoId / Aceptar datos Null
 export const obtenerHistorialPorTecnico = async (req: Request, res: Response) => {
   const tecnicoId = Number(req.params.id);
-
   if (Number.isNaN(tecnicoId)) {
     return res.status(400).json({ error: 'ID de técnico inválido' });
   }
@@ -632,16 +630,16 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
       },
     });
 
-    // Evita errores si algún registro no tiene empresa asociada
-    const safe = historial.map((v: any) => ({
-      ...v,
-      nombreCliente: v?.solicitanteRef?.empresa?.nombre ?? 'Empresa desconocida',
+    // Mapeo seguro para evitar errores por relaciones nulas
+    const safe = historial.map((h) => ({
+      ...h,
+      nombreCliente: h?.solicitanteRef?.empresa?.nombre ?? 'Empresa desconocida',
+      nombreSolicitante: h?.solicitanteRef?.nombre ?? 'Solicitante no asignado',
     }));
 
     return res.json({ historial: safe });
   } catch (err: any) {
-    console.error('[HISTORIAL] Error al obtener historial:', err);
-
+    console.error('[HISTORIAL] Error:', err);
     return res.status(500).json({
       message: 'Error consultando historial',
       name: err?.name,

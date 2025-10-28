@@ -28,7 +28,7 @@ model Solicitante {
   isActive        Boolean                 @default(true)
   microsoftUserId String?                 @unique
   accountType     AccountType?
-  empresa         Empresa                 @relation(fields: [empresaId], references: [id_empresa])
+  empresa         Empresa?                @relation(fields: [empresaId], references: [id_empresa])
   equipos         Equipo[]
   visitas         Visita[]                @relation("Solicitante_Visita")
   historiales     Historial[]             @relation("Solicitante_Historial")
@@ -79,18 +79,18 @@ model Historial {
   fin                DateTime
   realizado          String?
   solicitanteId      Int
-  actualizaciones    Boolean     @default(false)
-  antivirus          Boolean     @default(false)
-  ccleaner           Boolean     @default(false)
-  estadoDisco        Boolean     @default(false)
-  licenciaOffice     Boolean     @default(false)
-  licenciaWindows    Boolean     @default(false)
-  mantenimientoReloj Boolean     @default(false)
-  rendimientoEquipo  Boolean     @default(false)
-  id                 Int         @id @default(autoincrement()) @map("id_historial")
+  actualizaciones    Boolean      @default(false)
+  antivirus          Boolean      @default(false)
+  ccleaner           Boolean      @default(false)
+  estadoDisco        Boolean      @default(false)
+  licenciaOffice     Boolean      @default(false)
+  licenciaWindows    Boolean      @default(false)
+  mantenimientoReloj Boolean      @default(false)
+  rendimientoEquipo  Boolean      @default(false)
+  id                 Int          @id @default(autoincrement()) @map("id_historial")
   direccion_visita   String?
-  tecnico            Tecnico     @relation(fields: [tecnicoId], references: [id_tecnico])
-  solicitanteRef     Solicitante @relation("Solicitante_Historial", fields: [solicitanteId], references: [id_solicitante])
+  tecnico            Tecnico      @relation(fields: [tecnicoId], references: [id_tecnico])
+  solicitanteRef     Solicitante? @relation("Solicitante_Historial", fields: [solicitanteId], references: [id_solicitante])
 
   @@index([tecnicoId])
   @@index([solicitanteId])

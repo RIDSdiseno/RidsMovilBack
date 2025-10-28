@@ -614,7 +614,7 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
       where: { tecnicoId },
       orderBy: { fin: 'desc' },
       select: {
-        id: true,
+        id_historial: true,
         inicio: true,
         fin: true,
         realizado: true,

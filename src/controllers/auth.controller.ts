@@ -609,33 +609,27 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
     return res.status(400).json({ error: "ID de técnico inválido" });
   }
 
+  // Consultar el historial del técnico / Ver mensaje de error
   try {
-    // Obtener historial con la relación solicitante y la empresa de cada solicitante
     const historial = await prisma.historial.findMany({
-      where: {
-        tecnicoId: tecnicoId  // Filtrar por el ID del técnico
-      },
-      orderBy: {
-        fin: 'desc'  // Ordenar por fecha de fin, de más reciente a más antiguo
-      },
+      where: { tecnicoId },
+      orderBy: { fin: 'desc' },
       include: {
-        solicitanteRef: {  // Aquí usamos 'cliente' ya que es el nombre de la relación en el modelo
-          include: {
-            empresa: true  // Incluir la empresa asociada al solicitante
-          }
-        }
-      }
+        solicitanteRef: {
+          include: { empresa: true },
+        },
+      },
     });
 
-    // Retornar el historial con la información adicional de la empresa
     return res.json({ historial });
-  } catch (error) {
-    console.error("Error al obtener historial:", error);
-    return res.status(500).json({ error: "Error interno al obtener el historial" });
-  }
+  } catch (error: any) {
+    console.error('Error al obtener historial:', error.message || error);
+    return res.status(500).json({
+      error: 'Error interno al obtener el historial',
+      detalle: error.message,
+    });
+  };
 };
-
-
 
 //Carga masiva de solicitantes por empresa
 export const createManySolicitante = async (req: Request, res: Response) => {

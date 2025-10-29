@@ -30,6 +30,7 @@ model Sucursal {
   empresaId    Int
   empresa      Empresa       @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
   solicitantes Solicitante[]
+  historiales  Historial[]
 
   @@index([empresaId])
 }
@@ -167,12 +168,15 @@ model DetalleTrabajo {
 }
 
 model Historial {
+  id                 Int         @id @default(autoincrement()) @map("id_historial")
   tecnicoId          Int
+  solicitanteId      Int
+  sucursalId         Int?                             // ✅ ya está bien ubicado
   solicitante        String
   inicio             DateTime
   fin                DateTime
   realizado          String?
-  solicitanteId      Int
+  direccion_visita   String?
   actualizaciones    Boolean     @default(false)
   antivirus          Boolean     @default(false)
   ccleaner           Boolean     @default(false)
@@ -181,14 +185,15 @@ model Historial {
   licenciaWindows    Boolean     @default(false)
   mantenimientoReloj Boolean     @default(false)
   rendimientoEquipo  Boolean     @default(false)
-  id                 Int         @id @default(autoincrement()) @map("id_historial")
-  direccion_visita   String?
   ecografo           Boolean     @default(false)
+
   tecnico            Tecnico     @relation(fields: [tecnicoId], references: [id_tecnico])
   solicitanteRef     Solicitante @relation("Solicitante_Historial", fields: [solicitanteId], references: [id_solicitante])
+  sucursal           Sucursal?   @relation(fields: [sucursalId], references: [id_sucursal])
 
   @@index([tecnicoId])
   @@index([solicitanteId])
+  @@index([sucursalId]) 
 }
 
 model RefreshToken {

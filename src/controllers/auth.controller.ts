@@ -630,6 +630,11 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
             },
           },
         },
+        sucursal: {
+          select: {
+            nombre: true
+          }
+        }, // ✅ Ahora desde historial
       },
     });
 
@@ -638,6 +643,8 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
       ...h,
       nombreCliente: h?.solicitanteRef?.empresa?.nombre ?? 'Empresa desconocida',
       nombreSolicitante: h?.solicitanteRef?.nombre ?? 'Solicitante no asignado',
+      // Manejo de sucursal nula en el historial
+      sucursalNombre: h.sucursal?.nombre ?? '—',
     }));
 
     return res.json({ historial: safe });
@@ -1235,6 +1242,7 @@ export const obtenerEmpresasConSucursales = async (req: Request, res: Response) 
 };
 
 // GET /api/sucursales/:id/solicitantes
+/*
 export const getSolicitantesPorSucursal = async (req: Request, res: Response) => {
   const sucursalId = Number(req.params.id);
   if (isNaN(sucursalId)) return res.status(400).json({ error: 'ID de sucursal inválido' });
@@ -1249,4 +1257,4 @@ export const getSolicitantesPorSucursal = async (req: Request, res: Response) =>
     console.error('Error al obtener solicitantes por sucursal:', e);
     return res.status(500).json({ error: 'Error interno del servidor' });
   }
-};
+}; */

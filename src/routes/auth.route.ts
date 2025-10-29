@@ -16,8 +16,7 @@ createSolicitante,
 crearSucursal,
 obtenerSucursalesPorEmpresa,
 asignarSolicitanteSucursal,
-obtenerEmpresasConSucursales,
-getSolicitantesPorSucursal} from "../controllers/auth.controller";
+obtenerEmpresasConSucursales} from "../controllers/auth.controller";
 import { authGuard } from "../middlewares/auth.middleware";
 
 const r = Router();
@@ -57,6 +56,7 @@ r.post('/sucursales', authGuard,crearSucursal);
 r.get('/empresas/:id/sucursales', authGuard, obtenerSucursalesPorEmpresa);
 r.post('/sucursales/asignar-solicitante', authGuard, asignarSolicitanteSucursal);
 r.get('/empresas/sucursales', authGuard, obtenerEmpresasConSucursales);
-r.get('/sucursales/:id/solicitantes', authGuard, getSolicitantesPorSucursal);
+
+/* r.get('/sucursales/:id/solicitantes', authGuard, getSolicitantesPorSucursal); */
 
 export default r

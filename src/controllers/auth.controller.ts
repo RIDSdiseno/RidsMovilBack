@@ -614,7 +614,7 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
       where: { tecnicoId },
       orderBy: { fin: 'desc' },
       select: {
-        id_historial: true,
+        id: true,
         inicio: true,
         fin: true,
         realizado: true,
@@ -1146,7 +1146,7 @@ export const crearSucursal = async (req: Request, res: Response) => {
   }
 };
 
-// GET /api/sucursales/:id
+// GET /api/empresas/:id/sucursales
 export const obtenerSucursalesPorEmpresa = async (req: Request, res: Response) => {
   const empresaId = Number(req.params.id);
 
@@ -1164,6 +1164,11 @@ export const obtenerSucursalesPorEmpresa = async (req: Request, res: Response) =
         },
       },
     });
+
+    if (sucursales.length === 0) {
+      return res.status(404).json({ message: 'Esta empresa no tiene sucursales registradas' });
+    }
+
     return res.json({ sucursales });
   } catch (error) {
     console.error('Error al obtener sucursales:', error);

@@ -512,7 +512,7 @@ export const completarVisita = async (req: Request, res: Response) => {
           id_visita: true, tecnicoId: true, empresaId: true, inicio: true, fin: true,
           solicitanteId: true, solicitante: true, status: true,
           ccleaner: true, actualizaciones: true, antivirus: true, estadoDisco: true,
-          licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true,ecografo: true,
+          licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true, ecografo: true,
           direccion_visita: true // ✅ Incluir dirección en select
         }
       });
@@ -1181,15 +1181,15 @@ export const asignarSolicitanteSucursal = async (req: Request, res: Response) =>
 
   try {
     // Verificar que la sucursal exista
-    const solicitante = await prisma.sucursal.findUnique({
+    const sucursal = await prisma.sucursal.findUnique({
       where: { id_sucursal: sucursalId },
     });
 
-
-    if (!solicitante || !sucursalId) {
-      return res.status(404).json({ error: 'Solicitante o sucursal no encontrado' });
+    if (!sucursal) {
+      return res.status(404).json({ error: 'Sucursal no encontrada' });
     }
-    // Actualizar relación
+
+    // Actualizar relación del solicitante
     const actualizado = await prisma.solicitante.update({
       where: { id_solicitante: solicitanteId },
       data: { sucursalId },
@@ -1199,12 +1199,11 @@ export const asignarSolicitanteSucursal = async (req: Request, res: Response) =>
     return res.json({
       message: 'Solicitante asignado a sucursal correctamente',
       solicitante: actualizado,
-    })
+    });
   } catch (error) {
     console.error('Error al asignar solicitante a sucursal:', error);
     return res.status(500).json({ error: 'Error interno del servidor' });
   }
-
 };
 
 // GET /api/empresasConSucursales

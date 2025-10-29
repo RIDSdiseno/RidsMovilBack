@@ -53,7 +53,7 @@ r.post('/createSolicitante',authGuard,createSolicitante)
 
 r.post('/sucursales', authGuard,crearSucursal);
 
-r.get('empresas/:id/sucursales', authGuard, obtenerSucursalesPorEmpresa);
+r.get('/empresas/:id/sucursales', authGuard, obtenerSucursalesPorEmpresa);
 
 r.post('/sucursales/asignar-solicitante', authGuard, asignarSolicitanteSucursal);
 

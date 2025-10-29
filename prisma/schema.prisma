@@ -16,6 +16,7 @@ model Empresa {
   visitas         Visita[]              @relation("Empresa_Visita")
   tickets         FreshdeskTicket[]
   companyMaps     FreshdeskCompanyMap[]
+  sucursales      Sucursal[]
 }
 
 model Solicitante {
@@ -24,14 +25,13 @@ model Solicitante {
   email           String?
   telefono        String?
   empresaId       Int
-  sucursalId      Int?
-  sucursal        Sucursal?               @relation(fields: [sucursalId], references: [id_sucursal])
   clienteId       Int?                    @unique
   googleUserId    String?                 @unique
   isActive        Boolean                 @default(true)
   microsoftUserId String?                 @unique
   accountType     AccountType?
   sucursalId      Int?
+  sucursal        Sucursal?               @relation(fields: [sucursalId], references: [id_sucursal])
   empresa         Empresa                 @relation(fields: [empresaId], references: [id_empresa])
   equipos         Equipo[]
   visitas         Visita[]                @relation("Solicitante_Visita")
@@ -42,19 +42,18 @@ model Solicitante {
   @@index([empresaId])
   @@index([accountType])
   @@index([isActive])
-  @@index([sucursalId])
 }
 
 model Equipo {
   id_equipo     Int             @id @default(autoincrement()) @map("id_equipo")
   idSolicitante Int
-  serial        String
+  serial        String?         @unique
   marca         String
   modelo        String
-  procesador    String
-  ram           String
-  disco         String
-  propiedad     String
+  procesador    String?
+  ram           String?
+  disco         String?
+  propiedad     String          @default("ASUR")
   solicitante   Solicitante     @relation(fields: [idSolicitante], references: [id_solicitante])
   equipo        DetalleEquipo[]
 
@@ -84,17 +83,17 @@ model Historial {
   fin                DateTime
   realizado          String?
   solicitanteId      Int
-  actualizaciones    Boolean     @default(false)
-  antivirus          Boolean     @default(false)
-  ccleaner           Boolean     @default(false)
-  estadoDisco        Boolean     @default(false)
-  licenciaOffice     Boolean     @default(false)
-  licenciaWindows    Boolean     @default(false)
-  mantenimientoReloj Boolean     @default(false)
-  rendimientoEquipo  Boolean     @default(false)
-  ecografo           Boolean      @default(false)
-  id                 Int         @id @default(autoincrement()) @map("id_historial")
+  actualizaciones    Boolean      @default(false)
+  antivirus          Boolean      @default(false)
+  ccleaner           Boolean      @default(false)
+  estadoDisco        Boolean      @default(false)
+  licenciaOffice     Boolean      @default(false)
+  licenciaWindows    Boolean      @default(false)
+  mantenimientoReloj Boolean      @default(false)
+  rendimientoEquipo  Boolean      @default(false)
+  id                 Int          @id @default(autoincrement()) @map("id_historial")
   direccion_visita   String?
+  ecografo           Boolean      @default(false)
   tecnico            Tecnico      @relation(fields: [tecnicoId], references: [id_tecnico])
   solicitanteRef     Solicitante? @relation("Solicitante_Historial", fields: [solicitanteId], references: [id_solicitante])
 
@@ -151,8 +150,8 @@ model Visita {
   licenciaWindows    Boolean      @default(false)
   mantenimientoReloj Boolean      @default(false)
   rendimientoEquipo  Boolean      @default(false)
-  ecografo           Boolean      @default(false)
   direccion_visita   String?
+  ecografo           Boolean      @default(false)
   empresa            Empresa      @relation("Empresa_Visita", fields: [empresaId], references: [id_empresa])
   tecnico            Tecnico      @relation(fields: [tecnicoId], references: [id_tecnico])
   solicitanteRef     Solicitante? @relation("Solicitante_Visita", fields: [solicitanteId], references: [id_solicitante])
@@ -302,11 +301,15 @@ model SolicitanteMsLicense {
 }
 
 model Sucursal {
-  id_sucursal Int     @id @default(autoincrement())
-  nombre      String
-  direccion   String?
-  telefono    String?
-  empresaId   Int
+  id_sucursal  Int           @id @default(autoincrement())
+  nombre       String
+  direccion    String?
+  telefono     String?
+  empresaId    Int
+  empresa      Empresa       @relation(fields: [empresaId], references: [id_empresa])
+  solicitantes Solicitante[]
+
+  @@index([empresaId])
 }
 
 enum EstadoVisita {

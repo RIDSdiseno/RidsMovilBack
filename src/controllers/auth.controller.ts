@@ -447,7 +447,16 @@ export const completarVisita = async (req: Request, res: Response) => {
     const visitaId = Number(req.params.id);
     if (!Number.isFinite(visitaId)) return res.status(400).json({ error: "ID de visita inválido" });
 
-    const v = await prisma.visita.findUnique({ where: { id_visita: visitaId } });
+    const v = await prisma.visita.findUnique({
+      where: { id_visita: visitaId },
+      include: {
+        solicitanteRef: {
+          select: {
+            sucursalId: true, // ✅ Incluir sucursalId del solicitante original
+          },
+        },
+      },
+    });
     if (!v) return res.status(404).json({ error: "Visita no encontrada" });
 
     const {
@@ -456,7 +465,7 @@ export const completarVisita = async (req: Request, res: Response) => {
       licenciaWindows, licenciaOffice, rendimientoEquipo, mantenimientoReloj, ecografo,
       realizado,
       solicitantes,
-      direccion_visita // ✅ Recibir dirección del body
+      direccion_visita
     } = req.body ?? {};
 
     // Normalizar booleans
@@ -496,6 +505,24 @@ export const completarVisita = async (req: Request, res: Response) => {
     const result = await prisma.$transaction(async (tx) => {
       const updated: any[] = [];
 
+      // ✅ OBTENER DATOS DE SUCURSAL PARA TODOS LOS SOLICITANTES
+      const solicitantesConSucursal = await tx.solicitante.findMany({
+        where: {
+          id_solicitante: {
+            in: ids
+          }
+        },
+        select: {
+          id_solicitante: true,
+          sucursalId: true,
+        },
+      });
+
+      // Crear mapa para acceso rápido: id_solicitante -> sucursalId
+      const mapaSucursales = new Map(
+        solicitantesConSucursal.map(s => [s.id_solicitante, s.sucursalId])
+      );
+
       // 1) actualizar la visita existente con el primer solicitante
       const u = await tx.visita.update({
         where: { id_visita: visitaId },
@@ -506,19 +533,21 @@ export const completarVisita = async (req: Request, res: Response) => {
           solicitante: names[0] || null,
           fin: now,
           status: EstadoVisita.COMPLETADA,
-          direccion_visita: direccion_visita || v.direccion_visita // ✅ Usar nueva dirección o mantener existente
+          direccion_visita: direccion_visita || v.direccion_visita
         },
         select: {
           id_visita: true, tecnicoId: true, empresaId: true, inicio: true, fin: true,
           solicitanteId: true, solicitante: true, status: true,
           ccleaner: true, actualizaciones: true, antivirus: true, estadoDisco: true,
           licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true, ecografo: true,
-          direccion_visita: true // ✅ Incluir dirección en select
+          direccion_visita: true
         }
       });
       updated.push(u);
 
-      // ❌ ERROR CORREGIDO: Cambiar `direccion_visita: true` por `direccion_visita: u.direccion_visita`
+      // ✅ OBTENER SUCURSAL ID DEL PRIMER SOLICITANTE
+      const sucursalIdPrimero = mapaSucursales.get(ids[0]) || null;
+
       await tx.historial.create({
         data: {
           tecnicoId: u.tecnicoId,
@@ -536,12 +565,16 @@ export const completarVisita = async (req: Request, res: Response) => {
           rendimientoEquipo: u.rendimientoEquipo,
           mantenimientoReloj: u.mantenimientoReloj,
           ecografo: u.ecografo,
-          direccion_visita: u.direccion_visita, // ✅ CORREGIDO: usar el valor real
+          direccion_visita: u.direccion_visita,
+          sucursalId: sucursalIdPrimero, // ✅ CORREGIDO: usar del mapa, no de v
         }
       });
 
       // 2) crear visitas nuevas para el resto de solicitantes
       for (let i = 1; i < ids.length; i++) {
+        // ✅ OBTENER SUCURSAL ID PARA CADA SOLICITANTE
+        const sucursalIdActual = mapaSucursales.get(ids[i]) || null;
+
         const nueva = await tx.visita.create({
           data: {
             tecnicoId: u.tecnicoId,
@@ -553,20 +586,19 @@ export const completarVisita = async (req: Request, res: Response) => {
             otrosDetalle: otrosDetalleValidado,
             solicitanteId: ids[i],
             solicitante: names[i] || null,
-            direccion_visita: direccion_visita || v.direccion_visita // ✅ Agregar dirección también aquí
+            direccion_visita: direccion_visita || v.direccion_visita
           },
           select: {
             id_visita: true, tecnicoId: true, empresaId: true, inicio: true, fin: true,
             solicitanteId: true, solicitante: true, status: true,
             ccleaner: true, actualizaciones: true, antivirus: true, estadoDisco: true,
             licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true, ecografo: true,
-            direccion_visita: true // ✅ Incluir dirección en select
+            direccion_visita: true
           }
         });
 
         updated.push(nueva);
 
-        // ❌ ERROR CORREGIDO: Cambiar `direccion_visita: true` por `direccion_visita: nueva.direccion_visita`
         await tx.historial.create({
           data: {
             tecnicoId: nueva.tecnicoId,
@@ -584,7 +616,8 @@ export const completarVisita = async (req: Request, res: Response) => {
             rendimientoEquipo: nueva.rendimientoEquipo,
             mantenimientoReloj: nueva.mantenimientoReloj,
             ecografo: nueva.ecografo,
-            direccion_visita: nueva.direccion_visita // ✅ CORREGIDO: usar el valor real
+            direccion_visita: nueva.direccion_visita,
+            sucursalId: sucursalIdActual // ✅ CORREGIDO: usar del mapa, no de v
           }
         });
       }

@@ -536,7 +536,7 @@ export const completarVisita = async (req: Request, res: Response) => {
           rendimientoEquipo: u.rendimientoEquipo,
           mantenimientoReloj: u.mantenimientoReloj,
           ecografo: u.ecografo,
-          direccion_visita: u.direccion_visita // ✅ CORREGIDO: usar el valor real
+          direccion_visita: u.direccion_visita, // ✅ CORREGIDO: usar el valor real
         }
       });
 
@@ -603,6 +603,7 @@ export const completarVisita = async (req: Request, res: Response) => {
 };
 
 // GET /api/historial/:tecnicoId / Aceptar datos Null
+// GET /api/historial/:tecnicoId - CON MANEJO DE SUCURSAL NULL
 export const obtenerHistorialPorTecnico = async (req: Request, res: Response) => {
   const tecnicoId = Number(req.params.id);
   if (Number.isNaN(tecnicoId)) {
@@ -628,24 +629,40 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
                 nombre: true,
               },
             },
+            sucursal: {
+              select: {
+                id_sucursal: true,
+                nombre: true,
+              },
+            },
           },
         },
+        // ✅ También obtener sucursal desde el historial por si acaso
         sucursal: {
           select: {
-            nombre: true
-          }
-        }, // ✅ Ahora desde historial
+            id_sucursal: true,
+            nombre: true,
+          },
+        },
       },
     });
 
-    // Mapeo seguro para evitar errores por relaciones nulas
-    const safe = historial.map((h) => ({
-      ...h,
-      nombreCliente: h?.solicitanteRef?.empresa?.nombre ?? 'Empresa desconocida',
-      nombreSolicitante: h?.solicitanteRef?.nombre ?? 'Solicitante no asignado',
-      // Manejo de sucursal nula en el historial
-      sucursalNombre: h.sucursal?.nombre ?? '—',
-    }));
+    // Mapeo seguro con manejo de sucursal null
+    const safe = historial.map((h) => {
+      // ✅ Priorizar sucursal del historial, luego del solicitante
+      const sucursal = h.sucursal || h.solicitanteRef?.sucursal;
+
+      return {
+        ...h,
+        nombreCliente: h?.solicitanteRef?.empresa?.nombre ?? 'Empresa desconocida',
+        nombreSolicitante: h?.solicitanteRef?.nombre ?? 'Solicitante no asignado',
+        // ✅ Datos de sucursal - pueden ser null
+        sucursalId: sucursal?.id_sucursal ?? null,
+        sucursalNombre: sucursal?.nombre ?? null,
+        // ✅ Flag para saber si tiene sucursal
+        tieneSucursal: !!sucursal,
+      };
+    });
 
     return res.json({ historial: safe });
   } catch (err: any) {

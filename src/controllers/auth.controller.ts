@@ -1165,11 +1165,14 @@ export const obtenerSucursalesPorEmpresa = async (req: Request, res: Response) =
       },
     });
 
-    if (sucursales.length === 0) {
-      return res.status(404).json({ message: 'Esta empresa no tiene sucursales registradas' });
-    }
+    // ✅ En lugar de devolver 404, devolvemos 200 con lista vacía
+    return res.json({
+      sucursales,
+      message: sucursales.length > 0
+        ? 'Sucursales encontradas'
+        : 'Esta empresa no tiene sucursales registradas'
+    });
 
-    return res.json({ sucursales });
   } catch (error) {
     console.error('Error al obtener sucursales:', error);
     return res.status(500).json({ error: 'Error interno al obtener sucursales' });
@@ -1227,6 +1230,23 @@ export const obtenerEmpresasConSucursales = async (req: Request, res: Response) 
     return res.json({ empresas });
   } catch (error) {
     console.error('Error al obtener empresas con sucursales:', error);
+    return res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+// GET /api/sucursales/:id/solicitantes
+export const getSolicitantesPorSucursal = async (req: Request, res: Response) => {
+  const sucursalId = Number(req.params.id);
+  if (isNaN(sucursalId)) return res.status(400).json({ error: 'ID de sucursal inválido' });
+
+  try {
+    const solicitantes = await prisma.solicitante.findMany({
+      where: { sucursalId, isActive: true },
+      select: { id_solicitante: true, nombre: true }
+    });
+    return res.json({ solicitantes });
+  } catch (e) {
+    console.error('Error al obtener solicitantes por sucursal:', e);
     return res.status(500).json({ error: 'Error interno del servidor' });
   }
 };

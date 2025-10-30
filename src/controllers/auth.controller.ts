@@ -543,10 +543,19 @@ export const completarVisita = async (req: Request, res: Response) => {
           fin: u.fin!,
           realizado: (realizado ?? otrosDetalleValidado) ?? null,
           direccion_visita: u.direccion_visita,
-          sucursalId: sucursalIdPrimero, // ✅ puede ser null
-          ...payloadFlags,
+          sucursalId: sucursalIdPrimero,
+          ccleaner: u.ccleaner,
+          actualizaciones: u.actualizaciones,
+          antivirus: u.antivirus,
+          estadoDisco: u.estadoDisco,
+          licenciaWindows: u.licenciaWindows,
+          licenciaOffice: u.licenciaOffice,
+          rendimientoEquipo: u.rendimientoEquipo,
+          mantenimientoReloj: u.mantenimientoReloj,
+          ecografo: u.ecografo,
         }
       });
+
 
       // Crear visitas adicionales si hay más solicitantes
       for (let i = 1; i < ids.length; i++) {

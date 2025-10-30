@@ -628,19 +628,26 @@ export const completarVisita = async (req: Request, res: Response) => {
 // GET /api/historial/:tecnicoId / Aceptar datos Null
 // GET /api/historial/:tecnicoId?page=1&pageSize=10&q=texto
 export const obtenerHistorialPorTecnico = async (req: Request, res: Response) => {
-  //  usar el nombre real del parámetro de ruta
-  const tecnicoId = Number(req.params.tecnicoId);
-  if (Number.isNaN(tecnicoId)) {
+  // Param correcto: /api/historial/:tecnicoId
+  const tecnicoIdRaw = Number(req.params.tecnicoId);
+  if (!Number.isFinite(tecnicoIdRaw)) {
     return res.status(400).json({ error: 'ID de técnico inválido' });
   }
+  const tecnicoId = tecnicoIdRaw;
 
-  // --- Paginación y filtros ---
-  const page = Math.max(1, Number(req.query.page ?? 1));
-  const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize ?? 10))); // cap a 100
+  // --- Paginación segura ---
+  const pageRaw = Number(req.query.page);
+  const pageSizeRaw = Number(req.query.pageSize);
+
+  const page = Number.isFinite(pageRaw) && pageRaw > 0 ? Math.floor(pageRaw) : 1;
+  const pageSize = Number.isFinite(pageSizeRaw) && pageSizeRaw > 0
+    ? Math.min(100, Math.floor(pageSizeRaw))
+    : 10;
+
   const skip = (page - 1) * pageSize;
   const take = pageSize;
 
-  const q = String(req.query.q ?? '').trim();
+  const q = (typeof req.query.q === 'string' ? req.query.q : '').trim();
 
   // Filtro base + búsqueda opcional
   const where: Prisma.HistorialWhereInput = q
@@ -659,36 +666,30 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
     : { tecnicoId };
 
   try {
-    // Ejecutar count + findMany en paralelo
     const [total, historial] = await Promise.all([
       prisma.historial.count({ where }),
       prisma.historial.findMany({
         where,
-        orderBy: { fin: 'desc' },   // índice recomendado: (tecnicoId, fin DESC)
+        orderBy: { fin: 'desc' }, // índice sugerido: (tecnicoId, fin desc)
         skip,
         take,
         include: {
           solicitanteRef: {
-            include: {
-              empresa: { select: { id_empresa: true, nombre: true } },
-            },
+            include: { empresa: { select: { id_empresa: true, nombre: true } } },
           },
           sucursal: { select: { id_sucursal: true, nombre: true } },
         },
       }),
     ]);
 
-    // Mapeo seguro (sucursal puede ser null)
     const items = historial.map((h) => ({
       id: h.id,
-      nombreCliente: h.solicitanteRef?.empresa?.nombre, 
+      nombreCliente: h.solicitanteRef?.empresa?.nombre ?? 'Empresa desconocida',
       inicio: h.inicio,
       fin: h.fin,
       realizado: h.realizado ?? '—',
       direccion_visita: h.direccion_visita ?? 'No registrada',
       nombreSolicitante: h.solicitante || h.solicitanteRef?.nombre || 'Solicitante no asignado',
-
-      // ✅ Sucursal tomada directamente del historial (ya no desde el solicitante)
       sucursalId: h.sucursal?.id_sucursal ?? null,
       sucursalNombre: h.sucursal?.nombre ?? 'Sin sucursal asignada',
       tieneSucursal: !!h.sucursal,
@@ -699,7 +700,7 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
       total,
       page,
       pageSize,
-      totalPages: Math.ceil(total / pageSize),
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
     });
   } catch (err: any) {
     console.error('[HISTORIAL] Error:', err);

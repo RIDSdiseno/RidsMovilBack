@@ -546,7 +546,7 @@ export const completarVisita = async (req: Request, res: Response) => {
           fin: u.fin!,
           realizado: (realizado ?? otrosDetalleValidado) ?? null,
           direccion_visita: u.direccion_visita,
-          sucursalId: v.sucursalId ?? null,
+          sucursalId: u.sucursalId ?? null,
           ccleaner: u.ccleaner,
           actualizaciones: u.actualizaciones,
           antivirus: u.antivirus,

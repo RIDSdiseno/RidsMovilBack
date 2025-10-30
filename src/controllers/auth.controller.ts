@@ -665,7 +665,7 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
       fin: h.fin,
       realizado: h.realizado ?? '—',
       direccion_visita: h.direccion_visita ?? 'No registrada',
-      nombreSolicitante: h.solicitanteRef?.nombre ?? 'Solicitante no asignado',
+      nombreSolicitante: h.solicitante || h.solicitanteRef?.nombre || 'Solicitante no asignado',
 
       // ✅ Sucursal tomada directamente del historial (ya no desde el solicitante)
       sucursalId: h.sucursal?.id_sucursal ?? null,

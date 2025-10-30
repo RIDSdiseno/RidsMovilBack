@@ -448,20 +448,20 @@ export const crearVisita = async (req: Request, res: Response) => {
 export const completarVisita = async (req: Request, res: Response) => {
   try {
     const visitaId = Number(req.params.id);
-    if (!Number.isFinite(visitaId)) return res.status(400).json({ error: "ID de visita inválido" });
+    if (!Number.isFinite(visitaId)) {
+      return res.status(400).json({ error: "ID de visita inválido" });
+    }
 
-    const v = await prisma.visita.findUnique({
-      where: { id_visita: visitaId },
-    });
-    if (!v) return res.status(404).json({ error: "Visita no encontrada" });
+    const v = await prisma.visita.findUnique({ where: { id_visita: visitaId } });
+    if (!v) {
+      return res.status(404).json({ error: "Visita no encontrada" });
+    }
 
     const {
       confImpresoras, confTelefonos, confPiePagina, otros, otrosDetalle,
       ccleaner, actualizaciones, antivirus, estadoDisco,
       licenciaWindows, licenciaOffice, rendimientoEquipo, mantenimientoReloj, ecografo,
-      realizado,
-      solicitantes,
-      direccion_visita
+      realizado, solicitantes, direccion_visita
     } = req.body ?? {};
 
     // Normalizar booleans
@@ -482,6 +482,7 @@ export const completarVisita = async (req: Request, res: Response) => {
       ecografo: toB(ecografo),
     };
 
+    // Validar detalle de "otros"
     let otrosDetalleValidado: string | null = null;
     if (payloadFlags.otros) {
       const t = (otrosDetalle ?? '').toString().trim();
@@ -493,7 +494,6 @@ export const completarVisita = async (req: Request, res: Response) => {
     const arr = Array.isArray(solicitantes) ? solicitantes : [];
     const ids = arr.map(s => Number(s?.id_solicitante)).filter(n => Number.isFinite(n)) as number[];
     const names = arr.map(s => (s?.nombre ?? '').toString().trim());
-
     if (!ids.length) return res.status(400).json({ error: "Debe venir al menos un solicitante" });
 
     const now = new Date();
@@ -501,26 +501,15 @@ export const completarVisita = async (req: Request, res: Response) => {
     const result = await prisma.$transaction(async (tx) => {
       const updated: any[] = [];
 
-      // ✅ OBTENER DATOS DE SUCURSAL PARA TODOS LOS SOLICITANTES
+      // Obtener sucursales de los solicitantes
       const solicitantesConSucursal = await tx.solicitante.findMany({
-        where: {
-          id_solicitante: {
-            in: ids
-          }
-        },
-        select: {
-          id_solicitante: true,
-          sucursalId: true,
-        },
+        where: { id_solicitante: { in: ids } },
+        select: { id_solicitante: true, sucursalId: true },
       });
-
-      // Crear mapa para acceso rápido: id_solicitante -> sucursalId
-      const mapaSucursales = new Map(
-        solicitantesConSucursal.map(s => [s.id_solicitante, s.sucursalId])
-      );
+      const mapaSucursales = new Map(solicitantesConSucursal.map(s => [s.id_solicitante, s.sucursalId]));
       const sucursalIdPrimero = mapaSucursales.get(ids[0]) || null;
 
-      // 1) actualizar la visita existente con el primer solicitante
+      // Actualizar la visita principal
       const u = await tx.visita.update({
         where: { id_visita: visitaId },
         data: {
@@ -537,12 +526,14 @@ export const completarVisita = async (req: Request, res: Response) => {
           id_visita: true, tecnicoId: true, empresaId: true, inicio: true, fin: true,
           solicitanteId: true, solicitante: true, status: true,
           ccleaner: true, actualizaciones: true, antivirus: true, estadoDisco: true,
-          licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true, ecografo: true,
-          direccion_visita: true, sucursalId: true
+          licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true,
+          mantenimientoReloj: true, ecografo: true, direccion_visita: true, sucursalId: true
         }
       });
+
       updated.push(u);
 
+      // Crear historial principal
       await tx.historial.create({
         data: {
           tecnicoId: u.tecnicoId,
@@ -551,23 +542,14 @@ export const completarVisita = async (req: Request, res: Response) => {
           inicio: u.inicio,
           fin: u.fin!,
           realizado: (realizado ?? otrosDetalleValidado) ?? null,
-          ccleaner: u.ccleaner,
-          actualizaciones: u.actualizaciones,
-          antivirus: u.antivirus,
-          estadoDisco: u.estadoDisco,
-          licenciaWindows: u.licenciaWindows,
-          licenciaOffice: u.licenciaOffice,
-          rendimientoEquipo: u.rendimientoEquipo,
-          mantenimientoReloj: u.mantenimientoReloj,
-          ecografo: u.ecografo,
           direccion_visita: u.direccion_visita,
-          sucursalId: sucursalIdPrimero, // ✅ CORREGIDO: usar del mapa, no de v
+          sucursalId: sucursalIdPrimero, // ✅ puede ser null
+          ...payloadFlags,
         }
       });
 
-      // 2) crear visitas nuevas para el resto de solicitantes
+      // Crear visitas adicionales si hay más solicitantes
       for (let i = 1; i < ids.length; i++) {
-        // ✅ OBTENER SUCURSAL ID PARA CADA SOLICITANTE
         const sucursalIdActual = mapaSucursales.get(ids[i]) || null;
 
         const nueva = await tx.visita.create({
@@ -587,8 +569,6 @@ export const completarVisita = async (req: Request, res: Response) => {
           select: {
             id_visita: true, tecnicoId: true, empresaId: true, inicio: true, fin: true,
             solicitanteId: true, solicitante: true, status: true,
-            ccleaner: true, actualizaciones: true, antivirus: true, estadoDisco: true,
-            licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true, ecografo: true,
             direccion_visita: true, sucursalId: true
           }
         });
@@ -603,17 +583,9 @@ export const completarVisita = async (req: Request, res: Response) => {
             inicio: nueva.inicio,
             fin: nueva.fin!,
             realizado: (realizado ?? otrosDetalleValidado) ?? null,
-            ccleaner: nueva.ccleaner,
-            actualizaciones: nueva.actualizaciones,
-            antivirus: nueva.antivirus,
-            estadoDisco: nueva.estadoDisco,
-            licenciaWindows: nueva.licenciaWindows,
-            licenciaOffice: nueva.licenciaOffice,
-            rendimientoEquipo: nueva.rendimientoEquipo,
-            mantenimientoReloj: nueva.mantenimientoReloj,
-            ecografo: nueva.ecografo,
             direccion_visita: nueva.direccion_visita,
-            sucursalId: sucursalIdActual // ✅ CORREGIDO: usar del mapa, no de v
+            sucursalId: sucursalIdActual,
+            ...payloadFlags,
           }
         });
       }
@@ -625,6 +597,7 @@ export const completarVisita = async (req: Request, res: Response) => {
       message: `Visita(s) completada(s) para ${ids.length} solicitante(s)`,
       visitas: result,
     });
+
   } catch (error: any) {
     console.error("Error al completar visita:", error);
     return res.status(500).json({ error: `Error interno al completar la visita: ${error.message || error}` });

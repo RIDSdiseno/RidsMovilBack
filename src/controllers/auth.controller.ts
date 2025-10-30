@@ -523,6 +523,7 @@ export const completarVisita = async (req: Request, res: Response) => {
           fin: now,
           status: EstadoVisita.COMPLETADA,
           direccion_visita: direccion_visita || v.direccion_visita,
+          sucursalId: req.body.sucursalId ?? v.sucursalId ?? null,
         },
         select: {
           id_visita: true, tecnicoId: true, empresaId: true, inicio: true, fin: true,
@@ -564,7 +565,6 @@ export const completarVisita = async (req: Request, res: Response) => {
           data: {
             tecnicoId: u.tecnicoId,
             empresaId: u.empresaId,
-            sucursalId: v.sucursalId ?? null,
             inicio: v.inicio,
             fin: now,
             status: EstadoVisita.COMPLETADA,
@@ -573,6 +573,7 @@ export const completarVisita = async (req: Request, res: Response) => {
             solicitanteId: ids[i],
             solicitante: names[i] || null,
             direccion_visita: direccion_visita || v.direccion_visita,
+            sucursalId: req.body.sucursalId ?? v.sucursalId ?? null,
           },
           select: {
             id_visita: true, tecnicoId: true, empresaId: true, inicio: true, fin: true,
@@ -594,7 +595,7 @@ export const completarVisita = async (req: Request, res: Response) => {
             fin: nueva.fin!,
             realizado: (realizado ?? otrosDetalleValidado) ?? null,
             direccion_visita: nueva.direccion_visita,
-            sucursalId: v.sucursalId ?? null,
+            sucursalId: req.body.sucursalId ?? v.sucursalId ?? null,
             ccleaner: nueva.ccleaner,
             actualizaciones: nueva.actualizaciones,
             antivirus: nueva.antivirus,
@@ -659,12 +660,12 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
     // Mapeo seguro con manejo de sucursal null
     const safe = historial.map((h) => ({
       id: h.id,
+      nombreCliente: h.solicitanteRef?.empresa?.nombre, 
       inicio: h.inicio,
       fin: h.fin,
       realizado: h.realizado ?? '—',
       direccion_visita: h.direccion_visita ?? 'No registrada',
       nombreSolicitante: h.solicitanteRef?.nombre ?? 'Solicitante no asignado',
-      nombreCliente: h.solicitanteRef?.empresa?.nombre ?? 'Empresa desconocida',
 
       // ✅ Sucursal tomada directamente del historial (ya no desde el solicitante)
       sucursalId: h.sucursal?.id_sucursal ?? null,

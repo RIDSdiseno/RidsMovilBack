@@ -636,15 +636,9 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
     const historial = await prisma.historial.findMany({
       where: { tecnicoId },
       orderBy: { fin: 'desc' },
-      select: {
-        id: true,
-        inicio: true,
-        fin: true,
-        realizado: true,
-        direccion_visita: true,
+      include: {
         solicitanteRef: {
-          select: {
-            nombre: true,
+          include: {
             empresa: {
               select: {
                 id_empresa: true,
@@ -716,7 +710,6 @@ export const createManySolicitante = async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Error al insertar solicitantes' });
   }
 };
-
 
 export const createManyEquipos = async (req: Request, res: Response) => {
   const { equipos } = req.body;
@@ -852,8 +845,6 @@ export const updateSolicitante = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Error interno del servidor" });
   }
 };
-
-
 
 //GET Auth/getAllEquipos
 export const getAllEquipos = async (req: Request, res: Response) => {
@@ -996,7 +987,6 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
   }
 };
 
-
 type DetalleEquipoBody = {
   idEquipo: number;          // <- PRIMITIVO, no "Number"
   macWifi: string;
@@ -1008,7 +998,6 @@ type DetalleEquipoBody = {
   claveTv: string;
   revisado: string;          // cámbialo a boolean o enum si en tu schema no es string
 };
-
 
 export const createManyDetalle = async (req: Request, res: Response) => {
   const { detalles } = req.body as { detalles?: DetalleEquipoBody[] };;

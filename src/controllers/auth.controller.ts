@@ -636,7 +636,7 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
   // ✅ Paginación (query params): page >= 1, limit entre 1 y 100
   const page = Math.max(1, Number(req.query.page) || 1);
   const limitRaw = Number(req.query.limit);
-  const limit = Math.min(5, Math.max(1, Number.isNaN(limitRaw) ? 5 : limitRaw));
+  const limit = Math.min(100, Math.max(1, Number.isNaN(limitRaw) ? 5 : limitRaw));
   const skip = (page - 1) * limit;
 
   try {

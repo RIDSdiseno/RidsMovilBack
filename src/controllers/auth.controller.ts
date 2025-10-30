@@ -626,41 +626,55 @@ export const completarVisita = async (req: Request, res: Response) => {
 };
 
 // GET /api/historial/:tecnicoId / Aceptar datos Null
-// GET /api/historial/:tecnicoId - CON MANEJO DE SUCURSAL NULL
+// GET /api/historial/:tecnicoId?page=1&limit=10  - CON MANEJO DE SUCURSAL NULL + PAGINACIÓN
 export const obtenerHistorialPorTecnico = async (req: Request, res: Response) => {
   const tecnicoId = Number(req.params.id);
   if (Number.isNaN(tecnicoId)) {
     return res.status(400).json({ error: 'ID de técnico inválido' });
   }
 
+  // ✅ Paginación (query params): page >= 1, limit entre 1 y 100
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const limitRaw = Number(req.query.limit);
+  const limit = Math.min(100, Math.max(1, Number.isNaN(limitRaw) ? 10 : limitRaw));
+  const skip = (page - 1) * limit;
+
   try {
-    const historial = await prisma.historial.findMany({
-      where: { tecnicoId },
-      orderBy: { fin: 'desc' },
-      include: {
-        solicitanteRef: {
-          include: {
-            empresa: {
-              select: {
-                id_empresa: true,
-                nombre: true,
+    // total + página actual en paralelo
+    const [total, historial] = await Promise.all([
+      prisma.historial.count({
+        where: { tecnicoId },
+      }),
+      prisma.historial.findMany({
+        where: { tecnicoId },
+        orderBy: { fin: 'desc' },
+        skip,
+        take: limit,
+        include: {
+          solicitanteRef: {
+            include: {
+              empresa: {
+                select: {
+                  id_empresa: true,
+                  nombre: true,
+                },
               },
             },
           },
-        },
-        sucursal: {
-          select: {
-            id_sucursal: true,
-            nombre: true,
+          sucursal: {
+            select: {
+              id_sucursal: true,
+              nombre: true,
+            },
           },
         },
-      },
-    });
+      }),
+    ]);
 
     // Mapeo seguro con manejo de sucursal null
     const safe = historial.map((h) => ({
       id: h.id,
-      nombreCliente: h.solicitanteRef?.empresa?.nombre, 
+      nombreCliente: h.solicitanteRef?.empresa?.nombre,
       inicio: h.inicio,
       fin: h.fin,
       realizado: h.realizado ?? '—',
@@ -673,7 +687,19 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
       tieneSucursal: !!h.sucursal,
     }));
 
-    return res.json({ historial: safe });
+    const lastItemIndex = skip + safe.length;
+    const hasMore = lastItemIndex < total;
+    const nextPage = hasMore ? page + 1 : null;
+
+    // 🔁 Mantengo la clave "historial" y agrego metadatos de paginación
+    return res.json({
+      historial: safe,
+      page,
+      limit,
+      total,
+      hasMore,
+      nextPage,
+    });
 
   } catch (err: any) {
     console.error('[HISTORIAL] Error:', err);

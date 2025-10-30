@@ -399,7 +399,7 @@ export const createManyempresa = async (req: Request, res: Response) => {
 export const crearVisita = async (req: Request, res: Response) => {
   try {
     console.log("Datos recibidos para crear la visita:", req.body);
-    const { empresaId, tecnicoId, latitud, longitud } = req.body;
+    const { empresaId, tecnicoId, sucursalId, latitud, longitud } = req.body;
 
     if (!empresaId || !tecnicoId) {
       return res.status(400).json({ error: "empresaId y tecnicoId son obligatorios" });
@@ -407,6 +407,7 @@ export const crearVisita = async (req: Request, res: Response) => {
 
     const empresaIdInt = Number(empresaId);
     const tecnicoIdInt = Number(tecnicoId);
+    const sucursalIdInt = sucursalId ? Number(sucursalId) : null;
 
     if (isNaN(empresaIdInt) || isNaN(tecnicoIdInt)) {
       return res.status(400).json({ error: "Los IDs deben ser números válidos" });
@@ -419,6 +420,7 @@ export const crearVisita = async (req: Request, res: Response) => {
       data: {
         empresaId: empresaIdInt,
         tecnicoId: tecnicoIdInt,
+        sucursalId: sucursalIdInt,
         solicitante: 'No especificado',
         inicio: new Date(),
         status: EstadoVisita.PENDIENTE,
@@ -428,6 +430,7 @@ export const crearVisita = async (req: Request, res: Response) => {
         id_visita: true,
         empresaId: true,
         tecnicoId: true,
+        sucursalId: true,
         inicio: true,
         status: true,
         direccion_visita: true
@@ -445,9 +448,22 @@ export const crearVisita = async (req: Request, res: Response) => {
 export const completarVisita = async (req: Request, res: Response) => {
   try {
     const visitaId = Number(req.params.id);
-    if (!Number.isFinite(visitaId)) return res.status(400).json({ error: "ID de visita inválido" });
+    if (!Number.isFinite(visitaId)) {
+      return res.status(400).json({ error: "ID de visita inválido" });
+    }
 
-    const v = await prisma.visita.findUnique({ where: { id_visita: visitaId } });
+    const v = await prisma.visita.findUnique({
+      where: { id_visita: visitaId },
+      select: {
+        id_visita: true,
+        empresaId: true,
+        tecnicoId: true,
+        sucursalId: true,
+        direccion_visita: true,
+        inicio: true,
+      },
+    });
+
     if (!v) return res.status(404).json({ error: "Visita no encontrada" });
 
     const {
@@ -456,10 +472,10 @@ export const completarVisita = async (req: Request, res: Response) => {
       licenciaWindows, licenciaOffice, rendimientoEquipo, mantenimientoReloj, ecografo,
       realizado,
       solicitantes,
-      direccion_visita // ✅ Recibir dirección del body
+      direccion_visita
     } = req.body ?? {};
 
-    // Normalizar booleans
+    // Normalizar booleanos
     const toB = (x: any) => Boolean(x);
     const payloadFlags = {
       confImpresoras: toB(confImpresoras),
@@ -484,7 +500,7 @@ export const completarVisita = async (req: Request, res: Response) => {
       otrosDetalleValidado = t;
     }
 
-    // Normalizar solicitantes
+    // Validar solicitantes
     const arr = Array.isArray(solicitantes) ? solicitantes : [];
     const ids = arr.map(s => Number(s?.id_solicitante)).filter(n => Number.isFinite(n)) as number[];
     const names = arr.map(s => (s?.nombre ?? '').toString().trim());
@@ -496,7 +512,7 @@ export const completarVisita = async (req: Request, res: Response) => {
     const result = await prisma.$transaction(async (tx) => {
       const updated: any[] = [];
 
-      // 1) actualizar la visita existente con el primer solicitante
+      // 1️⃣ Actualizar la visita existente (primer solicitante)
       const u = await tx.visita.update({
         where: { id_visita: visitaId },
         data: {
@@ -506,19 +522,20 @@ export const completarVisita = async (req: Request, res: Response) => {
           solicitante: names[0] || null,
           fin: now,
           status: EstadoVisita.COMPLETADA,
-          direccion_visita: direccion_visita || v.direccion_visita // ✅ Usar nueva dirección o mantener existente
+          direccion_visita: direccion_visita || v.direccion_visita,
         },
         select: {
           id_visita: true, tecnicoId: true, empresaId: true, inicio: true, fin: true,
           solicitanteId: true, solicitante: true, status: true,
           ccleaner: true, actualizaciones: true, antivirus: true, estadoDisco: true,
-          licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true,ecografo: true,
-          direccion_visita: true // ✅ Incluir dirección en select
-        }
+          licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true, ecografo: true,
+          direccion_visita: true, sucursalId: true,
+        },
       });
+
       updated.push(u);
 
-      // ❌ ERROR CORREGIDO: Cambiar `direccion_visita: true` por `direccion_visita: u.direccion_visita`
+      // 2️⃣ Crear historial correspondiente
       await tx.historial.create({
         data: {
           tecnicoId: u.tecnicoId,
@@ -527,6 +544,8 @@ export const completarVisita = async (req: Request, res: Response) => {
           inicio: u.inicio,
           fin: u.fin!,
           realizado: (realizado ?? otrosDetalleValidado) ?? null,
+          direccion_visita: u.direccion_visita,
+          sucursalId: v.sucursalId ?? null,
           ccleaner: u.ccleaner,
           actualizaciones: u.actualizaciones,
           antivirus: u.antivirus,
@@ -536,16 +555,16 @@ export const completarVisita = async (req: Request, res: Response) => {
           rendimientoEquipo: u.rendimientoEquipo,
           mantenimientoReloj: u.mantenimientoReloj,
           ecografo: u.ecografo,
-          direccion_visita: u.direccion_visita // ✅ CORREGIDO: usar el valor real
-        }
+        },
       });
 
-      // 2) crear visitas nuevas para el resto de solicitantes
+      // 3️⃣ Crear visitas adicionales para otros solicitantes
       for (let i = 1; i < ids.length; i++) {
         const nueva = await tx.visita.create({
           data: {
             tecnicoId: u.tecnicoId,
             empresaId: u.empresaId,
+            sucursalId: v.sucursalId ?? null,
             inicio: v.inicio,
             fin: now,
             status: EstadoVisita.COMPLETADA,
@@ -553,20 +572,19 @@ export const completarVisita = async (req: Request, res: Response) => {
             otrosDetalle: otrosDetalleValidado,
             solicitanteId: ids[i],
             solicitante: names[i] || null,
-            direccion_visita: direccion_visita || v.direccion_visita // ✅ Agregar dirección también aquí
+            direccion_visita: direccion_visita || v.direccion_visita,
           },
           select: {
             id_visita: true, tecnicoId: true, empresaId: true, inicio: true, fin: true,
             solicitanteId: true, solicitante: true, status: true,
             ccleaner: true, actualizaciones: true, antivirus: true, estadoDisco: true,
             licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true, ecografo: true,
-            direccion_visita: true // ✅ Incluir dirección en select
-          }
+            direccion_visita: true, sucursalId: true,
+          },
         });
 
         updated.push(nueva);
 
-        // ❌ ERROR CORREGIDO: Cambiar `direccion_visita: true` por `direccion_visita: nueva.direccion_visita`
         await tx.historial.create({
           data: {
             tecnicoId: nueva.tecnicoId,
@@ -575,6 +593,8 @@ export const completarVisita = async (req: Request, res: Response) => {
             inicio: nueva.inicio,
             fin: nueva.fin!,
             realizado: (realizado ?? otrosDetalleValidado) ?? null,
+            direccion_visita: nueva.direccion_visita,
+            sucursalId: v.sucursalId ?? null,
             ccleaner: nueva.ccleaner,
             actualizaciones: nueva.actualizaciones,
             antivirus: nueva.antivirus,
@@ -584,8 +604,7 @@ export const completarVisita = async (req: Request, res: Response) => {
             rendimientoEquipo: nueva.rendimientoEquipo,
             mantenimientoReloj: nueva.mantenimientoReloj,
             ecografo: nueva.ecografo,
-            direccion_visita: nueva.direccion_visita // ✅ CORREGIDO: usar el valor real
-          }
+          },
         });
       }
 
@@ -596,13 +615,17 @@ export const completarVisita = async (req: Request, res: Response) => {
       message: `Visita(s) completada(s) para ${ids.length} solicitante(s)`,
       visitas: result,
     });
+
   } catch (error: any) {
     console.error("Error al completar visita:", error);
-    return res.status(500).json({ error: `Error interno al completar la visita: ${error.message || error}` });
+    return res.status(500).json({
+      error: `Error interno al completar la visita: ${error.message || error}`,
+    });
   }
 };
 
 // GET /api/historial/:tecnicoId / Aceptar datos Null
+// GET /api/historial/:tecnicoId - CON MANEJO DE SUCURSAL NULL
 export const obtenerHistorialPorTecnico = async (req: Request, res: Response) => {
   const tecnicoId = Number(req.params.id);
   if (Number.isNaN(tecnicoId)) {
@@ -614,7 +637,7 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
       where: { tecnicoId },
       orderBy: { fin: 'desc' },
       select: {
-        id_historial: true,
+        id: true,
         inicio: true,
         fin: true,
         realizado: true,
@@ -630,17 +653,33 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
             },
           },
         },
+        sucursal: {
+          select: {
+            id_sucursal: true,
+            nombre: true,
+          },
+        },
       },
     });
 
-    // Mapeo seguro para evitar errores por relaciones nulas
+    // Mapeo seguro con manejo de sucursal null
     const safe = historial.map((h) => ({
-      ...h,
-      nombreCliente: h?.solicitanteRef?.empresa?.nombre ?? 'Empresa desconocida',
-      nombreSolicitante: h?.solicitanteRef?.nombre ?? 'Solicitante no asignado',
+      id: h.id,
+      inicio: h.inicio,
+      fin: h.fin,
+      realizado: h.realizado ?? '—',
+      direccion_visita: h.direccion_visita ?? 'No registrada',
+      nombreSolicitante: h.solicitanteRef?.nombre ?? 'Solicitante no asignado',
+      nombreCliente: h.solicitanteRef?.empresa?.nombre ?? 'Empresa desconocida',
+
+      // ✅ Sucursal tomada directamente del historial (ya no desde el solicitante)
+      sucursalId: h.sucursal?.id_sucursal ?? null,
+      sucursalNombre: h.sucursal?.nombre ?? 'Sin sucursal asignada',
+      tieneSucursal: !!h.sucursal,
     }));
 
     return res.json({ historial: safe });
+
   } catch (err: any) {
     console.error('[HISTORIAL] Error:', err);
     return res.status(500).json({
@@ -1146,7 +1185,7 @@ export const crearSucursal = async (req: Request, res: Response) => {
   }
 };
 
-// GET /api/sucursales/:id
+// GET /api/empresas/:id/sucursales
 export const obtenerSucursalesPorEmpresa = async (req: Request, res: Response) => {
   const empresaId = Number(req.params.id);
 
@@ -1158,53 +1197,20 @@ export const obtenerSucursalesPorEmpresa = async (req: Request, res: Response) =
     const sucursales = await prisma.sucursal.findMany({
       where: { empresaId },
       orderBy: { nombre: 'asc' },
-      include: {
-        solicitantes: {
-          select: { id_solicitante: true, nombre: true, email: true },
-        },
-      },
     });
-    return res.json({ sucursales });
+
+    // ✅ En lugar de devolver 404, devolvemos 200 con lista vacía
+    return res.json({
+      sucursales,
+      message: sucursales.length > 0
+        ? 'Sucursales encontradas'
+        : 'Esta empresa no tiene sucursales registradas'
+    });
+
   } catch (error) {
     console.error('Error al obtener sucursales:', error);
     return res.status(500).json({ error: 'Error interno al obtener sucursales' });
   }
-};
-
-// POST /api/asignarSolicitanteSucursal
-export const asignarSolicitanteSucursal = async (req: Request, res: Response) => {
-  const { solicitanteId, sucursalId } = req.body;
-
-  if (!solicitanteId || !sucursalId) {
-    return res.status(400).json({ error: 'Debe indicar solicitanteId y sucursalId' });
-  }
-
-  try {
-    // Verificar que la sucursal exista
-    const solicitante = await prisma.sucursal.findUnique({
-      where: { id_sucursal: sucursalId },
-    });
-
-
-    if (!solicitante || !sucursalId) {
-      return res.status(404).json({ error: 'Solicitante o sucursal no encontrado' });
-    }
-    // Actualizar relación
-    const actualizado = await prisma.solicitante.update({
-      where: { id_solicitante: solicitanteId },
-      data: { sucursalId },
-      include: { sucursal: true, empresa: true },
-    });
-
-    return res.json({
-      message: 'Solicitante asignado a sucursal correctamente',
-      solicitante: actualizado,
-    })
-  } catch (error) {
-    console.error('Error al asignar solicitante a sucursal:', error);
-    return res.status(500).json({ error: 'Error interno del servidor' });
-  }
-
 };
 
 // GET /api/empresasConSucursales

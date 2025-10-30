@@ -15,7 +15,6 @@ createEquipo,
 createSolicitante,
 crearSucursal,
 obtenerSucursalesPorEmpresa,
-asignarSolicitanteSucursal,
 obtenerEmpresasConSucursales} from "../controllers/auth.controller";
 import { authGuard } from "../middlewares/auth.middleware";
 
@@ -51,12 +50,10 @@ r.put('/equipos/:id', authGuard,actualizarEquipo)
 r.post("/crearequipo",authGuard,createEquipo)
 r.post('/createSolicitante',authGuard,createSolicitante)
 
+// Rutas Sucursales
 r.post('/sucursales', authGuard,crearSucursal);
-
-r.get('empresas/:id/sucursales', authGuard, obtenerSucursalesPorEmpresa);
-
-r.post('/sucursales/asignar-solicitante', authGuard, asignarSolicitanteSucursal);
-
+r.get('/empresas/:id/sucursales', authGuard, obtenerSucursalesPorEmpresa);
 r.get('/empresas/sucursales', authGuard, obtenerEmpresasConSucursales);
+
 
 export default r

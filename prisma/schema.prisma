@@ -23,12 +23,14 @@ model Empresa {
 }
 
 model Sucursal {
-  id_sucursal Int     @id @default(autoincrement())
-  nombre      String
-  direccion   String?
-  telefono    String?
-  empresaId   Int
-  empresa     Empresa @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
+  id_sucursal  Int           @id @default(autoincrement())
+  nombre       String
+  direccion    String?
+  telefono     String?
+  empresaId    Int
+  empresa      Empresa       @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
+  historiales  Historial[]
+  visitas      Visita[]
 
   @@index([empresaId])
 }
@@ -164,12 +166,15 @@ model DetalleTrabajo {
 }
 
 model Historial {
+  id                 Int         @id @default(autoincrement()) @map("id_historial")
   tecnicoId          Int
+  solicitanteId      Int
+  sucursalId         Int?                             
   solicitante        String
   inicio             DateTime
   fin                DateTime
   realizado          String?
-  solicitanteId      Int
+  direccion_visita   String?
   actualizaciones    Boolean     @default(false)
   antivirus          Boolean     @default(false)
   ccleaner           Boolean     @default(false)
@@ -178,16 +183,15 @@ model Historial {
   licenciaWindows    Boolean     @default(false)
   mantenimientoReloj Boolean     @default(false)
   rendimientoEquipo  Boolean     @default(false)
-  id_historial       Int         @id @default(autoincrement())
-  direccion_visita   String?
   ecografo           Boolean     @default(false)
-  sucursalId         Int?
+
   tecnico            Tecnico     @relation(fields: [tecnicoId], references: [id_tecnico])
   solicitanteRef     Solicitante @relation("Solicitante_Historial", fields: [solicitanteId], references: [id_solicitante])
+  sucursal           Sucursal?   @relation(fields: [sucursalId], references: [id_sucursal])
 
   @@index([tecnicoId])
   @@index([solicitanteId])
-  @@index([sucursalId])
+  @@index([sucursalId]) 
 }
 
 model RefreshToken {
@@ -246,6 +250,7 @@ model Visita {
   empresa            Empresa      @relation("Empresa_Visita", fields: [empresaId], references: [id_empresa])
   tecnico            Tecnico      @relation(fields: [tecnicoId], references: [id_tecnico])
   solicitanteRef     Solicitante? @relation("Solicitante_Visita", fields: [solicitanteId], references: [id_solicitante])
+  sucursal           Sucursal?   @relation(fields: [sucursalId], references: [id_sucursal])
 
   @@index([empresaId])
   @@index([tecnicoId])

@@ -625,39 +625,60 @@ export const completarVisita = async (req: Request, res: Response) => {
 };
 
 // GET /api/historial/:tecnicoId / Aceptar datos Null
-// GET /api/historial/:tecnicoId - CON MANEJO DE SUCURSAL NULL
+// GET /api/historial/:tecnicoId?page=1&pageSize=10&q=texto
 export const obtenerHistorialPorTecnico = async (req: Request, res: Response) => {
-  const tecnicoId = Number(req.params.id);
+  //  usar el nombre real del parámetro de ruta
+  const tecnicoId = Number(req.params.tecnicoId);
   if (Number.isNaN(tecnicoId)) {
     return res.status(400).json({ error: 'ID de técnico inválido' });
   }
 
+  // --- Paginación y filtros ---
+  const page = Math.max(1, Number(req.query.page ?? 1));
+  const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize ?? 10))); // cap a 100
+  const skip = (page - 1) * pageSize;
+  const take = pageSize;
+
+  const q = String(req.query.q ?? '').trim();
+
+  // Filtro base + búsqueda opcional
+  const where: Prisma.HistorialWhereInput = q
+    ? {
+        AND: [
+          { tecnicoId },
+          {
+            OR: [
+              { solicitante: { contains: q, mode: 'insensitive' } },
+              { realizado: { contains: q, mode: 'insensitive' } },
+              { direccion_visita: { contains: q, mode: 'insensitive' } },
+            ],
+          },
+        ],
+      }
+    : { tecnicoId };
+
   try {
-    const historial = await prisma.historial.findMany({
-      where: { tecnicoId },
-      orderBy: { fin: 'desc' },
-      include: {
-        solicitanteRef: {
-          include: {
-            empresa: {
-              select: {
-                id_empresa: true,
-                nombre: true,
-              },
+    // Ejecutar count + findMany en paralelo
+    const [total, historial] = await Promise.all([
+      prisma.historial.count({ where }),
+      prisma.historial.findMany({
+        where,
+        orderBy: { fin: 'desc' },   // índice recomendado: (tecnicoId, fin DESC)
+        skip,
+        take,
+        include: {
+          solicitanteRef: {
+            include: {
+              empresa: { select: { id_empresa: true, nombre: true } },
             },
           },
+          sucursal: { select: { id_sucursal: true, nombre: true } },
         },
-        sucursal: {
-          select: {
-            id_sucursal: true,
-            nombre: true,
-          },
-        },
-      },
-    });
+      }),
+    ]);
 
-    // Mapeo seguro con manejo de sucursal null
-    const safe = historial.map((h) => ({
+    // Mapeo seguro (sucursal puede ser null)
+    const items = historial.map((h) => ({
       id: h.id,
       inicio: h.inicio,
       fin: h.fin,
@@ -665,15 +686,18 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
       direccion_visita: h.direccion_visita ?? 'No registrada',
       nombreSolicitante: h.solicitanteRef?.nombre ?? 'Solicitante no asignado',
       nombreCliente: h.solicitanteRef?.empresa?.nombre ?? 'Empresa desconocida',
-
-      // ✅ Sucursal tomada directamente del historial (ya no desde el solicitante)
       sucursalId: h.sucursal?.id_sucursal ?? null,
       sucursalNombre: h.sucursal?.nombre ?? 'Sin sucursal asignada',
       tieneSucursal: !!h.sucursal,
     }));
 
-    return res.json({ historial: safe });
-
+    return res.json({
+      items,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    });
   } catch (err: any) {
     console.error('[HISTORIAL] Error:', err);
     return res.status(500).json({
@@ -684,6 +708,7 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
     });
   }
 };
+
 
 //Carga masiva de solicitantes por empresa
 export const createManySolicitante = async (req: Request, res: Response) => {

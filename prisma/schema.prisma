@@ -189,7 +189,7 @@ model Historial {
   solicitanteRef     Solicitante @relation("Solicitante_Historial", fields: [solicitanteId], references: [id_solicitante])
   sucursal           Sucursal?   @relation(fields: [sucursalId], references: [id_sucursal])
 
-  @@index([tecnicoId])
+  @@index([tecnicoId, fin(sort: Desc)])
   @@index([solicitanteId])
   @@index([sucursalId]) 
 }

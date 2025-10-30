@@ -29,7 +29,6 @@ model Sucursal {
   telefono     String?
   empresaId    Int
   empresa      Empresa       @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
-  solicitantes Solicitante[]
   historiales  Historial[]
   visitas      Visita[]
 
@@ -59,7 +58,6 @@ model Solicitante {
   isActive        Boolean                 @default(true)
   microsoftUserId String?                 @unique
   accountType     AccountType?
-  sucursalId      Int?
   empresa         Empresa                 @relation(fields: [empresaId], references: [id_empresa])
   equipos         Equipo[]
   visitas         Visita[]                @relation("Solicitante_Visita")
@@ -68,7 +66,6 @@ model Solicitante {
   requesterMaps   FreshdeskRequesterMap[]
   cliente         Cliente?                @relation("ClienteSolicitante", fields: [clienteId], references: [id])
   msLicenses      SolicitanteMsLicense[]
-  sucursal        Sucursal?               @relation(fields: [sucursalId], references: [id_sucursal])
 
   @@index([empresaId])
   @@index([isActive])
@@ -172,7 +169,7 @@ model Historial {
   id                 Int         @id @default(autoincrement()) @map("id_historial")
   tecnicoId          Int
   solicitanteId      Int
-  sucursalId         Int?                             // ✅ ya está bien ubicado
+  sucursalId         Int?                             
   solicitante        String
   inicio             DateTime
   fin                DateTime

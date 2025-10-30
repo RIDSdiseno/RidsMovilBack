@@ -399,7 +399,7 @@ export const createManyempresa = async (req: Request, res: Response) => {
 export const crearVisita = async (req: Request, res: Response) => {
   try {
     console.log("Datos recibidos para crear la visita:", req.body);
-    const { empresaId, tecnicoId, latitud, longitud } = req.body;
+    const { empresaId, tecnicoId, sucursalId, latitud, longitud } = req.body;
 
     if (!empresaId || !tecnicoId) {
       return res.status(400).json({ error: "empresaId y tecnicoId son obligatorios" });
@@ -407,6 +407,7 @@ export const crearVisita = async (req: Request, res: Response) => {
 
     const empresaIdInt = Number(empresaId);
     const tecnicoIdInt = Number(tecnicoId);
+    const sucursalIdInt = sucursalId ? Number(sucursalId) : null;
 
     if (isNaN(empresaIdInt) || isNaN(tecnicoIdInt)) {
       return res.status(400).json({ error: "Los IDs deben ser números válidos" });
@@ -419,6 +420,7 @@ export const crearVisita = async (req: Request, res: Response) => {
       data: {
         empresaId: empresaIdInt,
         tecnicoId: tecnicoIdInt,
+        sucursalId: sucursalIdInt,
         solicitante: 'No especificado',
         inicio: new Date(),
         status: EstadoVisita.PENDIENTE,
@@ -428,6 +430,7 @@ export const crearVisita = async (req: Request, res: Response) => {
         id_visita: true,
         empresaId: true,
         tecnicoId: true,
+        sucursalId: true,
         inicio: true,
         status: true,
         direccion_visita: true
@@ -449,13 +452,6 @@ export const completarVisita = async (req: Request, res: Response) => {
 
     const v = await prisma.visita.findUnique({
       where: { id_visita: visitaId },
-      include: {
-        solicitanteRef: {
-          select: {
-            sucursalId: true, // ✅ Incluir sucursalId del solicitante original
-          },
-        },
-      },
     });
     if (!v) return res.status(404).json({ error: "Visita no encontrada" });
 
@@ -522,6 +518,7 @@ export const completarVisita = async (req: Request, res: Response) => {
       const mapaSucursales = new Map(
         solicitantesConSucursal.map(s => [s.id_solicitante, s.sucursalId])
       );
+      const sucursalIdPrimero = mapaSucursales.get(ids[0]) || null;
 
       // 1) actualizar la visita existente con el primer solicitante
       const u = await tx.visita.update({
@@ -533,20 +530,18 @@ export const completarVisita = async (req: Request, res: Response) => {
           solicitante: names[0] || null,
           fin: now,
           status: EstadoVisita.COMPLETADA,
-          direccion_visita: direccion_visita || v.direccion_visita
+          direccion_visita: direccion_visita || v.direccion_visita,
+          sucursalId: sucursalIdPrimero,
         },
         select: {
           id_visita: true, tecnicoId: true, empresaId: true, inicio: true, fin: true,
           solicitanteId: true, solicitante: true, status: true,
           ccleaner: true, actualizaciones: true, antivirus: true, estadoDisco: true,
           licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true, ecografo: true,
-          direccion_visita: true
+          direccion_visita: true, sucursalId: true
         }
       });
       updated.push(u);
-
-      // ✅ OBTENER SUCURSAL ID DEL PRIMER SOLICITANTE
-      const sucursalIdPrimero = mapaSucursales.get(ids[0]) || null;
 
       await tx.historial.create({
         data: {
@@ -579,6 +574,7 @@ export const completarVisita = async (req: Request, res: Response) => {
           data: {
             tecnicoId: u.tecnicoId,
             empresaId: u.empresaId,
+            sucursalId: sucursalIdActual,
             inicio: v.inicio,
             fin: now,
             status: EstadoVisita.COMPLETADA,
@@ -593,7 +589,7 @@ export const completarVisita = async (req: Request, res: Response) => {
             solicitanteId: true, solicitante: true, status: true,
             ccleaner: true, actualizaciones: true, antivirus: true, estadoDisco: true,
             licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true, ecografo: true,
-            direccion_visita: true
+            direccion_visita: true, sucursalId: true
           }
         });
 

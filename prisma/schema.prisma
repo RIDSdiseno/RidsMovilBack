@@ -31,6 +31,7 @@ model Sucursal {
   empresa      Empresa       @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
   solicitantes Solicitante[]
   historiales  Historial[]
+  visitas      Visita[]
 
   @@index([empresaId])
 }
@@ -248,9 +249,12 @@ model Visita {
   rendimientoEquipo  Boolean      @default(false)
   direccion_visita   String?
   ecografo           Boolean      @default(false)
+  sucursalId         Int?
+
   empresa            Empresa      @relation("Empresa_Visita", fields: [empresaId], references: [id_empresa])
   tecnico            Tecnico      @relation(fields: [tecnicoId], references: [id_tecnico])
   solicitanteRef     Solicitante? @relation("Solicitante_Visita", fields: [solicitanteId], references: [id_solicitante])
+  sucursal           Sucursal?   @relation(fields: [sucursalId], references: [id_sucursal])
 
   @@index([empresaId])
   @@index([tecnicoId])

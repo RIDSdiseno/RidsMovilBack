@@ -803,6 +803,7 @@ export const getSolicitantes = async (req: Request, res: Response) => {
       select: {
         id_solicitante: true,
         nombre: true,
+        email: true,
         empresaId: true,
       },
     });

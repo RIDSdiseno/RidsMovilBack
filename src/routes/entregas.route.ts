@@ -1,3 +1,5 @@
+// src/routes/entregas.route.ts
+
 import { Router } from "express";
 import { authGuard } from "../middlewares/auth.middleware.js";
 import { crearEntrega, obtenerEntrega } from "../controllers/entregas.controller.js";

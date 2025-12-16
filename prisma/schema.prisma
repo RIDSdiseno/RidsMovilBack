@@ -460,29 +460,6 @@ model ServicioGestioo {
   @@index([entidadId])
 }
 
-model Entrega {
-  id_entrega     Int       @id @default(autoincrement())
-  empresaNombre  String
-  receptorNombre String
-  fecha          DateTime  @default(now())
-  evidencias     EvidenciaEntrega[]
-}
-
-model EvidenciaEntrega {
-  id        Int                 @id @default(autoincrement())
-  entregaId Int
-  tipo      TipoEvidenciaEntrega
-  url       String
-  publicId  String              @unique
-  formato   String
-  bytes     Int
-  creadoEn  DateTime            @default(now())
-  entrega   Entrega             @relation(fields: [entregaId], references: [id_entrega], onDelete: Cascade)
-
-  @@index([entregaId])
-  @@index([tipo])
-}
-
 enum AccountType {
   google
   microsoft
@@ -561,9 +538,4 @@ enum TipoCotizacionGestioo {
 enum TipoEntidadGestioo {
   PERSONA
   EMPRESA
-}
-
-enum TipoEvidenciaEntrega {
-  FOTO
-  FIRMA
 }

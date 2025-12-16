@@ -210,6 +210,18 @@ export const confirmarEvidencia = async (req: Request, res: Response) => {
 
     return res.status(201).json({ evidencia });
   } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError) {
+      if (err.code === "P2002") {
+        return res.status(409).json({ error: "Ya existe una evidencia registrada con ese publicId" });
+      }
+      if (err.code === "P2003") {
+        return res.status(404).json({ error: "Entrega no encontrada o eliminada" });
+      }
+    }
+    if (err instanceof Prisma.PrismaClientValidationError) {
+      return res.status(400).json({ error: "Payload de evidencia invalido" });
+    }
+
     console.error("Error al confirmar evidencia:", err);
     return res.status(500).json({ error: "Error interno al confirmar la evidencia" });
   }

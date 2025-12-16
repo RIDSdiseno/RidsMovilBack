@@ -497,10 +497,11 @@ model EvidenciaEntrega {
   id        Int                 @id @default(autoincrement())
   entregaId Int
   tipo      TipoEvidenciaEntrega
-  url       String
-  publicId  String              @unique
-  formato   String
-  bytes     Int
+  url       String?
+  publicId  String?             @unique
+  formato   String?
+  bytes     Int?
+  vector    Json?
   creadoEn  DateTime            @default(now())
   entrega   Entrega             @relation(fields: [entregaId], references: [id_entrega], onDelete: Cascade)
 

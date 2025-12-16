@@ -1,7 +1,7 @@
 // src/controllers/evidencias.controller.ts
 
 import type { Request, Response } from "express";
-import { PrismaClient, TipoEvidenciaEntrega } from "@prisma/client";
+import { Prisma, PrismaClient, TipoEvidenciaEntrega } from "@prisma/client";
 import { buildEntregaFolder, createUploadSignature } from "../config/cloudinary.js";
 
 const prisma = new PrismaClient();
@@ -20,6 +20,7 @@ type EvidenceInput = {
   bytes?: number;
   url?: string;
   publicId?: string;
+  vector?: unknown;
 };
 
 function normalizeTipo(tipo?: string): TipoEvidenciaEntrega | null {
@@ -103,15 +104,17 @@ export const solicitarFirmaSubida = async (req: Request, res: Response) => {
     const formato = normalizeFormat(body.formato);
     const bytes = body.bytes !== undefined ? Number(body.bytes) : null;
 
-    if (formato && !ALLOWED_FORMATS.has(formato)) {
-      return res.status(400).json({ error: "Formato no permitido. Usa png o jpeg" });
-    }
-    if (bytes !== null) {
-      if (!Number.isFinite(bytes) || bytes <= 0) {
-        return res.status(400).json({ error: "bytes debe ser un número positivo" });
+    if (tipo === TipoEvidenciaEntrega.FOTO) {
+      if (formato && !ALLOWED_FORMATS.has(formato)) {
+        return res.status(400).json({ error: "Formato no permitido. Usa png o jpeg" });
       }
-      if (bytes > MAX_BYTES) {
-        return res.status(400).json({ error: "El archivo excede el tamaño máximo permitido" });
+      if (bytes !== null) {
+        if (!Number.isFinite(bytes) || bytes <= 0) {
+          return res.status(400).json({ error: "bytes debe ser un numero positivo" });
+        }
+        if (bytes > MAX_BYTES) {
+          return res.status(400).json({ error: "El archivo excede el tamano maximo permitido" });
+        }
       }
     }
 
@@ -121,6 +124,14 @@ export const solicitarFirmaSubida = async (req: Request, res: Response) => {
     const limiteMsg = await validarLimitesEvidencia(entrega.id_entrega, tipo);
     if (limiteMsg) {
       return res.status(409).json({ error: limiteMsg });
+    }
+
+    if (tipo === TipoEvidenciaEntrega.FIRMA) {
+      return res.json({
+        requiresUpload: false,
+        storage: "database",
+        message: "Envia el vector de la firma en el endpoint de confirmacion",
+      });
     }
 
     const folder = buildEntregaFolder(entrega.id_entrega);
@@ -146,28 +157,38 @@ export const confirmarEvidencia = async (req: Request, res: Response) => {
     const tipo = normalizeTipo(body.tipo);
     const formato = normalizeFormat(body.formato);
     const bytes = body.bytes !== undefined ? Number(body.bytes) : NaN;
-    const { url, publicId } = body;
+    const { url, publicId, vector } = body;
 
     if (!tipo) {
       return res.status(400).json({ error: "tipo es requerido (foto o firma)" });
     }
-    if (!url || !publicId) {
-      return res.status(400).json({ error: "url y publicId son obligatorios" });
-    }
-    if (!formato || !ALLOWED_FORMATS.has(formato)) {
-      return res.status(400).json({ error: "Formato no permitido. Usa png o jpeg" });
-    }
-    if (!Number.isFinite(bytes) || bytes <= 0 || bytes > MAX_BYTES) {
-      return res.status(400).json({ error: "bytes es requerido y debe estar dentro del límite permitido" });
+
+    if (tipo === TipoEvidenciaEntrega.FOTO) {
+      if (!url || !publicId) {
+        return res.status(400).json({ error: "url y publicId son obligatorios para las fotos" });
+      }
+      if (!formato || !ALLOWED_FORMATS.has(formato)) {
+        return res.status(400).json({ error: "Formato no permitido. Usa png o jpeg" });
+      }
+      if (!Number.isFinite(bytes) || bytes <= 0 || bytes > MAX_BYTES) {
+        return res.status(400).json({ error: "bytes es requerido y debe estar dentro del limite permitido" });
+      }
+    } else {
+      const isEmptyString = typeof vector === 'string' && vector.trim() === '';
+      if (vector === undefined || vector === null || isEmptyString) {
+        return res.status(400).json({ error: "vector de firma es requerido" });
+      }
     }
 
     const entrega = await validarEntrega(res, entregaId);
     if (!entrega) return;
 
-    const folder = buildEntregaFolder(entrega.id_entrega);
-    const expectedPrefix = `${folder}/`;
-    if (!publicId.startsWith(expectedPrefix)) {
-      return res.status(400).json({ error: "publicId no pertenece al folder asignado para la entrega" });
+    if (tipo === TipoEvidenciaEntrega.FOTO) {
+      const folder = buildEntregaFolder(entrega.id_entrega);
+      const expectedPrefix = `${folder}/`;
+      if (!publicId || !publicId.startsWith(expectedPrefix)) {
+        return res.status(400).json({ error: "publicId no pertenece al folder asignado para la entrega" });
+      }
     }
 
     const limiteMsg = await validarLimitesEvidencia(entrega.id_entrega, tipo);
@@ -179,10 +200,11 @@ export const confirmarEvidencia = async (req: Request, res: Response) => {
       data: {
         entregaId: entrega.id_entrega,
         tipo,
-        url,
-        publicId,
-        formato,
-        bytes,
+        url: tipo === TipoEvidenciaEntrega.FOTO ? url : null,
+        publicId: tipo === TipoEvidenciaEntrega.FOTO ? publicId : null,
+        formato: tipo === TipoEvidenciaEntrega.FOTO ? formato : null,
+        bytes: tipo === TipoEvidenciaEntrega.FOTO ? bytes : null,
+        vector: tipo === TipoEvidenciaEntrega.FIRMA ? (vector as Prisma.InputJsonValue) : undefined,
       },
     });
 

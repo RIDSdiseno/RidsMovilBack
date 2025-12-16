@@ -11,7 +11,8 @@
     "prisma:m": "prisma migrate dev --name init",
     "prisma:studio": "prisma studio",
     "seed": "prisma db seed",
-    "prepare": "prisma generate"
+    "prepare": "prisma generate",
+    "prebuild": "prisma generate"
   },
   "keywords": [],
   "author": "",

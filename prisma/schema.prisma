@@ -64,6 +64,7 @@ model Solicitante {
   historiales     Historial[]             @relation("Solicitante_Historial")
   tickets         FreshdeskTicket[]
   requesterMaps   FreshdeskRequesterMap[]
+
   msLicenses      SolicitanteMsLicense[]
 
   @@index([empresaId])
@@ -91,6 +92,14 @@ model SolicitanteMsLicense {
   @@index([solicitanteId])
 }
 
+
+
+
+
+
+
+
+
 model Equipo {
   id_equipo       Int              @id @default(autoincrement())
   idSolicitante   Int
@@ -107,6 +116,19 @@ model Equipo {
 
   @@index([idSolicitante])
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 model DetalleEquipo {
   id         Int     @id @default(autoincrement()) @map("id_detalle_equipo")
@@ -154,7 +176,10 @@ model DetalleTrabajo {
 }
 
 model Historial {
+
   tecnicoId          Int
+
+
   solicitante        String
   inicio             DateTime
   fin                DateTime
@@ -460,6 +485,29 @@ model ServicioGestioo {
   @@index([entidadId])
 }
 
+model Entrega {
+  id_entrega     Int       @id @default(autoincrement())
+  empresaNombre  String
+  receptorNombre String
+  fecha          DateTime  @default(now())
+  evidencias     EvidenciaEntrega[]
+}
+
+model EvidenciaEntrega {
+  id        Int                 @id @default(autoincrement())
+  entregaId Int
+  tipo      TipoEvidenciaEntrega
+  url       String
+  publicId  String              @unique
+  formato   String
+  bytes     Int
+  creadoEn  DateTime            @default(now())
+  entrega   Entrega             @relation(fields: [entregaId], references: [id_entrega], onDelete: Cascade)
+
+  @@index([entregaId])
+  @@index([tipo])
+}
+
 enum AccountType {
   google
   microsoft
@@ -538,4 +586,9 @@ enum TipoCotizacionGestioo {
 enum TipoEntidadGestioo {
   PERSONA
   EMPRESA
+}
+
+enum TipoEvidenciaEntrega {
+  FOTO
+  FIRMA
 }

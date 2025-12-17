@@ -494,20 +494,20 @@ model Entrega {
 }
 
 model EvidenciaEntrega {
-  id        Int                 @id @default(autoincrement())
+  id        Int                  @id @default(autoincrement())
   entregaId Int
   tipo      TipoEvidenciaEntrega
   url       String?
-  publicId  String?             @unique
+  publicId  String?              @unique
   formato   String?
   bytes     Int?
-  vector    Json?
-  creadoEn  DateTime            @default(now())
-  entrega   Entrega             @relation(fields: [entregaId], references: [id_entrega], onDelete: Cascade)
+  creadoEn  DateTime             @default(now())
+  entrega   Entrega              @relation(fields: [entregaId], references: [id_entrega], onDelete: Cascade)
 
   @@index([entregaId])
   @@index([tipo])
 }
+
 
 enum AccountType {
   google

@@ -30,6 +30,14 @@ model Sucursal {
   empresa     Empresa     @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
   historiales Historial[]
   visitas     Visita[]
+  id_sucursal Int         @id @default(autoincrement())
+  nombre      String
+  direccion   String?
+  telefono    String?
+  empresaId   Int
+  empresa     Empresa     @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
+  historiales Historial[]
+  visitas     Visita[]
 
   @@index([empresaId])
 }
@@ -47,6 +55,7 @@ model DetalleEmpresa {
 }
 
 model Solicitante {
+  id_solicitante  Int                     @id @default(dbgenerated("nextval((pg_get_serial_sequence('\"Solicitante\"'::text, 'id_solicitante'::text))::regclass)"))
   id_solicitante  Int                     @id @default(dbgenerated("nextval((pg_get_serial_sequence('\"Solicitante\"'::text, 'id_solicitante'::text))::regclass)"))
   nombre          String
   email           String?
@@ -237,6 +246,7 @@ model Historial {
   fin                DateTime
   realizado          String?
   solicitanteId      Int
+  solicitanteId      Int
   actualizaciones    Boolean     @default(false)
   antivirus          Boolean     @default(false)
   ccleaner           Boolean     @default(false)
@@ -247,7 +257,10 @@ model Historial {
   rendimientoEquipo  Boolean     @default(false)
   id                 Int         @id @default(autoincrement()) @map("id_historial")
   direccion_visita   String?
+  id                 Int         @id @default(autoincrement()) @map("id_historial")
+  direccion_visita   String?
   ecografo           Boolean     @default(false)
+  sucursalId         Int?
   sucursalId         Int?
   tecnico            Tecnico     @relation(fields: [tecnicoId], references: [id_tecnico])
   solicitanteRef     Solicitante @relation("Solicitante_Historial", fields: [solicitanteId], references: [id_solicitante])
@@ -255,6 +268,7 @@ model Historial {
 
   @@index([tecnicoId, fin(sort: Desc)])
   @@index([solicitanteId])
+  @@index([sucursalId])
   @@index([sucursalId])
 }
 
@@ -315,10 +329,12 @@ model Visita {
   tecnico            Tecnico      @relation(fields: [tecnicoId], references: [id_tecnico])
   solicitanteRef     Solicitante? @relation("Solicitante_Visita", fields: [solicitanteId], references: [id_solicitante])
   sucursal           Sucursal?    @relation(fields: [sucursalId], references: [id_sucursal])
+  sucursal           Sucursal?    @relation(fields: [sucursalId], references: [id_sucursal])
 
   @@index([empresaId])
   @@index([tecnicoId])
   @@index([solicitanteId])
+  @@index([sucursalId])
   @@index([sucursalId])
 }
 

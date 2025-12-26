@@ -1,7 +1,7 @@
 "use strict";
 // src/controllers/entregas.controller.ts
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.obtenerEntrega = exports.crearEntrega = void 0;
+exports.listarEntregas = exports.obtenerEntrega = exports.crearEntrega = void 0;
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
 const crearEntrega = async (req, res) => {
@@ -50,3 +50,22 @@ const obtenerEntrega = async (req, res) => {
     }
 };
 exports.obtenerEntrega = obtenerEntrega;
+const listarEntregas = async (_req, res) => {
+    try {
+        const entregas = await prisma.entrega.findMany({
+            orderBy: { fecha: "desc" },
+            take: 50, // 🔥 límite razonable para mobile
+            include: {
+                _count: {
+                    select: { evidencias: true },
+                },
+            },
+        });
+        return res.json({ entregas });
+    }
+    catch (err) {
+        console.error("Error al listar entregas:", err);
+        return res.status(500).json({ error: "Error interno al listar entregas" });
+    }
+};
+exports.listarEntregas = listarEntregas;

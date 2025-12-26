@@ -10,6 +10,7 @@ const entregas_controller_js_1 = require("../controllers/entregas.controller.js"
 const evidencias_route_js_1 = __importDefault(require("./evidencias.route.js"));
 const r = (0, express_1.Router)();
 r.use(auth_middleware_js_1.authGuard);
+r.get("/", entregas_controller_js_1.listarEntregas);
 r.post("/", entregas_controller_js_1.crearEntrega);
 r.get("/:id", entregas_controller_js_1.obtenerEntrega);
 r.use("/:id/evidencias", evidencias_route_js_1.default);

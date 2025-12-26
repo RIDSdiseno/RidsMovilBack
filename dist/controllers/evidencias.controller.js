@@ -76,20 +76,20 @@ const solicitarFirmaSubida = async (req, res) => {
         const entregaId = Number(req.params.id);
         const body = (req.body ?? {});
         const tipo = normalizeTipo(body.tipo);
+        const formato = normalizeFormat(body.formato);
+        const bytes = body.bytes !== undefined ? Number(body.bytes) : null;
         if (!tipo) {
             return res.status(400).json({ error: "tipo debe ser 'foto' o 'firma'" });
         }
-        const formato = normalizeFormat(body.formato);
-        const bytes = body.bytes !== undefined ? Number(body.bytes) : null;
         if (formato && !ALLOWED_FORMATS.has(formato)) {
             return res.status(400).json({ error: "Formato no permitido. Usa png o jpeg" });
         }
         if (bytes !== null) {
             if (!Number.isFinite(bytes) || bytes <= 0) {
-                return res.status(400).json({ error: "bytes debe ser un número positivo" });
+                return res.status(400).json({ error: "bytes debe ser un numero positivo" });
             }
             if (bytes > MAX_BYTES) {
-                return res.status(400).json({ error: "El archivo excede el tamaño máximo permitido" });
+                return res.status(400).json({ error: "El archivo excede el tamano maximo permitido" });
             }
         }
         const entrega = await validarEntrega(res, entregaId);
@@ -106,7 +106,8 @@ const solicitarFirmaSubida = async (req, res) => {
             ...signed,
             allowedFormats: Array.from(ALLOWED_FORMATS),
             maxBytes: MAX_BYTES,
-            resourceType: "auto",
+            resourceType: "image",
+            tipo,
         });
     }
     catch (err) {
@@ -133,14 +134,14 @@ const confirmarEvidencia = async (req, res) => {
             return res.status(400).json({ error: "Formato no permitido. Usa png o jpeg" });
         }
         if (!Number.isFinite(bytes) || bytes <= 0 || bytes > MAX_BYTES) {
-            return res.status(400).json({ error: "bytes es requerido y debe estar dentro del límite permitido" });
+            return res.status(400).json({ error: "bytes es requerido y debe estar dentro del limite permitido" });
         }
         const entrega = await validarEntrega(res, entregaId);
         if (!entrega)
             return;
         const folder = (0, cloudinary_js_1.buildEntregaFolder)(entrega.id_entrega);
         const expectedPrefix = `${folder}/`;
-        if (!publicId.startsWith(expectedPrefix)) {
+        if (!publicId || !publicId.startsWith(expectedPrefix)) {
             return res.status(400).json({ error: "publicId no pertenece al folder asignado para la entrega" });
         }
         const limiteMsg = await validarLimitesEvidencia(entrega.id_entrega, tipo);
@@ -151,15 +152,26 @@ const confirmarEvidencia = async (req, res) => {
             data: {
                 entregaId: entrega.id_entrega,
                 tipo,
-                url,
-                publicId,
-                formato,
-                bytes,
+                url: url,
+                publicId: publicId,
+                formato: formato,
+                bytes: bytes,
             },
         });
         return res.status(201).json({ evidencia });
     }
     catch (err) {
+        if (err instanceof client_1.Prisma.PrismaClientKnownRequestError) {
+            if (err.code === "P2002") {
+                return res.status(409).json({ error: "Ya existe una evidencia registrada con ese publicId" });
+            }
+            if (err.code === "P2003") {
+                return res.status(404).json({ error: "Entrega no encontrada o eliminada" });
+            }
+        }
+        if (err instanceof client_1.Prisma.PrismaClientValidationError) {
+            return res.status(400).json({ error: "Payload de evidencia invalido" });
+        }
         console.error("Error al confirmar evidencia:", err);
         return res.status(500).json({ error: "Error interno al confirmar la evidencia" });
     }

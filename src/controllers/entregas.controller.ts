@@ -55,3 +55,23 @@ export const obtenerEntrega = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Error interno al obtener la entrega" });
   }
 };
+
+export const listarEntregas = async (_req: Request, res: Response) => {
+  try {
+    const entregas = await prisma.entrega.findMany({
+      orderBy: { fecha: "desc" },
+      take: 50, // 🔥 límite razonable para mobile
+      include: {
+        _count: {
+          select: { evidencias: true },
+        },
+      },
+    });
+
+    return res.json({ entregas });
+  } catch (err) {
+    console.error("Error al listar entregas:", err);
+    return res.status(500).json({ error: "Error interno al listar entregas" });
+  }
+};
+

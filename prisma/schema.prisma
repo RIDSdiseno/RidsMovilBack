@@ -30,14 +30,6 @@ model Sucursal {
   empresa     Empresa     @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
   historiales Historial[]
   visitas     Visita[]
-  id_sucursal Int         @id @default(autoincrement())
-  nombre      String
-  direccion   String?
-  telefono    String?
-  empresaId   Int
-  empresa     Empresa     @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
-  historiales Historial[]
-  visitas     Visita[]
 
   @@index([empresaId])
 }
@@ -55,7 +47,6 @@ model DetalleEmpresa {
 }
 
 model Solicitante {
-  id_solicitante  Int                     @id @default(dbgenerated("nextval((pg_get_serial_sequence('\"Solicitante\"'::text, 'id_solicitante'::text))::regclass)"))
   id_solicitante  Int                     @id @default(dbgenerated("nextval((pg_get_serial_sequence('\"Solicitante\"'::text, 'id_solicitante'::text))::regclass)"))
   nombre          String
   email           String?
@@ -175,12 +166,13 @@ model DetalleTrabajoGestioo {
   productoId  Int?
   servicioId  Int?
   equipoId    Int?
-  tecnicoId   Int?
-  tecnico     Tecnico?         @relation(fields: [tecnicoId], references: [id_tecnico])
-  entidad     EntidadGestioo?  @relation(fields: [entidadId], references: [id])
-  producto    ProductoGestioo? @relation(fields: [productoId], references: [id])
-  servicio    ServicioGestioo? @relation(fields: [servicioId], references: [id])
-  equipo      Equipo?          @relation("EquipoToTrabajoGestioo", fields: [equipoId], references: [id_equipo])
+
+  tecnicoId Int?
+  tecnico   Tecnico?         @relation(fields: [tecnicoId], references: [id_tecnico])
+  entidad   EntidadGestioo?  @relation(fields: [entidadId], references: [id])
+  producto  ProductoGestioo? @relation(fields: [productoId], references: [id])
+  servicio  ServicioGestioo? @relation(fields: [servicioId], references: [id])
+  equipo    Equipo?          @relation("EquipoToTrabajoGestioo", fields: [equipoId], references: [id_equipo])
 
   @@index([productoId])
   @@index([servicioId])
@@ -206,16 +198,18 @@ model ModeloGestioo {
 }
 
 model Equipo {
-  id_equipo              Int                     @id @default(autoincrement())
-  idSolicitante          Int?
-  serial                 String?                 @unique
-  marca                  String
-  modelo                 String
+  id_equipo     Int     @id @default(autoincrement())
+  idSolicitante Int?
+  serial        String? @unique
+  marca         String
+  modelo        String
+
+  tipo TipoEquipo @default(GENERICO)
+
   procesador             String?
   ram                    String?
   disco                  String?
   propiedad              String                  @default("ASUR")
-  tipo                   TipoEquipo              @default(GENERICO)
   solicitante            Solicitante?            @relation(fields: [idSolicitante], references: [id_solicitante])
   equipo                 DetalleEquipo[]
   detalleTrabajosGestioo DetalleTrabajoGestioo[] @relation("EquipoToTrabajoGestioo")
@@ -246,7 +240,6 @@ model Historial {
   fin                DateTime
   realizado          String?
   solicitanteId      Int
-  solicitanteId      Int
   actualizaciones    Boolean     @default(false)
   antivirus          Boolean     @default(false)
   ccleaner           Boolean     @default(false)
@@ -257,10 +250,7 @@ model Historial {
   rendimientoEquipo  Boolean     @default(false)
   id                 Int         @id @default(autoincrement()) @map("id_historial")
   direccion_visita   String?
-  id                 Int         @id @default(autoincrement()) @map("id_historial")
-  direccion_visita   String?
   ecografo           Boolean     @default(false)
-  sucursalId         Int?
   sucursalId         Int?
   tecnico            Tecnico     @relation(fields: [tecnicoId], references: [id_tecnico])
   solicitanteRef     Solicitante @relation("Solicitante_Historial", fields: [solicitanteId], references: [id_solicitante])
@@ -268,7 +258,6 @@ model Historial {
 
   @@index([tecnicoId, fin(sort: Desc)])
   @@index([solicitanteId])
-  @@index([sucursalId])
   @@index([sucursalId])
 }
 
@@ -329,12 +318,10 @@ model Visita {
   tecnico            Tecnico      @relation(fields: [tecnicoId], references: [id_tecnico])
   solicitanteRef     Solicitante? @relation("Solicitante_Visita", fields: [solicitanteId], references: [id_solicitante])
   sucursal           Sucursal?    @relation(fields: [sucursalId], references: [id_sucursal])
-  sucursal           Sucursal?    @relation(fields: [sucursalId], references: [id_sucursal])
 
   @@index([empresaId])
   @@index([tecnicoId])
   @@index([solicitanteId])
-  @@index([sucursalId])
   @@index([sucursalId])
 }
 
@@ -476,6 +463,8 @@ model Entrega {
   empresaNombre  String
   receptorNombre String
   fecha          DateTime @default(now())
+
+  evidencias EvidenciaEntrega[]
 }
 
 model EvidenciaEntrega {
@@ -487,6 +476,8 @@ model EvidenciaEntrega {
   formato   String
   bytes     Int
   creadoEn  DateTime             @default(now())
+
+  entrega Entrega @relation(fields: [entregaId], references: [id_entrega], onDelete: Cascade)
 
   @@index([entregaId])
   @@index([tipo])
@@ -577,6 +568,7 @@ enum TipoEvidenciaEntrega {
   FIRMA
 }
 
+// TIPOS EQUIPOS
 enum TipoEquipo {
   GENERICO
   NOTEBOOK
@@ -584,16 +576,21 @@ enum TipoEquipo {
   DESKTOP
   CPU
   EQUIPO_ARMADO
+
   IMPRESORA
   SCANNER
   LASER
   LED
+
   MONITOR
   NAS
   ROUTER
+
   DISCO_DURO_EXTERNO
   CARGADOR
   INSUMOS_COMPUTACIONALES
+
   RELOJ_CONTROL
+
   OTRO
 }

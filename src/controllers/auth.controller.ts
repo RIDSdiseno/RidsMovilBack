@@ -627,27 +627,27 @@ export const completarVisita = async (req: Request, res: Response) => {
 
 // GET /api/historial/:tecnicoId / Aceptar datos Null
 // GET /api/historial/:tecnicoId?page=1&limit=10  - CON MANEJO DE SUCURSAL NULL + PAGINACIÓN
+// GET /api/historial
 export const obtenerHistorialPorTecnico = async (req: Request, res: Response) => {
-  const tecnicoId = Number(req.params.id);
-  if (Number.isNaN(tecnicoId)) {
-    return res.status(400).json({ error: 'ID de técnico inválido' });
+  const tecnicoId = (req as any).user?.id;
+
+  if (!tecnicoId) {
+    return res.status(401).json({ error: "Técnico no autenticado" });
   }
 
-  // ✅ Paginación (query params): page >= 1, limit entre 1 y 100
   const page = Math.max(1, Number(req.query.page) || 1);
   const limitRaw = Number(req.query.limit);
   const limit = Math.min(100, Math.max(1, Number.isNaN(limitRaw) ? 5 : limitRaw));
   const skip = (page - 1) * limit;
 
   try {
-    // total + página actual en paralelo
     const [total, historial] = await Promise.all([
       prisma.historial.count({
         where: { tecnicoId },
       }),
       prisma.historial.findMany({
         where: { tecnicoId },
-        orderBy: { fin: 'desc' },
+        orderBy: { fin: "desc" },
         skip,
         take: limit,
         include: {
@@ -671,44 +671,17 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
       }),
     ]);
 
-    // Mapeo seguro con manejo de sucursal null
-    const safe = historial.map((h) => ({
-      id: h.id,
-      nombreCliente: h.solicitanteRef?.empresa?.nombre,
-      inicio: h.inicio,
-      fin: h.fin,
-      realizado: h.realizado ?? '—',
-      direccion_visita: h.direccion_visita ?? 'No registrada',
-      nombreSolicitante: h.solicitante || h.solicitanteRef?.nombre || 'Solicitante no asignado',
-
-      // ✅ Sucursal tomada directamente del historial (ya no desde el solicitante)
-      sucursalId: h.sucursal?.id_sucursal ?? null,
-      sucursalNombre: h.sucursal?.nombre ?? 'Sin sucursal asignada',
-      tieneSucursal: !!h.sucursal,
-    }));
-
-    const lastItemIndex = skip + safe.length;
-    const hasMore = lastItemIndex < total;
-    const nextPage = hasMore ? page + 1 : null;
-
-    // 🔁 Mantengo la clave "historial" y agrego metadatos de paginación
     return res.json({
-      historial: safe,
+      historial,
       page,
       limit,
       total,
-      hasMore,
-      nextPage,
+      hasMore: skip + historial.length < total,
     });
 
-  } catch (err: any) {
-    console.error('[HISTORIAL] Error:', err);
-    return res.status(500).json({
-      message: 'Error consultando historial',
-      name: err?.name,
-      code: err?.code,
-      meta: err?.meta,
-    });
+  } catch (err) {
+    console.error("[HISTORIAL] Error:", err);
+    return res.status(500).json({ error: "Error consultando historial" });
   }
 };
 

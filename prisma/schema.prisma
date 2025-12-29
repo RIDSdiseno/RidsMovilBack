@@ -287,6 +287,8 @@ model Tecnico {
   historiales     Historial[]
   visitas         Visita[]
   detalleTrabajos DetalleTrabajoGestioo[]
+
+  entregas       Entrega[]
 }
 
 model Visita {
@@ -464,7 +466,12 @@ model Entrega {
   receptorNombre String
   fecha          DateTime @default(now())
 
+  tecnicoId Int
+  tecnico   Tecnico @relation(fields: [tecnicoId], references: [id_tecnico])
+
   evidencias EvidenciaEntrega[]
+
+  @@index([tecnicoId])
 }
 
 model EvidenciaEntrega {

@@ -540,6 +540,7 @@ export const completarVisita = async (req: Request, res: Response) => {
       await tx.historial.create({
         data: {
           tecnicoId: u.tecnicoId,
+          empresaId: u.empresaId,
           solicitanteId: u.solicitanteId!,
           solicitante: u.solicitante,
           inicio: u.inicio,
@@ -589,6 +590,7 @@ export const completarVisita = async (req: Request, res: Response) => {
         await tx.historial.create({
           data: {
             tecnicoId: nueva.tecnicoId,
+            empresaId: nueva.empresaId,
             solicitanteId: nueva.solicitanteId!,
             solicitante: nueva.solicitante,
             inicio: nueva.inicio,
@@ -651,14 +653,16 @@ export const obtenerHistorialPorTecnico = async (req: Request, res: Response) =>
         skip,
         take: limit,
         include: {
+          empresa: {
+            select: {
+              id_empresa: true,
+              nombre: true,
+            },
+          },
           solicitanteRef: {
-            include: {
-              empresa: {
-                select: {
-                  id_empresa: true,
-                  nombre: true,
-                },
-              },
+            select: {
+              id_solicitante: true,
+              nombre: true,
             },
           },
           sucursal: {
@@ -860,30 +864,42 @@ export const getAllEquipos = async (req: Request, res: Response) => {
         ram: true,
         disco: true,
         propiedad: true,
+
+        // 🔥 CLAVE
+        idSolicitante: true,
+        solicitante: {
+          select: {
+            id_solicitante: true,
+            nombre: true,
+            empresaId: true,
+          },
+        },
+
         equipo: {
           select: { tipoDd: true },
           orderBy: { id: 'desc' },
-          take: 1
-        }
-      }
+          take: 1,
+        },
+      },
     });
 
-    // 🔹 Aplanar tipoDd (convertir array a valor directo)
     const equiposMap = equipos.map(eq => ({
       ...eq,
-      tipoDd: eq.equipo[0]?.tipoDd ?? "S/A", // si no hay detalle, coloca S/A
+      tipoDd: eq.equipo[0]?.tipoDd ?? 'S/A',
+
+      // 🔥 EXTRAS PARA EL FRONT
+      empresaId: eq.solicitante?.empresaId ?? null,
+      nombreSolicitante: eq.solicitante?.nombre ?? 'S/A',
     }));
 
-    // 🔹 Eliminar la propiedad 'equipo' para no confundir al front
     equiposMap.forEach(eq => delete (eq as any).equipo);
 
     return res.json({ equipos: equiposMap });
   } catch (e) {
-    console.error("Error al obtener equipos", e);
-    return res.status(500).json({ error: "Error interno del servidor" });
+    console.error('Error al obtener equipos', e);
+    return res.status(500).json({ error: 'Error interno del servidor' });
   }
 };
-
 
 export const actualizarEquipo = async (req: Request, res: Response) => {
   try {

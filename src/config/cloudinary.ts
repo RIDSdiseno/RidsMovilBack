@@ -5,11 +5,18 @@ const apiKey = process.env.CLOUDINARY_API_KEY;
 const apiSecret = process.env.CLOUDINARY_API_SECRET;
 const baseFolder = (process.env.CLOUDINARY_FOLDER || "entregas").replace(/\/+$/, "");
 
-if (!cloudName || !apiKey || !apiSecret) {
-  throw new Error("Faltan variables de Cloudinary (CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET)");
+// 👉 Flag de estado
+export const cloudinaryEnabled = Boolean(
+  cloudName && apiKey && apiSecret
+);
+
+if (!cloudinaryEnabled) {
+  console.warn("⚠️ Cloudinary NO configurado. Subidas de imágenes deshabilitadas.");
 }
 
-const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`;
+const uploadUrl = cloudName
+  ? `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`
+  : null;
 
 export const cloudinaryConfig = {
   cloudName,
@@ -33,9 +40,19 @@ export function buildEntregaFolder(entregaId: number) {
   return `${baseFolder}/entrega-${entregaId}`;
 }
 
-export function createUploadSignature({ folder, publicId, timestamp }: UploadSignatureInput) {
+export function createUploadSignature({
+  folder,
+  publicId,
+  timestamp,
+}: UploadSignatureInput) {
+
+  // 🚨 ERROR SOLO CUANDO REALMENTE SE USA CLOUDINARY
+  if (!cloudinaryEnabled) {
+    throw new Error("Cloudinary no está configurado en este entorno");
+  }
+
   if (!folder || !publicId) {
-    throw new Error("folder y publicId son requeridos para firmar la subida a Cloudinary");
+    throw new Error("folder y publicId son requeridos para firmar la subida");
   }
 
   const ts = timestamp ?? Math.floor(Date.now() / 1000);

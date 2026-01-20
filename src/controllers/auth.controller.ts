@@ -1004,6 +1004,57 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
   }
 };
 
+// PUT /auth/equipos/:id/solicitante
+export const cambiarSolicitanteEquipo = async (req: Request, res: Response) => {
+  try {
+    const equipoId = Number(req.params.id);
+    const { solicitanteId } = req.body;
+
+    if (!Number.isFinite(equipoId) || !Number.isFinite(Number(solicitanteId))) {
+      return res.status(400).json({ error: "IDs inválidos" });
+    }
+
+    // Verificar que el equipo exista
+    const equipo = await prisma.equipo.findUnique({
+      where: { id_equipo: equipoId },
+      select: { id_equipo: true }
+    });
+
+    if (!equipo) {
+      return res.status(404).json({ error: "Equipo no encontrado" });
+    }
+
+    // Verificar que el solicitante exista
+    const solicitante = await prisma.solicitante.findUnique({
+      where: { id_solicitante: Number(solicitanteId) },
+      select: { id_solicitante: true }
+    });
+
+    if (!solicitante) {
+      return res.status(404).json({ error: "Solicitante no encontrado" });
+    }
+
+    // Actualizar dueño del equipo
+    const actualizado = await prisma.equipo.update({
+      where: { id_equipo: equipoId },
+      data: { idSolicitante: Number(solicitanteId) },
+      select: {
+        id_equipo: true,
+        idSolicitante: true,
+      }
+    });
+
+    return res.json({
+      message: "Solicitante del equipo actualizado correctamente",
+      equipo: actualizado,
+    });
+
+  } catch (error) {
+    console.error("[CAMBIAR_SOLICITANTE_EQUIPO]", error);
+    return res.status(500).json({ error: "Error interno al cambiar solicitante" });
+  }
+};
+
 type DetalleEquipoBody = {
   idEquipo: number;          // <- PRIMITIVO, no "Number"
   macWifi: string;

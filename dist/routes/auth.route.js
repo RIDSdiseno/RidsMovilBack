@@ -23,6 +23,7 @@ r.get("/solicitantes", auth_controller_1.getSolicitantes);
 r.put("/updateSolicitante", auth_controller_1.updateSolicitante);
 r.post("/detalles", auth_controller_1.createManyDetalle);
 r.get("/equipos", auth_controller_1.getAllEquipos);
+r.put("/equipos/:id/solicitante", auth_middleware_1.authGuard, auth_controller_1.cambiarSolicitanteEquipo);
 //Funcionalidad de visitas
 r.post("/crear_visita", auth_middleware_1.authGuard, auth_controller_1.crearVisita);
 r.put("/finalizar_visita/:id", auth_middleware_1.authGuard, auth_controller_1.completarVisita);

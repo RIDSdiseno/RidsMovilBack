@@ -3,11 +3,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.obtenerEmpresasConSucursales = exports.obtenerSucursalesPorEmpresa = exports.crearSucursal = exports.createSolicitante = exports.createEquipo = exports.createManyDetalle = exports.actualizarEquipo = exports.getAllEquipos = exports.updateSolicitante = exports.getSolicitantes = exports.createManyEquipos = exports.createManySolicitante = exports.obtenerHistorialPorTecnico = exports.completarVisita = exports.crearVisita = exports.createManyempresa = exports.refresh = exports.logout = exports.getAllUsers = exports.login = exports.createCliente = exports.deleteCliente = exports.getAllClientes = exports.registerUser = void 0;
+exports.obtenerEmpresasConSucursales = exports.obtenerSucursalesPorEmpresa = exports.crearSucursal = exports.createSolicitante = exports.createEquipo = exports.createManyDetalle = exports.cambiarSolicitanteEquipo = exports.actualizarEquipo = exports.getAllEquipos = exports.updateSolicitante = exports.getSolicitantes = exports.createManyEquipos = exports.createManySolicitante = exports.obtenerHistorialPorTecnico = exports.completarVisita = exports.crearVisita = exports.createManyempresa = exports.refresh = exports.logout = exports.getAllUsers = exports.login = exports.createCliente = exports.deleteCliente = exports.getAllClientes = exports.registerUser = void 0;
 const client_1 = require("@prisma/client");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const crypto_1 = __importDefault(require("crypto"));
+const argon2_1 = __importDefault(require("argon2"));
 const prisma = new client_1.PrismaClient;
 /* =========================
    CONFIG / CONSTANTES
@@ -174,9 +175,17 @@ const login = async (req, res) => {
             await bcrypt_1.default.compare(password, "$2b$10$invalidinvalidinvalidinvalidinv12345678901234567890");
             return res.status(401).json({ error: "Credenciales inválidas" });
         }
-        const ok = await bcrypt_1.default.compare(password, user.passwordHash);
-        if (!ok)
+        let ok = false;
+        const hash = user.passwordHash;
+        if (hash.startsWith("$argon2")) {
+            ok = await argon2_1.default.verify(hash, password);
+        }
+        else if (hash.startsWith("$2")) {
+            ok = await bcrypt_1.default.compare(password, hash);
+        }
+        if (!ok) {
             return res.status(401).json({ error: "Credenciales inválidas" });
+        }
         // 1) Access Token (corto)
         const at = signAccessToken({
             id: user.id_tecnico,
@@ -471,6 +480,7 @@ const completarVisita = async (req, res) => {
             await tx.historial.create({
                 data: {
                     tecnicoId: u.tecnicoId,
+                    empresaId: u.empresaId,
                     solicitanteId: u.solicitanteId,
                     solicitante: u.solicitante,
                     inicio: u.inicio,
@@ -517,6 +527,7 @@ const completarVisita = async (req, res) => {
                 await tx.historial.create({
                     data: {
                         tecnicoId: nueva.tecnicoId,
+                        empresaId: nueva.empresaId,
                         solicitanteId: nueva.solicitanteId,
                         solicitante: nueva.solicitante,
                         inicio: nueva.inicio,
@@ -553,36 +564,37 @@ const completarVisita = async (req, res) => {
 exports.completarVisita = completarVisita;
 // GET /api/historial/:tecnicoId / Aceptar datos Null
 // GET /api/historial/:tecnicoId?page=1&limit=10  - CON MANEJO DE SUCURSAL NULL + PAGINACIÓN
+// GET /api/historial
 const obtenerHistorialPorTecnico = async (req, res) => {
-    const tecnicoId = Number(req.params.id);
-    if (Number.isNaN(tecnicoId)) {
-        return res.status(400).json({ error: 'ID de técnico inválido' });
+    const tecnicoId = req.user?.id;
+    if (!tecnicoId) {
+        return res.status(401).json({ error: "Técnico no autenticado" });
     }
-    // ✅ Paginación (query params): page >= 1, limit entre 1 y 100
     const page = Math.max(1, Number(req.query.page) || 1);
     const limitRaw = Number(req.query.limit);
     const limit = Math.min(100, Math.max(1, Number.isNaN(limitRaw) ? 5 : limitRaw));
     const skip = (page - 1) * limit;
     try {
-        // total + página actual en paralelo
         const [total, historial] = await Promise.all([
             prisma.historial.count({
                 where: { tecnicoId },
             }),
             prisma.historial.findMany({
                 where: { tecnicoId },
-                orderBy: { fin: 'desc' },
+                orderBy: { fin: "desc" },
                 skip,
                 take: limit,
                 include: {
+                    empresa: {
+                        select: {
+                            id_empresa: true,
+                            nombre: true,
+                        },
+                    },
                     solicitanteRef: {
-                        include: {
-                            empresa: {
-                                select: {
-                                    id_empresa: true,
-                                    nombre: true,
-                                },
-                            },
+                        select: {
+                            id_solicitante: true,
+                            nombre: true,
                         },
                     },
                     sucursal: {
@@ -594,41 +606,17 @@ const obtenerHistorialPorTecnico = async (req, res) => {
                 },
             }),
         ]);
-        // Mapeo seguro con manejo de sucursal null
-        const safe = historial.map((h) => ({
-            id: h.id,
-            nombreCliente: h.solicitanteRef?.empresa?.nombre,
-            inicio: h.inicio,
-            fin: h.fin,
-            realizado: h.realizado ?? '—',
-            direccion_visita: h.direccion_visita ?? 'No registrada',
-            nombreSolicitante: h.solicitante || h.solicitanteRef?.nombre || 'Solicitante no asignado',
-            // ✅ Sucursal tomada directamente del historial (ya no desde el solicitante)
-            sucursalId: h.sucursal?.id_sucursal ?? null,
-            sucursalNombre: h.sucursal?.nombre ?? 'Sin sucursal asignada',
-            tieneSucursal: !!h.sucursal,
-        }));
-        const lastItemIndex = skip + safe.length;
-        const hasMore = lastItemIndex < total;
-        const nextPage = hasMore ? page + 1 : null;
-        // 🔁 Mantengo la clave "historial" y agrego metadatos de paginación
         return res.json({
-            historial: safe,
+            historial,
             page,
             limit,
             total,
-            hasMore,
-            nextPage,
+            hasMore: skip + historial.length < total,
         });
     }
     catch (err) {
-        console.error('[HISTORIAL] Error:', err);
-        return res.status(500).json({
-            message: 'Error consultando historial',
-            name: err?.name,
-            code: err?.code,
-            meta: err?.meta,
-        });
+        console.error("[HISTORIAL] Error:", err);
+        return res.status(500).json({ error: "Error consultando historial" });
     }
 };
 exports.obtenerHistorialPorTecnico = obtenerHistorialPorTecnico;
@@ -780,25 +768,35 @@ const getAllEquipos = async (req, res) => {
                 ram: true,
                 disco: true,
                 propiedad: true,
+                // 🔥 CLAVE
+                idSolicitante: true,
+                solicitante: {
+                    select: {
+                        id_solicitante: true,
+                        nombre: true,
+                        empresaId: true,
+                    },
+                },
                 equipo: {
                     select: { tipoDd: true },
                     orderBy: { id: 'desc' },
-                    take: 1
-                }
-            }
+                    take: 1,
+                },
+            },
         });
-        // 🔹 Aplanar tipoDd (convertir array a valor directo)
         const equiposMap = equipos.map(eq => ({
             ...eq,
-            tipoDd: eq.equipo[0]?.tipoDd ?? "S/A", // si no hay detalle, coloca S/A
+            tipoDd: eq.equipo[0]?.tipoDd ?? 'S/A',
+            // 🔥 EXTRAS PARA EL FRONT
+            empresaId: eq.solicitante?.empresaId ?? null,
+            nombreSolicitante: eq.solicitante?.nombre ?? 'S/A',
         }));
-        // 🔹 Eliminar la propiedad 'equipo' para no confundir al front
         equiposMap.forEach(eq => delete eq.equipo);
         return res.json({ equipos: equiposMap });
     }
     catch (e) {
-        console.error("Error al obtener equipos", e);
-        return res.status(500).json({ error: "Error interno del servidor" });
+        console.error('Error al obtener equipos', e);
+        return res.status(500).json({ error: 'Error interno del servidor' });
     }
 };
 exports.getAllEquipos = getAllEquipos;
@@ -901,6 +899,50 @@ const actualizarEquipo = async (req, res) => {
     }
 };
 exports.actualizarEquipo = actualizarEquipo;
+// PUT /auth/equipos/:id/solicitante
+const cambiarSolicitanteEquipo = async (req, res) => {
+    try {
+        const equipoId = Number(req.params.id);
+        const { solicitanteId } = req.body;
+        if (!Number.isFinite(equipoId) || !Number.isFinite(Number(solicitanteId))) {
+            return res.status(400).json({ error: "IDs inválidos" });
+        }
+        // Verificar que el equipo exista
+        const equipo = await prisma.equipo.findUnique({
+            where: { id_equipo: equipoId },
+            select: { id_equipo: true }
+        });
+        if (!equipo) {
+            return res.status(404).json({ error: "Equipo no encontrado" });
+        }
+        // Verificar que el solicitante exista
+        const solicitante = await prisma.solicitante.findUnique({
+            where: { id_solicitante: Number(solicitanteId) },
+            select: { id_solicitante: true }
+        });
+        if (!solicitante) {
+            return res.status(404).json({ error: "Solicitante no encontrado" });
+        }
+        // Actualizar dueño del equipo
+        const actualizado = await prisma.equipo.update({
+            where: { id_equipo: equipoId },
+            data: { idSolicitante: Number(solicitanteId) },
+            select: {
+                id_equipo: true,
+                idSolicitante: true,
+            }
+        });
+        return res.json({
+            message: "Solicitante del equipo actualizado correctamente",
+            equipo: actualizado,
+        });
+    }
+    catch (error) {
+        console.error("[CAMBIAR_SOLICITANTE_EQUIPO]", error);
+        return res.status(500).json({ error: "Error interno al cambiar solicitante" });
+    }
+};
+exports.cambiarSolicitanteEquipo = cambiarSolicitanteEquipo;
 const createManyDetalle = async (req, res) => {
     const { detalles } = req.body;
     ;

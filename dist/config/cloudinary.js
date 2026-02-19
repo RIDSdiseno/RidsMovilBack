@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cloudinaryConfig = void 0;
+exports.cloudinaryConfig = exports.cloudinaryEnabled = void 0;
 exports.buildVisitFolder = buildVisitFolder;
 exports.buildEntregaFolder = buildEntregaFolder;
 exports.createUploadSignature = createUploadSignature;
@@ -12,10 +12,14 @@ const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
 const apiKey = process.env.CLOUDINARY_API_KEY;
 const apiSecret = process.env.CLOUDINARY_API_SECRET;
 const baseFolder = (process.env.CLOUDINARY_FOLDER || "entregas").replace(/\/+$/, "");
-if (!cloudName || !apiKey || !apiSecret) {
-    throw new Error("Faltan variables de Cloudinary (CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET)");
+// 👉 Flag de estado
+exports.cloudinaryEnabled = Boolean(cloudName && apiKey && apiSecret);
+if (!exports.cloudinaryEnabled) {
+    console.warn("⚠️ Cloudinary NO configurado. Subidas de imágenes deshabilitadas.");
 }
-const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`;
+const uploadUrl = cloudName
+    ? `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`
+    : null;
 exports.cloudinaryConfig = {
     cloudName,
     apiKey,
@@ -29,9 +33,13 @@ function buildVisitFolder(visitaId) {
 function buildEntregaFolder(entregaId) {
     return `${baseFolder}/entrega-${entregaId}`;
 }
-function createUploadSignature({ folder, publicId, timestamp }) {
+function createUploadSignature({ folder, publicId, timestamp, }) {
+    // 🚨 ERROR SOLO CUANDO REALMENTE SE USA CLOUDINARY
+    if (!exports.cloudinaryEnabled) {
+        throw new Error("Cloudinary no está configurado en este entorno");
+    }
     if (!folder || !publicId) {
-        throw new Error("folder y publicId son requeridos para firmar la subida a Cloudinary");
+        throw new Error("folder y publicId son requeridos para firmar la subida");
     }
     const ts = timestamp ?? Math.floor(Date.now() / 1000);
     const toSign = `folder=${folder}&public_id=${publicId}&timestamp=${ts}${apiSecret}`;

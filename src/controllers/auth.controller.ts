@@ -4,7 +4,8 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import type { Secret } from "jsonwebtoken";
 import crypto from "crypto";
-import { error } from "console";
+
+import argon2 from "argon2";
 
 const prisma = new PrismaClient
 /* =========================
@@ -202,10 +203,18 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json({ error: "Credenciales inválidas" });
     }
 
-    const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) return res.status(401).json({ error: "Credenciales inválidas" });
+    let ok = false;
+    const hash = user.passwordHash;
 
+    if (hash.startsWith("$argon2")) {
+      ok = await argon2.verify(hash, password);
+    } else if (hash.startsWith("$2")) {
+      ok = await bcrypt.compare(password, hash);
+    }
 
+    if (!ok) {
+      return res.status(401).json({ error: "Credenciales inválidas" });
+    }
 
     // 1) Access Token (corto)
     const at = signAccessToken({

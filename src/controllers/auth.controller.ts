@@ -37,6 +37,27 @@ type JwtPayload = {
   nombreUsuario: string;
 };
 
+type MicrosoftTokenPayload = {
+  aud?: string;
+  email?: string;
+  iss?: string;
+  name?: string;
+  oid?: string;
+  preferred_username?: string;
+  tid?: string;
+};
+
+type MicrosoftJwk = {
+  kid: string;
+  kty: string;
+  n: string;
+  e: string;
+  alg?: string;
+  use?: string;
+};
+
+let microsoftKeysCache: { expiresAt: number; keys: MicrosoftJwk[] } | null = null;
+
 
 /* =========================
    HELPERS
@@ -88,6 +109,89 @@ function clearRefreshCookie(res: Response) {
   });
 }
 
+function getMicrosoftConfig() {
+  const tenantId = process.env.MICROSOFT_TENANT_ID;
+  const clientId = process.env.MICROSOFT_CLIENT_ID;
+
+  if (!tenantId || !clientId) {
+    throw new Error("MICROSOFT_TENANT_ID y MICROSOFT_CLIENT_ID deben estar configurados");
+  }
+
+  return { clientId, tenantId };
+}
+
+async function getMicrosoftSigningKey(kid: string) {
+  const now = Date.now();
+
+  if (!microsoftKeysCache || microsoftKeysCache.expiresAt <= now) {
+    const { tenantId } = getMicrosoftConfig();
+    const response = await fetch(`https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`);
+
+    if (!response.ok) {
+      throw new Error("No se pudieron obtener las llaves publicas de Microsoft");
+    }
+
+    const data = await response.json() as { keys?: MicrosoftJwk[] };
+    microsoftKeysCache = {
+      expiresAt: now + 60 * 60 * 1000,
+      keys: data.keys ?? [],
+    };
+  }
+
+  const jwk = microsoftKeysCache.keys.find((key) => key.kid === kid);
+
+  if (!jwk) {
+    throw new Error("No se encontro la llave publica de Microsoft para validar el token");
+  }
+
+  return crypto.createPublicKey({ key: jwk, format: "jwk" }).export({
+    format: "pem",
+    type: "spki",
+  });
+}
+
+function assertAllowedMicrosoftDomain(email: string) {
+  const allowedDomains = (process.env.MICROSOFT_ALLOWED_DOMAINS ?? "")
+    .split(",")
+    .map((domain) => domain.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (!allowedDomains.length) {
+    return;
+  }
+
+  const domain = email.split("@")[1]?.toLowerCase();
+  if (!domain || !allowedDomains.includes(domain)) {
+    throw new Error("Dominio Microsoft no autorizado");
+  }
+}
+
+async function verifyMicrosoftIdToken(idToken: string) {
+  const decoded = jwt.decode(idToken, { complete: true });
+  const { clientId, tenantId } = getMicrosoftConfig();
+
+  if (!decoded || typeof decoded === "string" || !decoded.header.kid) {
+    throw new Error("Token Microsoft invalido");
+  }
+
+  const publicKey = await getMicrosoftSigningKey(decoded.header.kid);
+  const payload = jwt.verify(idToken, publicKey, {
+    algorithms: ["RS256"],
+    audience: clientId,
+    issuer: `https://login.microsoftonline.com/${tenantId}/v2.0`,
+  }) as MicrosoftTokenPayload;
+
+  const email = (payload.preferred_username || payload.email || "").trim().toLowerCase();
+
+  if (!email) {
+    throw new Error("El token Microsoft no contiene correo");
+  }
+
+  assertAllowedMicrosoftDomain(email);
+
+  return { email, microsoftUserId: payload.oid, name: payload.name };
+}
+
 /* =========================
    CONTROLADORES
 ========================= */
@@ -130,6 +234,13 @@ export const getAllClientes = async (req: Request, res: Response) => {
   try {
     const clientes = await prisma.empresa.findMany({
       orderBy: { nombre: "asc" },
+      include: {
+        detalleEmpresa: {
+          select: {
+            rut: true,
+          },
+        },
+      },
     });
     return res.json(clientes);
   } catch (e) {
@@ -252,6 +363,45 @@ export const login = async (req: Request, res: Response) => {
   } catch (err) {
     console.error("login error:", err);
     return res.status(500).json({ error: "Error interno" });
+  }
+};
+
+// POST /auth/microsoft
+export const loginMicrosoft = async (req: Request, res: Response) => {
+  try {
+    const { idToken } = req.body as { idToken?: string };
+
+    if (!idToken) {
+      return res.status(400).json({ error: "Token Microsoft requerido" });
+    }
+
+    const microsoftUser = await verifyMicrosoftIdToken(idToken);
+    const user = await prisma.tecnico.findUnique({
+      where: { email: microsoftUser.email },
+      select: {
+        id_tecnico: true,
+        nombre: true,
+        email: true,
+        status: true,
+      },
+    });
+
+    if (!user || !user.status) {
+      return res.status(403).json({
+        error: "No existe un tecnico activo asociado a esta cuenta Microsoft",
+      });
+    }
+
+    const at = signAccessToken({
+      id: user.id_tecnico,
+      email: user.email,
+      nombreUsuario: user.nombre,
+    });
+
+    return res.json({ token: at, user });
+  } catch (err) {
+    console.error("microsoft login error:", err);
+    return res.status(401).json({ error: "No se pudo iniciar sesion con Microsoft" });
   }
 };
 

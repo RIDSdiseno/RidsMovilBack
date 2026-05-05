@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.obtenerEmpresasConSucursales = exports.obtenerSucursalesPorEmpresa = exports.crearSucursal = exports.createSolicitante = exports.createEquipo = exports.createManyDetalle = exports.cambiarSolicitanteEquipo = exports.actualizarEquipo = exports.getAllEquipos = exports.updateSolicitante = exports.getSolicitantes = exports.createManyEquipos = exports.createManySolicitante = exports.obtenerHistorialPorTecnico = exports.completarVisita = exports.crearVisita = exports.createManyempresa = exports.refresh = exports.logout = exports.getAllUsers = exports.login = exports.createCliente = exports.deleteCliente = exports.getAllClientes = exports.registerUser = void 0;
+exports.obtenerEmpresasConSucursales = exports.obtenerSucursalesPorEmpresa = exports.crearSucursal = exports.createSolicitante = exports.createEquipo = exports.createManyDetalle = exports.cambiarSolicitanteEquipo = exports.actualizarEquipo = exports.getAllEquipos = exports.updateSolicitante = exports.getSolicitantes = exports.createManyEquipos = exports.createManySolicitante = exports.obtenerHistorialPorTecnico = exports.completarVisita = exports.crearVisita = exports.createManyempresa = exports.refresh = exports.logout = exports.getAllUsers = exports.loginMicrosoft = exports.login = exports.createCliente = exports.deleteCliente = exports.getAllClientes = exports.registerUser = void 0;
 const client_1 = require("@prisma/client");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
@@ -25,6 +25,7 @@ const COOKIE_SAMESITE = process.env.COOKIE_SAMESITE ?? "lax";
 const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || undefined;
 // 👇 muy importante si tus rutas están bajo /api/auth
 const COOKIE_PATH = process.env.COOKIE_PATH ?? "/api/auth";
+let microsoftKeysCache = null;
 /* =========================
    HELPERS
 ========================= */
@@ -71,6 +72,69 @@ function clearRefreshCookie(res) {
         path: COOKIE_PATH,
     });
 }
+function getMicrosoftConfig() {
+    const tenantId = process.env.MICROSOFT_TENANT_ID;
+    const clientId = process.env.MICROSOFT_CLIENT_ID;
+    if (!tenantId || !clientId) {
+        throw new Error("MICROSOFT_TENANT_ID y MICROSOFT_CLIENT_ID deben estar configurados");
+    }
+    return { clientId, tenantId };
+}
+async function getMicrosoftSigningKey(kid) {
+    const now = Date.now();
+    if (!microsoftKeysCache || microsoftKeysCache.expiresAt <= now) {
+        const { tenantId } = getMicrosoftConfig();
+        const response = await fetch(`https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`);
+        if (!response.ok) {
+            throw new Error("No se pudieron obtener las llaves publicas de Microsoft");
+        }
+        const data = await response.json();
+        microsoftKeysCache = {
+            expiresAt: now + 60 * 60 * 1000,
+            keys: data.keys ?? [],
+        };
+    }
+    const jwk = microsoftKeysCache.keys.find((key) => key.kid === kid);
+    if (!jwk) {
+        throw new Error("No se encontro la llave publica de Microsoft para validar el token");
+    }
+    return crypto_1.default.createPublicKey({ key: jwk, format: "jwk" }).export({
+        format: "pem",
+        type: "spki",
+    });
+}
+function assertAllowedMicrosoftDomain(email) {
+    const allowedDomains = (process.env.MICROSOFT_ALLOWED_DOMAINS ?? "")
+        .split(",")
+        .map((domain) => domain.trim().toLowerCase())
+        .filter(Boolean);
+    if (!allowedDomains.length) {
+        return;
+    }
+    const domain = email.split("@")[1]?.toLowerCase();
+    if (!domain || !allowedDomains.includes(domain)) {
+        throw new Error("Dominio Microsoft no autorizado");
+    }
+}
+async function verifyMicrosoftIdToken(idToken) {
+    const decoded = jsonwebtoken_1.default.decode(idToken, { complete: true });
+    const { clientId, tenantId } = getMicrosoftConfig();
+    if (!decoded || typeof decoded === "string" || !decoded.header.kid) {
+        throw new Error("Token Microsoft invalido");
+    }
+    const publicKey = await getMicrosoftSigningKey(decoded.header.kid);
+    const payload = jsonwebtoken_1.default.verify(idToken, publicKey, {
+        algorithms: ["RS256"],
+        audience: clientId,
+        issuer: `https://login.microsoftonline.com/${tenantId}/v2.0`,
+    });
+    const email = (payload.preferred_username || payload.email || "").trim().toLowerCase();
+    if (!email) {
+        throw new Error("El token Microsoft no contiene correo");
+    }
+    assertAllowedMicrosoftDomain(email);
+    return { email, microsoftUserId: payload.oid, name: payload.name };
+}
 /* =========================
    CONTROLADORES
 ========================= */
@@ -110,6 +174,13 @@ const getAllClientes = async (req, res) => {
     try {
         const clientes = await prisma.empresa.findMany({
             orderBy: { nombre: "asc" },
+            include: {
+                detalleEmpresa: {
+                    select: {
+                        rut: true,
+                    },
+                },
+            },
         });
         return res.json(clientes);
     }
@@ -220,6 +291,41 @@ const login = async (req, res) => {
     }
 };
 exports.login = login;
+// POST /auth/microsoft
+const loginMicrosoft = async (req, res) => {
+    try {
+        const { idToken } = req.body;
+        if (!idToken) {
+            return res.status(400).json({ error: "Token Microsoft requerido" });
+        }
+        const microsoftUser = await verifyMicrosoftIdToken(idToken);
+        const user = await prisma.tecnico.findUnique({
+            where: { email: microsoftUser.email },
+            select: {
+                id_tecnico: true,
+                nombre: true,
+                email: true,
+                status: true,
+            },
+        });
+        if (!user || !user.status) {
+            return res.status(403).json({
+                error: "No existe un tecnico activo asociado a esta cuenta Microsoft",
+            });
+        }
+        const at = signAccessToken({
+            id: user.id_tecnico,
+            email: user.email,
+            nombreUsuario: user.nombre,
+        });
+        return res.json({ token: at, user });
+    }
+    catch (err) {
+        console.error("microsoft login error:", err);
+        return res.status(401).json({ error: "No se pudo iniciar sesion con Microsoft" });
+    }
+};
+exports.loginMicrosoft = loginMicrosoft;
 const getAllUsers = async (_req, res) => {
     try {
         const users = await prisma.tecnico.findMany({

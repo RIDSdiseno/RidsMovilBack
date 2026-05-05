@@ -8,6 +8,7 @@ r.get("/health", (_req, res) => res.json({ ok: true, service: "API Movil", ts: D
 //Auth
 r.post("/register", auth_controller_1.registerUser);
 r.post("/login", auth_controller_1.login);
+r.post("/microsoft", auth_controller_1.loginMicrosoft);
 r.post("/logout", auth_controller_1.logout);
 r.post("/refresh", auth_controller_1.refresh);
 r.get("/usuarios", auth_controller_1.getAllUsers);

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import {
-    login, registerUser, createManyempresa, crearVisita,
+    login, loginMicrosoft, registerUser, createManyempresa, crearVisita,
     completarVisita, logout, refresh, getAllUsers,
     createCliente, getAllClientes,
     deleteCliente,
@@ -28,6 +28,7 @@ r.get("/health", (_req, res) => res.json({ ok: true, service: "API Movil", ts: D
 //Auth
 r.post("/register", registerUser)
 r.post("/login", login)
+r.post("/microsoft", loginMicrosoft)
 r.post("/logout", logout)
 r.post("/refresh", refresh);
 r.get("/usuarios", getAllUsers);

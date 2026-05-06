@@ -48,21 +48,49 @@ export const crearEntrega = async (req: Request, res: Response) => {
 ========================= */
 export const listarEntregas = async (req: any, res: Response) => {
   try {
-    const tecnicoId = req.user.id; // 👈 viene del authGuard
+    const tecnicoId = req.user.id;
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limitRaw = Number(req.query.limit);
+    const limit = Math.min(100, Math.max(1, Number.isNaN(limitRaw) ? 20 : limitRaw));
+    const skip = (page - 1) * limit;
+    const includeEvidencias = req.query.includeEvidencias !== "false";
 
-    const entregas = await prisma.entrega.findMany({
-      where: {
-        tecnicoId: tecnicoId, // 👈 FILTRO CLAVE
-      },
-      orderBy: {
-        fecha: 'desc',
-      },
-      include: {
-        evidencias: true,
-      },
+    const where = { tecnicoId };
+    const [total, entregas] = await Promise.all([
+      prisma.entrega.count({ where }),
+      includeEvidencias
+        ? prisma.entrega.findMany({
+            where,
+            orderBy: { fecha: "desc" },
+            skip,
+            take: limit,
+            include: { evidencias: true },
+          })
+        : prisma.entrega.findMany({
+            where,
+            orderBy: { fecha: "desc" },
+            skip,
+            take: limit,
+            select: {
+              id_entrega: true,
+              empresaNombre: true,
+              receptorNombre: true,
+              fecha: true,
+              tecnicoId: true,
+              _count: {
+                select: { evidencias: true },
+              },
+            },
+          }),
+    ]);
+
+    res.json({
+      entregas,
+      page,
+      limit,
+      total,
+      hasMore: skip + entregas.length < total,
     });
-
-    res.json({ entregas });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al listar entregas' });

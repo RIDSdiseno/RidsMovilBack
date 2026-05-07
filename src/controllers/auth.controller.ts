@@ -1268,6 +1268,14 @@ type EquipoInput = {
   ram: string;
   disco: string;
   propiedad: string;
+  macWifi?: string;
+  so?: string;
+  tipoDd?: string;
+  estadoAlm?: string;
+  office?: string;
+  teamViewer?: string;
+  claveTv?: string;
+  revisado?: string;
 };
 
 export const createEquipo = async (req: Request, res: Response) => {
@@ -1281,18 +1289,50 @@ export const createEquipo = async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'serial, marca y modelo son requeridos' });
   }
 
+  const serial = body.serial.trim();
+  const marca = body.marca.trim();
+  const modelo = body.modelo.trim();
+
   try {
-    const equipo = await prisma.equipo.create({
-      data: {
-        idSolicitante: body.idSolicitante,
-        serial: body.serial.trim(),
-        marca: body.marca.trim(),
-        modelo: body.modelo.trim(),
-        procesador: body.procesador?.trim() ?? '',
-        ram: body.ram?.trim() ?? '',
-        disco: body.disco?.trim() ?? '',
-        propiedad: body.propiedad?.trim() ?? '',
-      },
+    const equipo = await prisma.$transaction(async (tx) => {
+      const created = await tx.equipo.create({
+        data: {
+          idSolicitante: body.idSolicitante,
+          serial,
+          marca,
+          modelo,
+          procesador: body.procesador?.trim() ?? '',
+          ram: body.ram?.trim() ?? '',
+          disco: body.disco?.trim() ?? '',
+          propiedad: body.propiedad?.trim() ?? '',
+        },
+      });
+
+      const detalle = {
+        macWifi: body.macWifi?.trim() || null,
+        so: body.so?.trim() || null,
+        tipoDd: body.tipoDd?.trim() || null,
+        estadoAlm: body.estadoAlm?.trim() || null,
+        office: body.office?.trim() || null,
+        teamViewer: body.teamViewer?.trim() || null,
+        claveTv: body.claveTv?.trim() || null,
+        revisado: body.revisado?.trim() || null,
+      };
+      const hasDetalle = Object.values(detalle).some(Boolean);
+
+      if (hasDetalle) {
+        await tx.detalleEquipo.create({
+          data: {
+            idEquipo: created.id_equipo,
+            ...detalle,
+          },
+        });
+      }
+
+      return tx.equipo.findUnique({
+        where: { id_equipo: created.id_equipo },
+        include: { equipo: true },
+      });
     });
 
     return res.status(201).json({

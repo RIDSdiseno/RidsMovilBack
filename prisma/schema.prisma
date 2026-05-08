@@ -742,6 +742,7 @@ enum ItemTipoGestioo {
 enum TipoEvidenciaEntrega {
   FOTO
   FIRMA
+  PDF
 }
 
 // TIPOS EQUIPOS

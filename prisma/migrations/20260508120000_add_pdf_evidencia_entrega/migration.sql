@@ -1,0 +1,1 @@
+ALTER TYPE "TipoEvidenciaEntrega" ADD VALUE IF NOT EXISTS 'PDF';

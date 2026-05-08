@@ -5,7 +5,9 @@ exports.listarEvidenciasPorEntrega = exports.confirmarEvidencia = exports.solici
 const client_1 = require("@prisma/client");
 const cloudinary_js_1 = require("../config/cloudinary.js");
 const prisma = new client_1.PrismaClient();
-const ALLOWED_FORMATS = new Set(["png", "jpg", "jpeg"]);
+const ALLOWED_IMAGE_FORMATS = new Set(["png", "jpg", "jpeg"]);
+const ALLOWED_PDF_FORMATS = new Set(["pdf"]);
+const ALLOWED_FORMATS = new Set([...ALLOWED_IMAGE_FORMATS, ...ALLOWED_PDF_FORMATS]);
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 const MAX_FOTOS_POR_ENTREGA = 10;
 function normalizeTipo(tipo) {
@@ -15,6 +17,9 @@ function normalizeTipo(tipo) {
     }
     if (val === "firma" || val === "signature") {
         return client_1.TipoEvidenciaEntrega.FIRMA;
+    }
+    if (val === "pdf" || val === "documento" || val === "comprobante") {
+        return client_1.TipoEvidenciaEntrega.PDF;
     }
     return null;
 }
@@ -29,8 +34,28 @@ function normalizeFormat(format) {
         return raw.slice(1);
     return raw;
 }
-function buildPublicId(tipo, entregaId) {
-    const prefix = tipo === client_1.TipoEvidenciaEntrega.FIRMA ? "firma" : "foto";
+function sanitizePublicIdName(value) {
+    const cleaned = (value || "")
+        .toString()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[\\/:*?"<>|]/g, "-")
+        .replace(/\s+/g, " ")
+        .trim();
+    return cleaned || null;
+}
+function buildPublicId(tipo, entregaId, nombreArchivo) {
+    if (tipo === client_1.TipoEvidenciaEntrega.PDF) {
+        const sanitized = sanitizePublicIdName(nombreArchivo);
+        if (sanitized) {
+            return sanitized.toLowerCase().endsWith(".pdf") ? sanitized : `${sanitized}.pdf`;
+        }
+    }
+    const prefix = tipo === client_1.TipoEvidenciaEntrega.FIRMA
+        ? "firma"
+        : tipo === client_1.TipoEvidenciaEntrega.PDF
+            ? "pdf"
+            : "foto";
     const rand = Math.random().toString(36).slice(2, 8);
     return `${prefix}-${entregaId}-${Date.now()}-${rand}`;
 }
@@ -53,13 +78,15 @@ async function validarEntrega(res, entregaId) {
     return entrega;
 }
 async function validarLimitesEvidencia(entregaId, tipo) {
-    if (tipo === client_1.TipoEvidenciaEntrega.FIRMA) {
+    if (tipo === client_1.TipoEvidenciaEntrega.FIRMA || tipo === client_1.TipoEvidenciaEntrega.PDF) {
         const existing = await prisma.evidenciaEntrega.findFirst({
-            where: { entregaId, tipo: client_1.TipoEvidenciaEntrega.FIRMA },
+            where: { entregaId, tipo },
             select: { id: true },
         });
         if (existing) {
-            return "La entrega ya tiene una firma registrada";
+            return tipo === client_1.TipoEvidenciaEntrega.FIRMA
+                ? "La entrega ya tiene una firma registrada"
+                : "La entrega ya tiene un PDF registrado";
         }
         return null;
     }
@@ -79,10 +106,16 @@ const solicitarFirmaSubida = async (req, res) => {
         const formato = normalizeFormat(body.formato);
         const bytes = body.bytes !== undefined ? Number(body.bytes) : null;
         if (!tipo) {
-            return res.status(400).json({ error: "tipo debe ser 'foto' o 'firma'" });
+            return res.status(400).json({ error: "tipo debe ser 'foto', 'firma' o 'pdf'" });
         }
         if (formato && !ALLOWED_FORMATS.has(formato)) {
-            return res.status(400).json({ error: "Formato no permitido. Usa png o jpeg" });
+            return res.status(400).json({ error: "Formato no permitido. Usa png, jpeg o pdf" });
+        }
+        if (tipo === client_1.TipoEvidenciaEntrega.PDF && formato && !ALLOWED_PDF_FORMATS.has(formato)) {
+            return res.status(400).json({ error: "El comprobante debe ser PDF" });
+        }
+        if (tipo !== client_1.TipoEvidenciaEntrega.PDF && formato && !ALLOWED_IMAGE_FORMATS.has(formato)) {
+            return res.status(400).json({ error: "La evidencia debe ser imagen png o jpeg" });
         }
         if (bytes !== null) {
             if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -100,13 +133,15 @@ const solicitarFirmaSubida = async (req, res) => {
             return res.status(409).json({ error: limiteMsg });
         }
         const folder = (0, cloudinary_js_1.buildEntregaFolder)(entrega.id_entrega);
-        const publicId = buildPublicId(tipo, entrega.id_entrega);
+        const publicId = buildPublicId(tipo, entrega.id_entrega, body.nombreArchivo);
         const signed = (0, cloudinary_js_1.createUploadSignature)({ folder, publicId });
+        const resourceType = tipo === client_1.TipoEvidenciaEntrega.PDF ? "raw" : "image";
         return res.json({
             ...signed,
             allowedFormats: Array.from(ALLOWED_FORMATS),
             maxBytes: MAX_BYTES,
-            resourceType: "image",
+            uploadUrl: signed.uploadUrl?.replace("/auto/upload", `/${resourceType}/upload`),
+            resourceType,
             tipo,
         });
     }
@@ -125,13 +160,19 @@ const confirmarEvidencia = async (req, res) => {
         const bytes = body.bytes !== undefined ? Number(body.bytes) : NaN;
         const { url, publicId } = body;
         if (!tipo) {
-            return res.status(400).json({ error: "tipo es requerido (foto o firma)" });
+            return res.status(400).json({ error: "tipo es requerido (foto, firma o pdf)" });
         }
         if (!url || !publicId) {
             return res.status(400).json({ error: "url y publicId son obligatorios" });
         }
         if (!formato || !ALLOWED_FORMATS.has(formato)) {
-            return res.status(400).json({ error: "Formato no permitido. Usa png o jpeg" });
+            return res.status(400).json({ error: "Formato no permitido. Usa png, jpeg o pdf" });
+        }
+        if (tipo === client_1.TipoEvidenciaEntrega.PDF && !ALLOWED_PDF_FORMATS.has(formato)) {
+            return res.status(400).json({ error: "El comprobante debe ser PDF" });
+        }
+        if (tipo !== client_1.TipoEvidenciaEntrega.PDF && !ALLOWED_IMAGE_FORMATS.has(formato)) {
+            return res.status(400).json({ error: "La evidencia debe ser imagen png o jpeg" });
         }
         if (!Number.isFinite(bytes) || bytes <= 0 || bytes > MAX_BYTES) {
             return res.status(400).json({ error: "bytes es requerido y debe estar dentro del limite permitido" });

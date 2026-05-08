@@ -6,7 +6,9 @@ import { buildEntregaFolder, createUploadSignature } from "../config/cloudinary.
 
 const prisma = new PrismaClient();
 
-const ALLOWED_FORMATS = new Set(["png", "jpg", "jpeg"]);
+const ALLOWED_IMAGE_FORMATS = new Set(["png", "jpg", "jpeg"]);
+const ALLOWED_PDF_FORMATS = new Set(["pdf"]);
+const ALLOWED_FORMATS = new Set([...ALLOWED_IMAGE_FORMATS, ...ALLOWED_PDF_FORMATS]);
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 const MAX_FOTOS_POR_ENTREGA = 10;
 
@@ -20,6 +22,7 @@ type EvidenceInput = {
   bytes?: number;
   url?: string;
   publicId?: string;
+  nombreArchivo?: string;
 };
 
 function normalizeTipo(tipo?: string): TipoEvidenciaEntrega | null {
@@ -29,6 +32,9 @@ function normalizeTipo(tipo?: string): TipoEvidenciaEntrega | null {
   }
   if (val === "firma" || val === "signature") {
     return TipoEvidenciaEntrega.FIRMA;
+  }
+  if (val === "pdf" || val === "documento" || val === "comprobante") {
+    return TipoEvidenciaEntrega.PDF;
   }
   return null;
 }
@@ -43,8 +49,32 @@ function normalizeFormat(format?: string) {
   return raw;
 }
 
-function buildPublicId(tipo: TipoEvidenciaEntrega, entregaId: number) {
-  const prefix = tipo === TipoEvidenciaEntrega.FIRMA ? "firma" : "foto";
+function sanitizePublicIdName(value?: string) {
+  const cleaned = (value || "")
+    .toString()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\\/:*?"<>|]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return cleaned || null;
+}
+
+function buildPublicId(tipo: TipoEvidenciaEntrega, entregaId: number, nombreArchivo?: string) {
+  if (tipo === TipoEvidenciaEntrega.PDF) {
+    const sanitized = sanitizePublicIdName(nombreArchivo);
+    if (sanitized) {
+      return sanitized.toLowerCase().endsWith(".pdf") ? sanitized : `${sanitized}.pdf`;
+    }
+  }
+
+  const prefix =
+    tipo === TipoEvidenciaEntrega.FIRMA
+      ? "firma"
+      : tipo === TipoEvidenciaEntrega.PDF
+        ? "pdf"
+        : "foto";
   const rand = Math.random().toString(36).slice(2, 8);
   return `${prefix}-${entregaId}-${Date.now()}-${rand}`;
 }
@@ -71,13 +101,15 @@ async function validarEntrega(res: Response, entregaId: number) {
 }
 
 async function validarLimitesEvidencia(entregaId: number, tipo: TipoEvidenciaEntrega) {
-  if (tipo === TipoEvidenciaEntrega.FIRMA) {
+  if (tipo === TipoEvidenciaEntrega.FIRMA || tipo === TipoEvidenciaEntrega.PDF) {
     const existing = await prisma.evidenciaEntrega.findFirst({
-      where: { entregaId, tipo: TipoEvidenciaEntrega.FIRMA },
+      where: { entregaId, tipo },
       select: { id: true },
     });
     if (existing) {
-      return "La entrega ya tiene una firma registrada";
+      return tipo === TipoEvidenciaEntrega.FIRMA
+        ? "La entrega ya tiene una firma registrada"
+        : "La entrega ya tiene un PDF registrado";
     }
     return null;
   }
@@ -100,10 +132,16 @@ export const solicitarFirmaSubida = async (req: Request, res: Response) => {
   const bytes = body.bytes !== undefined ? Number(body.bytes) : null;
 
   if (!tipo) {
-    return res.status(400).json({ error: "tipo debe ser 'foto' o 'firma'" });
+    return res.status(400).json({ error: "tipo debe ser 'foto', 'firma' o 'pdf'" });
   }
   if (formato && !ALLOWED_FORMATS.has(formato)) {
-    return res.status(400).json({ error: "Formato no permitido. Usa png o jpeg" });
+    return res.status(400).json({ error: "Formato no permitido. Usa png, jpeg o pdf" });
+  }
+  if (tipo === TipoEvidenciaEntrega.PDF && formato && !ALLOWED_PDF_FORMATS.has(formato)) {
+    return res.status(400).json({ error: "El comprobante debe ser PDF" });
+  }
+  if (tipo !== TipoEvidenciaEntrega.PDF && formato && !ALLOWED_IMAGE_FORMATS.has(formato)) {
+    return res.status(400).json({ error: "La evidencia debe ser imagen png o jpeg" });
   }
   if (bytes !== null) {
     if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -123,14 +161,17 @@ export const solicitarFirmaSubida = async (req: Request, res: Response) => {
   }
 
   const folder = buildEntregaFolder(entrega.id_entrega);
-  const publicId = buildPublicId(tipo, entrega.id_entrega);
+  const publicId = buildPublicId(tipo, entrega.id_entrega, body.nombreArchivo);
   const signed = createUploadSignature({ folder, publicId });
+
+  const resourceType = tipo === TipoEvidenciaEntrega.PDF ? "raw" : "image";
 
   return res.json({
       ...signed,
       allowedFormats: Array.from(ALLOWED_FORMATS),
       maxBytes: MAX_BYTES,
-    resourceType: "image",
+    uploadUrl: signed.uploadUrl?.replace("/auto/upload", `/${resourceType}/upload`),
+    resourceType,
     tipo,
   });
 } catch (err) {
@@ -149,14 +190,20 @@ export const confirmarEvidencia = async (req: Request, res: Response) => {
   const { url, publicId } = body;
 
   if (!tipo) {
-    return res.status(400).json({ error: "tipo es requerido (foto o firma)" });
+    return res.status(400).json({ error: "tipo es requerido (foto, firma o pdf)" });
   }
 
   if (!url || !publicId) {
     return res.status(400).json({ error: "url y publicId son obligatorios" });
   }
   if (!formato || !ALLOWED_FORMATS.has(formato)) {
-    return res.status(400).json({ error: "Formato no permitido. Usa png o jpeg" });
+    return res.status(400).json({ error: "Formato no permitido. Usa png, jpeg o pdf" });
+  }
+  if (tipo === TipoEvidenciaEntrega.PDF && !ALLOWED_PDF_FORMATS.has(formato)) {
+    return res.status(400).json({ error: "El comprobante debe ser PDF" });
+  }
+  if (tipo !== TipoEvidenciaEntrega.PDF && !ALLOWED_IMAGE_FORMATS.has(formato)) {
+    return res.status(400).json({ error: "La evidencia debe ser imagen png o jpeg" });
   }
   if (!Number.isFinite(bytes) || bytes <= 0 || bytes > MAX_BYTES) {
     return res.status(400).json({ error: "bytes es requerido y debe estar dentro del limite permitido" });

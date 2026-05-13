@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, TipoEvidenciaEntrega } from "@prisma/client";
+import { sendDeliveryPdfEmail } from "../services/microsoft-mail.service.js";
 
 const prisma = new PrismaClient();
 
@@ -125,5 +126,69 @@ export const obtenerEntrega = async (req: Request, res: Response) => {
   } catch (err) {
     console.error("Error al obtener entrega:", err);
     return res.status(500).json({ error: "Error interno al obtener la entrega" });
+  }
+};
+
+/* =========================
+   ENVIAR PDF POR CORREO
+========================= */
+export const enviarPdfEntrega = async (req: Request, res: Response) => {
+  try {
+    const tecnicoId = req.user?.id;
+    const tecnicoEmail = req.user?.email;
+    const tecnicoNombre = req.user?.nombre;
+    const entregaId = Number(req.params.id);
+    const receptorEmail = String(req.body?.receptorEmail || "").trim().toLowerCase();
+
+    if (!tecnicoId || !tecnicoEmail) {
+      return res.status(401).json({ error: "Técnico no autenticado" });
+    }
+    if (!Number.isFinite(entregaId)) {
+      return res.status(400).json({ error: "ID inválido" });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(receptorEmail)) {
+      return res.status(400).json({ error: "Correo del receptor inválido" });
+    }
+
+    const entrega = await prisma.entrega.findFirst({
+      where: { id_entrega: entregaId, tecnicoId },
+      include: {
+        evidencias: {
+          where: { tipo: TipoEvidenciaEntrega.PDF },
+          orderBy: { creadoEn: "desc" },
+          take: 1,
+        },
+      },
+    });
+
+    if (!entrega) {
+      return res.status(404).json({ error: "Entrega no encontrada" });
+    }
+
+    const pdf = entrega.evidencias[0];
+    if (!pdf) {
+      return res.status(404).json({ error: "La entrega no tiene PDF registrado" });
+    }
+
+    const publicIdName = pdf.publicId.split("/").pop() || `entrega-${entrega.id_entrega}.pdf`;
+    const pdfFileName = publicIdName.toLowerCase().endsWith(".pdf")
+      ? publicIdName
+      : `${publicIdName}.pdf`;
+
+    await sendDeliveryPdfEmail({
+      ccEmail: tecnicoEmail,
+      companyName: entrega.empresaNombre,
+      pdfFileName,
+      pdfUrl: pdf.url,
+      recipientEmail: receptorEmail,
+      recipientName: entrega.receptorNombre,
+      senderName: tecnicoNombre || tecnicoEmail,
+    });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("Error al enviar PDF de entrega:", err);
+    const message = err instanceof Error ? err.message : "Error interno al enviar el correo";
+    return res.status(500).json({ error: message });
   }
 };

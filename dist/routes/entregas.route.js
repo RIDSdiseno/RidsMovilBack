@@ -13,5 +13,6 @@ r.use(auth_middleware_js_1.authGuard);
 r.get("/", entregas_controller_js_1.listarEntregas);
 r.post("/", entregas_controller_js_1.crearEntrega);
 r.get("/:id", entregas_controller_js_1.obtenerEntrega);
+r.post("/:id/enviar-pdf", entregas_controller_js_1.enviarPdfEntrega);
 r.use("/:id/evidencias", evidencias_route_js_1.default);
 exports.default = r;

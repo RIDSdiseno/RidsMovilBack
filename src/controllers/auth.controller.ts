@@ -1035,21 +1035,66 @@ export const getAllEquipos = async (req: Request, res: Response) => {
         },
 
         equipo: {
-          select: { tipoDd: true },
+          select: {
+            macWifi: true,
+            redEthernet: true,
+            so: true,
+            tipoDd: true,
+            estadoAlm: true,
+            office: true,
+            teamViewer: true,
+            claveTv: true,
+            revisado: true,
+            adminRidsUsuario: true,
+            adminRidsPassword: true,
+            usuarioEmpresa: true,
+            passwordEmpresa: true,
+            usuarioPersonal: true,
+            passwordPersonal: true,
+          },
           orderBy: { id: 'desc' },
           take: 1,
+        },
+        adicionales: {
+          select: {
+            id: true,
+            tipo: true,
+            descripcion: true,
+            cantidad: true,
+            serialAdicional: true,
+          },
+          orderBy: { id: 'asc' },
         },
       },
     });
 
-    const equiposMap = equipos.map(eq => ({
-      ...eq,
-      tipoDd: eq.equipo[0]?.tipoDd ?? 'S/A',
+    const equiposMap = equipos.map(eq => {
+      const detalle = eq.equipo[0];
 
-      // 🔥 EXTRAS PARA EL FRONT
-      empresaId: eq.solicitante?.empresaId ?? null,
-      nombreSolicitante: eq.solicitante?.nombre ?? 'S/A',
-    }));
+      return {
+        ...eq,
+        macWifi: detalle?.macWifi ?? '',
+        redEthernet: detalle?.redEthernet ?? '',
+        so: detalle?.so ?? '',
+        tipoDd: detalle?.tipoDd ?? '',
+        estadoAlm: detalle?.estadoAlm ?? '',
+        office: detalle?.office ?? '',
+        teamViewer: detalle?.teamViewer ?? '',
+        claveTv: detalle?.claveTv ?? '',
+        revisado: detalle?.revisado ?? '',
+        adminRidsUsuario: detalle?.adminRidsUsuario ?? '',
+        adminRidsPassword: detalle?.adminRidsPassword ?? '',
+        usuarioEmpresa: detalle?.usuarioEmpresa ?? '',
+        passwordEmpresa: detalle?.passwordEmpresa ?? '',
+        usuarioPersonal: detalle?.usuarioPersonal ?? '',
+        passwordPersonal: detalle?.passwordPersonal ?? '',
+        adicionales: eq.adicionales ?? [],
+
+        // 🔥 EXTRAS PARA EL FRONT
+        empresaId: eq.solicitante?.empresaId ?? null,
+        nombreSolicitante: eq.solicitante?.nombre ?? 'S/A',
+      };
+    });
 
     equiposMap.forEach(eq => delete (eq as any).equipo);
 
@@ -1065,26 +1110,73 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) return res.status(400).json({ error: "ID inválido" });
 
-    // Aceptar ahora estas 4 llaves
-    const { disco, procesador, ram, tipoDd } = req.body ?? {};
+    const {
+      serial,
+      marca,
+      modelo,
+      disco,
+      procesador,
+      ram,
+      propiedad,
+      macWifi,
+      redEthernet,
+      so,
+      tipoDd,
+      estadoAlm,
+      office,
+      teamViewer,
+      claveTv,
+      revisado,
+      adminRidsUsuario,
+      adminRidsPassword,
+      usuarioEmpresa,
+      passwordEmpresa,
+      usuarioPersonal,
+      passwordPersonal,
+      adicionales,
+    } = req.body ?? {};
     const keys = Object.keys(req.body || {});
-    const allowed = new Set(["disco", "procesador", "ram", "tipoDd"]);
+    const allowed = new Set([
+      "serial",
+      "marca",
+      "modelo",
+      "disco",
+      "procesador",
+      "ram",
+      "propiedad",
+      "macWifi",
+      "redEthernet",
+      "so",
+      "tipoDd",
+      "estadoAlm",
+      "office",
+      "teamViewer",
+      "claveTv",
+      "revisado",
+      "adminRidsUsuario",
+      "adminRidsPassword",
+      "usuarioEmpresa",
+      "passwordEmpresa",
+      "usuarioPersonal",
+      "passwordPersonal",
+      "adicionales",
+    ]);
     const extras = keys.filter(k => !allowed.has(k));
     if (extras.length) {
       return res.status(400).json({ error: `Campos no permitidos: ${extras.join(", ")}` });
     }
-    if (
-      typeof disco === "undefined" &&
-      typeof procesador === "undefined" &&
-      typeof ram === "undefined" &&
-      typeof tipoDd === "undefined"
-    ) {
+    if (!keys.length) {
       return res.status(400).json({ error: "No hay campos para actualizar" });
     }
 
     const norm = (v: any): string | undefined => {
       if (typeof v === "undefined") return undefined;
       return String(v).trim();
+    };
+    const normNullable = (v: any): string | null | undefined => {
+      const value = norm(v);
+      if (typeof value === "undefined") return undefined;
+      return value || null;
     };
 
     // Verifica que el equipo exista (importante si solo viene tipoDd)
@@ -1095,14 +1187,63 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
     if (!existe) return res.status(404).json({ error: "Equipo no encontrado" });
 
     const dataEquipo: Prisma.EquipoUpdateInput = {};
+    const vSerial = norm(serial);
+    const vMarca = norm(marca);
+    const vModelo = norm(modelo);
     const vDisco = norm(disco);
     const vProc = norm(procesador);
     const vRam = norm(ram);
-    const vTipo = norm(tipoDd);
+    const vPropiedad = norm(propiedad);
+
+    if (typeof vSerial !== "undefined") {
+      if (!vSerial) return res.status(400).json({ error: "serial no puede estar vacío" });
+      dataEquipo.serial = vSerial;
+    }
+    if (typeof vMarca !== "undefined") {
+      if (!vMarca) return res.status(400).json({ error: "marca no puede estar vacía" });
+      dataEquipo.marca = vMarca;
+    }
+    if (typeof vModelo !== "undefined") {
+      if (!vModelo) return res.status(400).json({ error: "modelo no puede estar vacío" });
+      dataEquipo.modelo = vModelo;
+    }
 
     if (typeof vDisco !== "undefined") dataEquipo.disco = vDisco;
     if (typeof vProc !== "undefined") dataEquipo.procesador = vProc;
     if (typeof vRam !== "undefined") dataEquipo.ram = vRam;
+    if (typeof vPropiedad !== "undefined") dataEquipo.propiedad = vPropiedad;
+
+    const detalleData: Record<string, string | null | undefined> = {
+      macWifi: normNullable(macWifi),
+      redEthernet: normNullable(redEthernet),
+      so: normNullable(so),
+      tipoDd: normNullable(tipoDd),
+      estadoAlm: normNullable(estadoAlm),
+      office: normNullable(office),
+      teamViewer: normNullable(teamViewer),
+      claveTv: normNullable(claveTv),
+      revisado: normNullable(revisado),
+      adminRidsUsuario: normNullable(adminRidsUsuario),
+      adminRidsPassword: normNullable(adminRidsPassword),
+      usuarioEmpresa: normNullable(usuarioEmpresa),
+      passwordEmpresa: normNullable(passwordEmpresa),
+      usuarioPersonal: normNullable(usuarioPersonal),
+      passwordPersonal: normNullable(passwordPersonal),
+    };
+    const dataDetalle = Object.fromEntries(
+      Object.entries(detalleData).filter(([, value]) => typeof value !== "undefined"),
+    ) as Record<string, string | null>;
+
+    const adicionalesData = Array.isArray(adicionales)
+      ? adicionales
+        .filter((item) => typeof item?.tipo !== "undefined" && String(item.tipo).trim())
+        .map((item) => ({
+          tipo: String(item.tipo).trim(),
+          descripcion: normNullable(item.descripcion),
+          cantidad: Math.max(1, Number(item.cantidad) || 1),
+          serialAdicional: normNullable(item.serialAdicional),
+        }))
+      : undefined;
 
     const result = await prisma.$transaction(async (tx) => {
       // 1) Actualizar Equipo si corresponde
@@ -1112,21 +1253,21 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
           data: dataEquipo,
           select: {
             id_equipo: true, marca: true, modelo: true, serial: true,
-            disco: true, procesador: true, ram: true,
+            disco: true, procesador: true, ram: true, propiedad: true,
           },
         })
         : await tx.equipo.findUnique({
           where: { id_equipo: id },
           select: {
             id_equipo: true, marca: true, modelo: true, serial: true,
-            disco: true, procesador: true, ram: true,
+            disco: true, procesador: true, ram: true, propiedad: true,
           },
         });
 
-      // 2) Actualizar/crear DetalleEquipo.tipoDd si vino en el body
-      let detalle: { id: number; tipoDd: string | null } | null = null;
+      // 2) Actualizar/crear DetalleEquipo si vino informacion tecnica en el body
+      let detalle = null;
 
-      if (typeof vTipo !== "undefined") {
+      if (Object.keys(dataDetalle).length > 0) {
         // Tomamos el último detalle (por id desc). Si no hay, lo creamos.
         const last = await tx.detalleEquipo.findFirst({
           where: { idEquipo: id },
@@ -1137,13 +1278,20 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
         if (last) {
           detalle = await tx.detalleEquipo.update({
             where: { id: last.id },
-            data: { tipoDd: vTipo },
-            select: { id: true, tipoDd: true },
+            data: dataDetalle,
           });
         } else {
           detalle = await tx.detalleEquipo.create({
-            data: { idEquipo: id, tipoDd: vTipo },
-            select: { id: true, tipoDd: true },
+            data: { idEquipo: id, ...dataDetalle },
+          });
+        }
+      }
+
+      if (typeof adicionalesData !== "undefined") {
+        await tx.equipoAdicional.deleteMany({ where: { equipoId: id } });
+        if (adicionalesData.length > 0) {
+          await tx.equipoAdicional.createMany({
+            data: adicionalesData.map((item) => ({ ...item, equipoId: id })),
           });
         }
       }
@@ -1154,9 +1302,13 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
     return res.status(200).json({
       message: "Equipo actualizado",
       equipo: result.updatedEquipo,
-      detalleActualizado: result.detalle, // null si no se envió tipoDd
+      detalleActualizado: result.detalle,
     });
   } catch (e: any) {
+    if ((e as Prisma.PrismaClientKnownRequestError)?.code === "P2002") {
+      const fields = (e as Prisma.PrismaClientKnownRequestError).meta?.target;
+      return res.status(409).json({ error: `Ya existe un equipo con ese valor único (${fields})` });
+    }
     if (e?.code === "P2025") return res.status(404).json({ error: "Equipo no encontrado" });
     console.error("Error al actualizar equipo:", e);
     return res.status(500).json({ error: "Error al actualizar equipo" });
@@ -1217,6 +1369,7 @@ export const cambiarSolicitanteEquipo = async (req: Request, res: Response) => {
 type DetalleEquipoBody = {
   idEquipo: number;          // <- PRIMITIVO, no "Number"
   macWifi: string;
+  redEthernet?: string;
   so: string;
   tipoDd: string;
   estadoAlm: string;
@@ -1224,6 +1377,12 @@ type DetalleEquipoBody = {
   teamViewer: string;
   claveTv: string;
   revisado: string;          // cámbialo a boolean o enum si en tu schema no es string
+  adminRidsUsuario?: string;
+  adminRidsPassword?: string;
+  usuarioEmpresa?: string;
+  passwordEmpresa?: string;
+  usuarioPersonal?: string;
+  passwordPersonal?: string;
 };
 
 export const createManyDetalle = async (req: Request, res: Response) => {
@@ -1238,6 +1397,7 @@ export const createManyDetalle = async (req: Request, res: Response) => {
     const data: Prisma.DetalleEquipoCreateManyInput[] = detalles.map((e) => ({
       idEquipo: typeof e.idEquipo === 'string' ? Number(e.idEquipo) : e.idEquipo,
       macWifi: e.macWifi?.trim(),
+      redEthernet: e.redEthernet?.trim(),
       so: e.so?.trim(),
       tipoDd: e.tipoDd?.trim(),
       estadoAlm: e.estadoAlm?.trim(),
@@ -1245,6 +1405,12 @@ export const createManyDetalle = async (req: Request, res: Response) => {
       teamViewer: e.teamViewer?.trim(),
       claveTv: e.claveTv?.trim(),
       revisado: e.revisado?.trim(),
+      adminRidsUsuario: e.adminRidsUsuario?.trim(),
+      adminRidsPassword: e.adminRidsPassword?.trim(),
+      usuarioEmpresa: e.usuarioEmpresa?.trim(),
+      passwordEmpresa: e.passwordEmpresa?.trim(),
+      usuarioPersonal: e.usuarioPersonal?.trim(),
+      passwordPersonal: e.passwordPersonal?.trim(),
     }));
 
     const result = await prisma.detalleEquipo.createMany({
@@ -1269,6 +1435,7 @@ type EquipoInput = {
   disco: string;
   propiedad: string;
   macWifi?: string;
+  redEthernet?: string;
   so?: string;
   tipoDd?: string;
   estadoAlm?: string;
@@ -1276,6 +1443,18 @@ type EquipoInput = {
   teamViewer?: string;
   claveTv?: string;
   revisado?: string;
+  adminRidsUsuario?: string;
+  adminRidsPassword?: string;
+  usuarioEmpresa?: string;
+  passwordEmpresa?: string;
+  usuarioPersonal?: string;
+  passwordPersonal?: string;
+  adicionales?: Array<{
+    tipo?: string;
+    descripcion?: string | null;
+    cantidad?: number | string;
+    serialAdicional?: string | null;
+  }>;
 };
 
 export const createEquipo = async (req: Request, res: Response) => {
@@ -1310,6 +1489,7 @@ export const createEquipo = async (req: Request, res: Response) => {
 
       const detalle = {
         macWifi: body.macWifi?.trim() || null,
+        redEthernet: body.redEthernet?.trim() || null,
         so: body.so?.trim() || null,
         tipoDd: body.tipoDd?.trim() || null,
         estadoAlm: body.estadoAlm?.trim() || null,
@@ -1317,6 +1497,12 @@ export const createEquipo = async (req: Request, res: Response) => {
         teamViewer: body.teamViewer?.trim() || null,
         claveTv: body.claveTv?.trim() || null,
         revisado: body.revisado?.trim() || null,
+        adminRidsUsuario: body.adminRidsUsuario?.trim() || null,
+        adminRidsPassword: body.adminRidsPassword?.trim() || null,
+        usuarioEmpresa: body.usuarioEmpresa?.trim() || null,
+        passwordEmpresa: body.passwordEmpresa?.trim() || null,
+        usuarioPersonal: body.usuarioPersonal?.trim() || null,
+        passwordPersonal: body.passwordPersonal?.trim() || null,
       };
       const hasDetalle = Object.values(detalle).some(Boolean);
 
@@ -1329,9 +1515,25 @@ export const createEquipo = async (req: Request, res: Response) => {
         });
       }
 
+      const adicionales = Array.isArray(body.adicionales)
+        ? body.adicionales
+          .filter((item) => item.tipo?.trim())
+          .map((item) => ({
+            equipoId: created.id_equipo,
+            tipo: item.tipo!.trim(),
+            descripcion: item.descripcion?.trim() || null,
+            cantidad: Math.max(1, Number(item.cantidad) || 1),
+            serialAdicional: item.serialAdicional?.trim() || null,
+          }))
+        : [];
+
+      if (adicionales.length > 0) {
+        await tx.equipoAdicional.createMany({ data: adicionales });
+      }
+
       return tx.equipo.findUnique({
         where: { id_equipo: created.id_equipo },
-        include: { equipo: true },
+        include: { equipo: true, adicionales: true },
       });
     });
 

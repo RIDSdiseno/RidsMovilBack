@@ -132,6 +132,7 @@ const enviarPdfEntrega = async (req, res) => {
         const entregaId = Number(req.params.id);
         const receptorEmail = String(req.body?.receptorEmail || "").trim().toLowerCase();
         const brand = req.body?.brand === "econnet" ? "econnet" : "rids";
+        const operation = req.body?.operation === "retiro" ? "retiro" : "entrega";
         const pdfBase64 = typeof req.body?.pdfBase64 === "string" ? req.body.pdfBase64.trim() : undefined;
         const pdfFile = req.file;
         if (!tecnicoId || !tecnicoEmail) {
@@ -175,6 +176,7 @@ const enviarPdfEntrega = async (req, res) => {
             brand,
             ccEmail: tecnicoEmail,
             companyName: entrega.empresaNombre,
+            operation,
             pdfBase64,
             pdfBuffer,
             pdfFileName,

@@ -141,8 +141,14 @@ function getLogoBase64(brand) {
     logoCache.set(brandConfig.logoFile, logoBase64);
     return logoBase64;
 }
-function buildDeliveryEmailHtml({ brand, companyName, recipientName, }) {
+function buildDeliveryEmailHtml({ brand, companyName, operation = "entrega", recipientName, }) {
     const brandConfig = getBrandConfig(brand);
+    const operationText = operation === "retiro" ? "retiro" : "entrega";
+    const operationTitle = operation === "retiro" ? "Retiro registrado correctamente" : "Entrega registrada correctamente";
+    const operationCopy = operation === "retiro"
+        ? "retiro realizado"
+        : "entrega realizada";
+    const tagText = operation === "retiro" ? "Comprobante de retiro" : "Comprobante de entrega";
     const safeCompanyName = escapeHtml(companyName);
     const safeRecipientName = escapeHtml(recipientName || "");
     const logoBase64 = getLogoBase64(brand);
@@ -162,15 +168,15 @@ function buildDeliveryEmailHtml({ brand, companyName, recipientName, }) {
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                       <tr>
                         <td>${logoMarkup}</td>
-                        <td align="right" style="font-size:12px;font-weight:700;color:#d9ecff;text-transform:uppercase;letter-spacing:.08em;">Comprobante de entrega</td>
+                        <td align="right" style="font-size:12px;font-weight:700;color:#d9ecff;text-transform:uppercase;letter-spacing:.08em;">${tagText}</td>
                       </tr>
                     </table>
                   </td>
                 </tr>
                 <tr>
                   <td style="padding:30px 28px 10px;">
-                    <h1 style="margin:0;color:#101828;font-size:24px;line-height:1.25;font-weight:800;">Entrega registrada correctamente</h1>
-                    <p style="margin:14px 0 0;color:#475467;font-size:15px;line-height:1.7;">Hola ${safeRecipientName || "equipo"}, adjuntamos el comprobante PDF de la entrega realizada para <strong style="color:#101828;">${safeCompanyName}</strong>.</p>
+                    <h1 style="margin:0;color:#101828;font-size:24px;line-height:1.25;font-weight:800;">${operationTitle}</h1>
+                    <p style="margin:14px 0 0;color:#475467;font-size:15px;line-height:1.7;">Hola ${safeRecipientName || "equipo"}, adjuntamos el comprobante PDF del ${operationCopy} para <strong style="color:#101828;">${safeCompanyName}</strong>.</p>
                   </td>
                 </tr>
                 <tr>
@@ -187,7 +193,7 @@ function buildDeliveryEmailHtml({ brand, companyName, recipientName, }) {
                 </tr>
                 <tr>
                   <td style="padding:0 28px 28px;">
-                    <p style="margin:0;color:#475467;font-size:14px;line-height:1.7;">El documento adjunto contiene el detalle de la evidencia, firma de recepción y fecha del registro.</p>
+                    <p style="margin:0;color:#475467;font-size:14px;line-height:1.7;">El documento adjunto contiene el detalle de la evidencia, firma de ${operationText === "retiro" ? "retiro" : "recepción"} y fecha del registro.</p>
                     <p style="margin:22px 0 0;color:#101828;font-size:14px;line-height:1.7;"><strong>Saludos Cordiales,</strong><br/>${brandConfig.name}</p>
                   </td>
                 </tr>
@@ -225,7 +231,7 @@ async function sendDeliveryPdfViaSmtp(input) {
         from: `"Soporte RIDS" <${smtp.user}>`,
         to: input.recipientEmail,
         cc: input.ccEmail,
-        subject: `Comprobante de entrega - ${input.companyName}`,
+        subject: `Comprobante de ${input.operation || "entrega"} - ${input.companyName}`,
         html: buildDeliveryEmailHtml(input),
         attachments: [
             ...(getLogoBase64(input.brand)
@@ -247,19 +253,19 @@ async function sendDeliveryPdfViaSmtp(input) {
     });
     return true;
 }
-async function sendDeliveryPdfViaGraph({ brand, ccEmail, companyName, pdfBase64: providedPdfBase64, pdfBuffer, pdfFileName, pdfUrl, recipientEmail, recipientName, senderName, }) {
+async function sendDeliveryPdfViaGraph({ brand, ccEmail, companyName, operation = "entrega", pdfBase64: providedPdfBase64, pdfBuffer, pdfFileName, pdfUrl, recipientEmail, recipientName, senderName, }) {
     const { sender } = getGraphConfig();
     const [accessToken, pdfBase64] = await Promise.all([
         getGraphAccessToken(),
         resolvePdfBase64({ pdfBase64: providedPdfBase64, pdfBuffer, pdfUrl }),
     ]);
-    const subject = `Comprobante de entrega - ${companyName}`;
+    const subject = `Comprobante de ${operation} - ${companyName}`;
     const body = {
         message: {
             subject,
             body: {
                 contentType: "HTML",
-                content: buildDeliveryEmailHtml({ brand, companyName, recipientName }),
+                content: buildDeliveryEmailHtml({ brand, companyName, operation, recipientName }),
             },
             toRecipients: [
                 {
@@ -313,11 +319,12 @@ async function sendDeliveryPdfViaGraph({ brand, ccEmail, companyName, pdfBase64:
         throw new Error(text || "Microsoft Graph no pudo enviar el correo");
     }
 }
-async function sendDeliveryPdfEmail({ brand, ccEmail, companyName, pdfBase64, pdfBuffer, pdfFileName, pdfUrl, recipientEmail, recipientName, senderName, }) {
+async function sendDeliveryPdfEmail({ brand, ccEmail, companyName, operation, pdfBase64, pdfBuffer, pdfFileName, pdfUrl, recipientEmail, recipientName, senderName, }) {
     const input = {
         ccEmail,
         brand,
         companyName,
+        operation,
         pdfBase64,
         pdfBuffer,
         pdfFileName,

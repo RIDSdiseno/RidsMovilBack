@@ -145,7 +145,7 @@ function getBrandConfig(brand?: SendDeliveryPdfInput["brand"]) {
     return {
       accentColor: "#1f7a3b",
       alt: "Econnet",
-      logoFile: "logo-econnet.jpeg",
+      logoFile: "logo-econnet.png",
       name: "Econnet",
     };
   }
@@ -273,7 +273,7 @@ async function sendDeliveryPdfViaSmtp(input: SendDeliveryPdfInput) {
             {
               cid: LOGO_CONTENT_ID,
               content: Buffer.from(getLogoBase64(input.brand), "base64"),
-              contentType: input.brand === "econnet" ? "image/jpeg" : "image/png",
+              contentType: "image/png",
               filename: getBrandConfig(input.brand).logoFile,
             },
           ]
@@ -338,7 +338,7 @@ async function sendDeliveryPdfViaGraph({
                 "@odata.type": "#microsoft.graph.fileAttachment",
                 contentBytes: getLogoBase64(brand),
                 contentId: LOGO_CONTENT_ID,
-                contentType: brand === "econnet" ? "image/jpeg" : "image/png",
+                contentType: "image/png",
                 isInline: true,
                 name: getBrandConfig(brand).logoFile,
               },

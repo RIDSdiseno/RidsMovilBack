@@ -18,6 +18,7 @@ type SendDeliveryPdfInput = {
 };
 
 const GRAPH_SCOPE = "https://graph.microsoft.com/.default";
+const MAIL_TIMEOUT_MS = 15000;
 
 function getOptionalEnv(...keys: string[]) {
   for (const key of keys) {
@@ -42,6 +43,15 @@ function getGraphConfig() {
   return { clientId, clientSecret, sender, tenantId };
 }
 
+function hasGraphConfig() {
+  return Boolean(
+    getOptionalEnv("MICROSOFT_TENANT_ID", "MS_TENANT_ID") &&
+    getOptionalEnv("MICROSOFT_CLIENT_ID", "MS_CLIENT_ID", "CLIENT_ID") &&
+    getOptionalEnv("MICROSOFT_CLIENT_SECRET", "MS_CLIENT_SECRET", "CLIENT_SECRET") &&
+    getOptionalEnv("MICROSOFT_MAIL_SENDER", "MICROSOFT_FROM_EMAIL", "EMAIL_USER")
+  );
+}
+
 function getSmtpConfig() {
   const host = getOptionalEnv("SMTP_HOST");
   const portRaw = getOptionalEnv("SMTP_PORT");
@@ -60,6 +70,20 @@ function getSmtpConfig() {
   };
 }
 
+async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = MAIL_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function getGraphAccessToken() {
   const { clientId, clientSecret, tenantId } = getGraphConfig();
   const body = new URLSearchParams({
@@ -69,7 +93,7 @@ async function getGraphAccessToken() {
     scope: GRAPH_SCOPE,
   });
 
-  const response = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
+  const response = await fetchWithTimeout(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
@@ -136,6 +160,9 @@ async function sendDeliveryPdfViaSmtp(input: SendDeliveryPdfInput) {
     host: smtp.host,
     port: smtp.port,
     secure: smtp.secure,
+    connectionTimeout: MAIL_TIMEOUT_MS,
+    greetingTimeout: MAIL_TIMEOUT_MS,
+    socketTimeout: MAIL_TIMEOUT_MS,
     auth: {
       user: smtp.user,
       pass: smtp.pass,
@@ -212,7 +239,7 @@ async function sendDeliveryPdfViaGraph({
     saveToSentItems: true,
   };
 
-  const response = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(sender)}/sendMail`, {
+  const response = await fetchWithTimeout(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(sender)}/sendMail`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -250,21 +277,27 @@ export async function sendDeliveryPdfEmail({
     senderName,
   };
 
-  let smtpError: unknown;
+  let graphError: unknown;
+  if (hasGraphConfig()) {
+    try {
+      await sendDeliveryPdfViaGraph(input);
+      return;
+    } catch (error) {
+      graphError = error;
+    }
+  }
+
   try {
     const sentBySmtp = await sendDeliveryPdfViaSmtp(input);
     if (sentBySmtp) return;
-  } catch (error) {
-    smtpError = error;
-  }
+  } catch (smtpError) {
+    if (!graphError) throw smtpError;
 
-  try {
-    await sendDeliveryPdfViaGraph(input);
-  } catch (graphError) {
-    if (!smtpError) throw graphError;
-
-    const smtpMessage = smtpError instanceof Error ? smtpError.message : "SMTP no pudo enviar el correo";
     const graphMessage = graphError instanceof Error ? graphError.message : "Graph no pudo enviar el correo";
+    const smtpMessage = smtpError instanceof Error ? smtpError.message : "SMTP no pudo enviar el correo";
     throw new Error(`No se pudo enviar el correo. SMTP: ${smtpMessage}. Graph: ${graphMessage}`);
   }
+
+  if (graphError) throw graphError;
+  throw new Error("Configura SMTP o Microsoft Graph para enviar correos");
 }

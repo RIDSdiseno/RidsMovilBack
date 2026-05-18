@@ -67,6 +67,14 @@ async function downloadPdfAsBase64(url) {
     const arrayBuffer = await response.arrayBuffer();
     return Buffer.from(arrayBuffer).toString("base64");
 }
+async function resolvePdfBase64(input) {
+    if (input.pdfBase64)
+        return input.pdfBase64;
+    if (!input.pdfUrl) {
+        throw new Error("No se recibio el PDF para adjuntar al correo");
+    }
+    return downloadPdfAsBase64(input.pdfUrl);
+}
 function escapeHtml(value) {
     return value
         .replace(/&/g, "&amp;")
@@ -89,7 +97,7 @@ async function sendDeliveryPdfViaSmtp(input) {
     const smtp = getSmtpConfig();
     if (!smtp)
         return false;
-    const pdfBase64 = await downloadPdfAsBase64(input.pdfUrl);
+    const pdfBase64 = await resolvePdfBase64(input);
     const transporter = nodemailer_1.default.createTransport({
         host: smtp.host,
         port: smtp.port,
@@ -115,11 +123,11 @@ async function sendDeliveryPdfViaSmtp(input) {
     });
     return true;
 }
-async function sendDeliveryPdfViaGraph({ ccEmail, companyName, pdfFileName, pdfUrl, recipientEmail, recipientName, senderName, }) {
+async function sendDeliveryPdfViaGraph({ ccEmail, companyName, pdfBase64: providedPdfBase64, pdfFileName, pdfUrl, recipientEmail, recipientName, senderName, }) {
     const { sender } = getGraphConfig();
     const [accessToken, pdfBase64] = await Promise.all([
         getGraphAccessToken(),
-        downloadPdfAsBase64(pdfUrl),
+        resolvePdfBase64({ pdfBase64: providedPdfBase64, pdfUrl }),
     ]);
     const subject = `Comprobante de entrega - ${companyName}`;
     const body = {
@@ -169,10 +177,11 @@ async function sendDeliveryPdfViaGraph({ ccEmail, companyName, pdfFileName, pdfU
         throw new Error(text || "Microsoft Graph no pudo enviar el correo");
     }
 }
-async function sendDeliveryPdfEmail({ ccEmail, companyName, pdfFileName, pdfUrl, recipientEmail, recipientName, senderName, }) {
+async function sendDeliveryPdfEmail({ ccEmail, companyName, pdfBase64, pdfFileName, pdfUrl, recipientEmail, recipientName, senderName, }) {
     const input = {
         ccEmail,
         companyName,
+        pdfBase64,
         pdfFileName,
         pdfUrl,
         recipientEmail,

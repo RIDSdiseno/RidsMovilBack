@@ -8,8 +8,9 @@ type GraphTokenResponse = {
 type SendDeliveryPdfInput = {
   ccEmail: string;
   companyName: string;
+  pdfBase64?: string;
   pdfFileName: string;
-  pdfUrl: string;
+  pdfUrl?: string;
   recipientEmail: string;
   recipientName: string;
   senderName: string;
@@ -91,6 +92,14 @@ async function downloadPdfAsBase64(url: string) {
   return Buffer.from(arrayBuffer).toString("base64");
 }
 
+async function resolvePdfBase64(input: Pick<SendDeliveryPdfInput, "pdfBase64" | "pdfUrl">) {
+  if (input.pdfBase64) return input.pdfBase64;
+  if (!input.pdfUrl) {
+    throw new Error("No se recibio el PDF para adjuntar al correo");
+  }
+  return downloadPdfAsBase64(input.pdfUrl);
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")
@@ -120,7 +129,7 @@ async function sendDeliveryPdfViaSmtp(input: SendDeliveryPdfInput) {
   const smtp = getSmtpConfig();
   if (!smtp) return false;
 
-  const pdfBase64 = await downloadPdfAsBase64(input.pdfUrl);
+  const pdfBase64 = await resolvePdfBase64(input);
   const transporter = nodemailer.createTransport({
     host: smtp.host,
     port: smtp.port,
@@ -152,6 +161,7 @@ async function sendDeliveryPdfViaSmtp(input: SendDeliveryPdfInput) {
 async function sendDeliveryPdfViaGraph({
   ccEmail,
   companyName,
+  pdfBase64: providedPdfBase64,
   pdfFileName,
   pdfUrl,
   recipientEmail,
@@ -161,7 +171,7 @@ async function sendDeliveryPdfViaGraph({
   const { sender } = getGraphConfig();
   const [accessToken, pdfBase64] = await Promise.all([
     getGraphAccessToken(),
-    downloadPdfAsBase64(pdfUrl),
+    resolvePdfBase64({ pdfBase64: providedPdfBase64, pdfUrl }),
   ]);
 
   const subject = `Comprobante de entrega - ${companyName}`;
@@ -218,6 +228,7 @@ async function sendDeliveryPdfViaGraph({
 export async function sendDeliveryPdfEmail({
   ccEmail,
   companyName,
+  pdfBase64,
   pdfFileName,
   pdfUrl,
   recipientEmail,
@@ -227,6 +238,7 @@ export async function sendDeliveryPdfEmail({
   const input = {
     ccEmail,
     companyName,
+    pdfBase64,
     pdfFileName,
     pdfUrl,
     recipientEmail,

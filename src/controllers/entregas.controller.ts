@@ -139,6 +139,7 @@ export const enviarPdfEntrega = async (req: Request, res: Response) => {
     const tecnicoNombre = req.user?.nombre;
     const entregaId = Number(req.params.id);
     const receptorEmail = String(req.body?.receptorEmail || "").trim().toLowerCase();
+    const pdfBase64 = typeof req.body?.pdfBase64 === "string" ? req.body.pdfBase64.trim() : undefined;
 
     if (!tecnicoId || !tecnicoEmail) {
       return res.status(401).json({ error: "Técnico no autenticado" });
@@ -148,6 +149,9 @@ export const enviarPdfEntrega = async (req: Request, res: Response) => {
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(receptorEmail)) {
       return res.status(400).json({ error: "Correo del receptor inválido" });
+    }
+    if (pdfBase64 && !/^[A-Za-z0-9+/]+={0,2}$/.test(pdfBase64)) {
+      return res.status(400).json({ error: "PDF inválido para enviar por correo" });
     }
 
     const entrega = await prisma.entrega.findFirst({
@@ -178,6 +182,7 @@ export const enviarPdfEntrega = async (req: Request, res: Response) => {
     await sendDeliveryPdfEmail({
       ccEmail: tecnicoEmail,
       companyName: entrega.empresaNombre,
+      pdfBase64,
       pdfFileName,
       pdfUrl: pdf.url,
       recipientEmail: receptorEmail,

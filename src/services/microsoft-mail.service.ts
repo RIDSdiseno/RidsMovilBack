@@ -191,6 +191,7 @@ async function sendDeliveryPdfViaGraph({
   ccEmail,
   companyName,
   pdfBase64: providedPdfBase64,
+  pdfBuffer,
   pdfFileName,
   pdfUrl,
   recipientEmail,
@@ -200,7 +201,7 @@ async function sendDeliveryPdfViaGraph({
   const { sender } = getGraphConfig();
   const [accessToken, pdfBase64] = await Promise.all([
     getGraphAccessToken(),
-    resolvePdfBase64({ pdfBase64: providedPdfBase64, pdfUrl }),
+    resolvePdfBase64({ pdfBase64: providedPdfBase64, pdfBuffer, pdfUrl }),
   ]);
 
   const subject = `Comprobante de entrega - ${companyName}`;

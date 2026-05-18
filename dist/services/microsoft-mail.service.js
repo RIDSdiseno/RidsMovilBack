@@ -148,11 +148,11 @@ async function sendDeliveryPdfViaSmtp(input) {
     });
     return true;
 }
-async function sendDeliveryPdfViaGraph({ ccEmail, companyName, pdfBase64: providedPdfBase64, pdfFileName, pdfUrl, recipientEmail, recipientName, senderName, }) {
+async function sendDeliveryPdfViaGraph({ ccEmail, companyName, pdfBase64: providedPdfBase64, pdfBuffer, pdfFileName, pdfUrl, recipientEmail, recipientName, senderName, }) {
     const { sender } = getGraphConfig();
     const [accessToken, pdfBase64] = await Promise.all([
         getGraphAccessToken(),
-        resolvePdfBase64({ pdfBase64: providedPdfBase64, pdfUrl }),
+        resolvePdfBase64({ pdfBase64: providedPdfBase64, pdfBuffer, pdfUrl }),
     ]);
     const subject = `Comprobante de entrega - ${companyName}`;
     const body = {

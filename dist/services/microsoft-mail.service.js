@@ -68,6 +68,8 @@ async function downloadPdfAsBase64(url) {
     return Buffer.from(arrayBuffer).toString("base64");
 }
 async function resolvePdfBase64(input) {
+    if (input.pdfBuffer)
+        return input.pdfBuffer.toString("base64");
     if (input.pdfBase64)
         return input.pdfBase64;
     if (!input.pdfUrl) {
@@ -177,11 +179,12 @@ async function sendDeliveryPdfViaGraph({ ccEmail, companyName, pdfBase64: provid
         throw new Error(text || "Microsoft Graph no pudo enviar el correo");
     }
 }
-async function sendDeliveryPdfEmail({ ccEmail, companyName, pdfBase64, pdfFileName, pdfUrl, recipientEmail, recipientName, senderName, }) {
+async function sendDeliveryPdfEmail({ ccEmail, companyName, pdfBase64, pdfBuffer, pdfFileName, pdfUrl, recipientEmail, recipientName, senderName, }) {
     const input = {
         ccEmail,
         companyName,
         pdfBase64,
+        pdfBuffer,
         pdfFileName,
         pdfUrl,
         recipientEmail,

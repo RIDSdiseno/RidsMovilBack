@@ -5,14 +5,19 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
+const multer_1 = __importDefault(require("multer"));
 const auth_middleware_js_1 = require("../middlewares/auth.middleware.js");
 const entregas_controller_js_1 = require("../controllers/entregas.controller.js");
 const evidencias_route_js_1 = __importDefault(require("./evidencias.route.js"));
 const r = (0, express_1.Router)();
+const upload = (0, multer_1.default)({
+    limits: { fileSize: 8 * 1024 * 1024 },
+    storage: multer_1.default.memoryStorage(),
+});
 r.use(auth_middleware_js_1.authGuard);
 r.get("/", entregas_controller_js_1.listarEntregas);
 r.post("/", entregas_controller_js_1.crearEntrega);
 r.get("/:id", entregas_controller_js_1.obtenerEntrega);
-r.post("/:id/enviar-pdf", entregas_controller_js_1.enviarPdfEntrega);
+r.post("/:id/enviar-pdf", upload.single("pdf"), entregas_controller_js_1.enviarPdfEntrega);
 r.use("/:id/evidencias", evidencias_route_js_1.default);
 exports.default = r;

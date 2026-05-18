@@ -1,17 +1,22 @@
 // src/routes/entregas.route.ts
 
 import { Router } from "express";
+import multer from "multer";
 import { authGuard } from "../middlewares/auth.middleware.js";
 import { crearEntrega, enviarPdfEntrega, obtenerEntrega, listarEntregas, } from "../controllers/entregas.controller.js";
 import evidenciasRoutes from "./evidencias.route.js";
 
 const r = Router();
+const upload = multer({
+  limits: { fileSize: 8 * 1024 * 1024 },
+  storage: multer.memoryStorage(),
+});
 
 r.use(authGuard);
 r.get("/", listarEntregas);
 r.post("/", crearEntrega);
 r.get("/:id", obtenerEntrega);
-r.post("/:id/enviar-pdf", enviarPdfEntrega);
+r.post("/:id/enviar-pdf", upload.single("pdf"), enviarPdfEntrega);
 r.use("/:id/evidencias", evidenciasRoutes);
 
 export default r;

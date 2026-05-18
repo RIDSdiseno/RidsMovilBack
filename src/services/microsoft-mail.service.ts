@@ -9,6 +9,7 @@ type SendDeliveryPdfInput = {
   ccEmail: string;
   companyName: string;
   pdfBase64?: string;
+  pdfBuffer?: Buffer;
   pdfFileName: string;
   pdfUrl?: string;
   recipientEmail: string;
@@ -92,7 +93,8 @@ async function downloadPdfAsBase64(url: string) {
   return Buffer.from(arrayBuffer).toString("base64");
 }
 
-async function resolvePdfBase64(input: Pick<SendDeliveryPdfInput, "pdfBase64" | "pdfUrl">) {
+async function resolvePdfBase64(input: Pick<SendDeliveryPdfInput, "pdfBase64" | "pdfBuffer" | "pdfUrl">) {
+  if (input.pdfBuffer) return input.pdfBuffer.toString("base64");
   if (input.pdfBase64) return input.pdfBase64;
   if (!input.pdfUrl) {
     throw new Error("No se recibio el PDF para adjuntar al correo");
@@ -229,6 +231,7 @@ export async function sendDeliveryPdfEmail({
   ccEmail,
   companyName,
   pdfBase64,
+  pdfBuffer,
   pdfFileName,
   pdfUrl,
   recipientEmail,
@@ -239,6 +242,7 @@ export async function sendDeliveryPdfEmail({
     ccEmail,
     companyName,
     pdfBase64,
+    pdfBuffer,
     pdfFileName,
     pdfUrl,
     recipientEmail,

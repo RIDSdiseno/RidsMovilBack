@@ -169,18 +169,21 @@ const enviarPdfEntrega = async (req, res) => {
         const pdfFileName = publicIdName.toLowerCase().endsWith(".pdf")
             ? publicIdName
             : `${publicIdName}.pdf`;
-        await (0, microsoft_mail_service_js_1.sendDeliveryPdfEmail)({
+        const pdfBuffer = pdfFile?.buffer ? Buffer.from(pdfFile.buffer) : undefined;
+        void (0, microsoft_mail_service_js_1.sendDeliveryPdfEmail)({
             ccEmail: tecnicoEmail,
             companyName: entrega.empresaNombre,
             pdfBase64,
-            pdfBuffer: pdfFile?.buffer,
+            pdfBuffer,
             pdfFileName,
             pdfUrl: pdf.url,
             recipientEmail: receptorEmail,
             recipientName: entrega.receptorNombre,
             senderName: tecnicoNombre || tecnicoEmail,
+        }).catch((error) => {
+            console.error("Error enviando PDF de entrega en segundo plano:", error);
         });
-        return res.json({ ok: true });
+        return res.status(202).json({ emailQueued: true, ok: true });
     }
     catch (err) {
         console.error("Error al enviar PDF de entrega:", err);

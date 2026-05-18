@@ -183,19 +183,23 @@ export const enviarPdfEntrega = async (req: Request, res: Response) => {
       ? publicIdName
       : `${publicIdName}.pdf`;
 
-    await sendDeliveryPdfEmail({
+    const pdfBuffer = pdfFile?.buffer ? Buffer.from(pdfFile.buffer) : undefined;
+
+    void sendDeliveryPdfEmail({
       ccEmail: tecnicoEmail,
       companyName: entrega.empresaNombre,
       pdfBase64,
-      pdfBuffer: pdfFile?.buffer,
+      pdfBuffer,
       pdfFileName,
       pdfUrl: pdf.url,
       recipientEmail: receptorEmail,
       recipientName: entrega.receptorNombre,
       senderName: tecnicoNombre || tecnicoEmail,
+    }).catch((error) => {
+      console.error("Error enviando PDF de entrega en segundo plano:", error);
     });
 
-    return res.json({ ok: true });
+    return res.status(202).json({ emailQueued: true, ok: true });
   } catch (err) {
     console.error("Error al enviar PDF de entrega:", err);
     const message = err instanceof Error ? err.message : "Error interno al enviar el correo";

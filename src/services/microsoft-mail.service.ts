@@ -8,6 +8,7 @@ type GraphTokenResponse = {
 };
 
 type SendDeliveryPdfInput = {
+  brand?: "rids" | "econnet";
   ccEmail: string;
   companyName: string;
   pdfBase64?: string;
@@ -21,8 +22,8 @@ type SendDeliveryPdfInput = {
 
 const GRAPH_SCOPE = "https://graph.microsoft.com/.default";
 const MAIL_TIMEOUT_MS = 15000;
-const LOGO_CONTENT_ID = "rids-logo";
-let cachedLogoBase64: string | null = null;
+const LOGO_CONTENT_ID = "brand-logo";
+const logoCache = new Map<string, string>();
 
 function getOptionalEnv(...keys: string[]) {
   for (const key of keys) {
@@ -139,30 +140,52 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#39;");
 }
 
-function getLogoBase64() {
-  if (cachedLogoBase64 !== null) return cachedLogoBase64;
-
-  const logoPath = path.resolve(process.cwd(), "assets/images/logo-rids.png");
-  if (!fs.existsSync(logoPath)) {
-    cachedLogoBase64 = "";
-    return cachedLogoBase64;
+function getBrandConfig(brand?: SendDeliveryPdfInput["brand"]) {
+  if (brand === "econnet") {
+    return {
+      accentColor: "#1f7a3b",
+      alt: "Econnet",
+      logoFile: "logo-econnet.jpeg",
+      name: "Econnet",
+    };
   }
 
-  cachedLogoBase64 = fs.readFileSync(logoPath).toString("base64");
-  return cachedLogoBase64;
+  return {
+    accentColor: "#155fa0",
+    alt: "RIDS",
+    logoFile: "logo-rids.png",
+    name: "RIDS",
+  };
+}
+
+function getLogoBase64(brand?: SendDeliveryPdfInput["brand"]) {
+  const brandConfig = getBrandConfig(brand);
+  const cached = logoCache.get(brandConfig.logoFile);
+  if (cached !== undefined) return cached;
+
+  const logoPath = path.resolve(process.cwd(), "assets/images", brandConfig.logoFile);
+  if (!fs.existsSync(logoPath)) {
+    logoCache.set(brandConfig.logoFile, "");
+    return "";
+  }
+
+  const logoBase64 = fs.readFileSync(logoPath).toString("base64");
+  logoCache.set(brandConfig.logoFile, logoBase64);
+  return logoBase64;
 }
 
 function buildDeliveryEmailHtml({
+  brand,
   companyName,
   recipientName,
-  senderName,
-}: Pick<SendDeliveryPdfInput, "companyName" | "recipientName" | "senderName">) {
+}: Pick<SendDeliveryPdfInput, "brand" | "companyName" | "recipientName">) {
+  const brandConfig = getBrandConfig(brand);
   const safeCompanyName = escapeHtml(companyName);
   const safeRecipientName = escapeHtml(recipientName || "");
-  const safeSenderName = escapeHtml(senderName || "Equipo RIDS");
-  const logoMarkup = getLogoBase64()
-    ? `<img src="cid:${LOGO_CONTENT_ID}" width="116" alt="RIDS" style="display:block;border:0;outline:none;text-decoration:none;max-width:116px;height:auto;" />`
-    : `<strong style="font-size:24px;letter-spacing:.04em;color:#155fa0;">RIDS</strong>`;
+  const logoBase64 = getLogoBase64(brand);
+  const logoMarkup = logoBase64
+    ? `<img src="cid:${LOGO_CONTENT_ID}" width="132" alt="${brandConfig.alt}" style="display:block;border:0;outline:none;text-decoration:none;max-width:132px;height:auto;" />`
+    : `<strong style="font-size:24px;letter-spacing:.04em;color:${brandConfig.accentColor};">${brandConfig.name}</strong>`;
 
   return `
     <!doctype html>
@@ -173,7 +196,7 @@ function buildDeliveryEmailHtml({
             <td align="center">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#ffffff;border:1px solid #e5eaf2;border-radius:18px;overflow:hidden;">
                 <tr>
-                  <td style="background:#0f5f9f;padding:24px 28px;">
+                  <td style="background:${brandConfig.accentColor};padding:24px 28px;">
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                       <tr>
                         <td>${logoMarkup}</td>
@@ -193,7 +216,7 @@ function buildDeliveryEmailHtml({
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f8fbff;border:1px solid #dbeafe;border-radius:14px;">
                       <tr>
                         <td style="padding:16px 18px;">
-                          <p style="margin:0 0 6px;color:#155fa0;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;">Empresa</p>
+                          <p style="margin:0 0 6px;color:${brandConfig.accentColor};font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;">Empresa</p>
                           <p style="margin:0;color:#101828;font-size:18px;font-weight:800;">${safeCompanyName}</p>
                         </td>
                       </tr>
@@ -203,12 +226,12 @@ function buildDeliveryEmailHtml({
                 <tr>
                   <td style="padding:0 28px 28px;">
                     <p style="margin:0;color:#475467;font-size:14px;line-height:1.7;">El documento adjunto contiene el detalle de la evidencia, firma de recepción y fecha del registro.</p>
-                    <p style="margin:22px 0 0;color:#101828;font-size:14px;line-height:1.7;">Saludos,<br/><strong>${safeSenderName}</strong></p>
+                    <p style="margin:22px 0 0;color:#101828;font-size:14px;line-height:1.7;"><strong>Saludos Cordiales,</strong><br/>${brandConfig.name}</p>
                   </td>
                 </tr>
                 <tr>
                   <td style="background:#f8fafc;border-top:1px solid #e5eaf2;padding:16px 28px;">
-                    <p style="margin:0;color:#667085;font-size:12px;line-height:1.6;">Este correo fue generado automáticamente por RIDS. Si tienes dudas, responde a este mensaje o contacta a soporte@rids.cl.</p>
+                    <p style="margin:0;color:#667085;font-size:12px;line-height:1.6;">Este correo fue generado automáticamente por ${brandConfig.name}.</p>
                   </td>
                 </tr>
               </table>
@@ -245,13 +268,13 @@ async function sendDeliveryPdfViaSmtp(input: SendDeliveryPdfInput) {
     subject: `Comprobante de entrega - ${input.companyName}`,
     html: buildDeliveryEmailHtml(input),
     attachments: [
-      ...(getLogoBase64()
+      ...(getLogoBase64(input.brand)
         ? [
             {
               cid: LOGO_CONTENT_ID,
-              content: Buffer.from(getLogoBase64(), "base64"),
-              contentType: "image/png",
-              filename: "logo-rids.png",
+              content: Buffer.from(getLogoBase64(input.brand), "base64"),
+              contentType: input.brand === "econnet" ? "image/jpeg" : "image/png",
+              filename: getBrandConfig(input.brand).logoFile,
             },
           ]
         : []),
@@ -267,6 +290,7 @@ async function sendDeliveryPdfViaSmtp(input: SendDeliveryPdfInput) {
 }
 
 async function sendDeliveryPdfViaGraph({
+  brand,
   ccEmail,
   companyName,
   pdfBase64: providedPdfBase64,
@@ -289,7 +313,7 @@ async function sendDeliveryPdfViaGraph({
       subject,
       body: {
         contentType: "HTML",
-        content: buildDeliveryEmailHtml({ companyName, recipientName, senderName }),
+        content: buildDeliveryEmailHtml({ brand, companyName, recipientName }),
       },
       toRecipients: [
         {
@@ -308,15 +332,15 @@ async function sendDeliveryPdfViaGraph({
         },
       ],
       attachments: [
-        ...(getLogoBase64()
+        ...(getLogoBase64(brand)
           ? [
               {
                 "@odata.type": "#microsoft.graph.fileAttachment",
-                contentBytes: getLogoBase64(),
+                contentBytes: getLogoBase64(brand),
                 contentId: LOGO_CONTENT_ID,
-                contentType: "image/png",
+                contentType: brand === "econnet" ? "image/jpeg" : "image/png",
                 isInline: true,
-                name: "logo-rids.png",
+                name: getBrandConfig(brand).logoFile,
               },
             ]
           : []),
@@ -347,6 +371,7 @@ async function sendDeliveryPdfViaGraph({
 }
 
 export async function sendDeliveryPdfEmail({
+  brand,
   ccEmail,
   companyName,
   pdfBase64,
@@ -359,6 +384,7 @@ export async function sendDeliveryPdfEmail({
 }: SendDeliveryPdfInput) {
   const input = {
     ccEmail,
+    brand,
     companyName,
     pdfBase64,
     pdfBuffer,

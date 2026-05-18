@@ -940,6 +940,7 @@ export const getSolicitantes = async (req: Request, res: Response) => {
         id_solicitante: true,
         nombre: true,
         email: true,
+        rut: true,
         empresaId: true,
       },
     });

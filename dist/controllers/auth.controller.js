@@ -801,6 +801,7 @@ const getSolicitantes = async (req, res) => {
                 id_solicitante: true,
                 nombre: true,
                 email: true,
+                rut: true,
                 empresaId: true,
             },
         });

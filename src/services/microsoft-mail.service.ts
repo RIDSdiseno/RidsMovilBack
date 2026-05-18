@@ -1,4 +1,6 @@
 import nodemailer from "nodemailer";
+import fs from "node:fs";
+import path from "node:path";
 
 type GraphTokenResponse = {
   access_token?: string;
@@ -19,6 +21,8 @@ type SendDeliveryPdfInput = {
 
 const GRAPH_SCOPE = "https://graph.microsoft.com/.default";
 const MAIL_TIMEOUT_MS = 15000;
+const LOGO_CONTENT_ID = "rids-logo";
+let cachedLogoBase64: string | null = null;
 
 function getOptionalEnv(...keys: string[]) {
   for (const key of keys) {
@@ -135,6 +139,19 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#39;");
 }
 
+function getLogoBase64() {
+  if (cachedLogoBase64 !== null) return cachedLogoBase64;
+
+  const logoPath = path.resolve(process.cwd(), "assets/images/logo-rids.png");
+  if (!fs.existsSync(logoPath)) {
+    cachedLogoBase64 = "";
+    return cachedLogoBase64;
+  }
+
+  cachedLogoBase64 = fs.readFileSync(logoPath).toString("base64");
+  return cachedLogoBase64;
+}
+
 function buildDeliveryEmailHtml({
   companyName,
   recipientName,
@@ -143,11 +160,63 @@ function buildDeliveryEmailHtml({
   const safeCompanyName = escapeHtml(companyName);
   const safeRecipientName = escapeHtml(recipientName || "");
   const safeSenderName = escapeHtml(senderName || "Equipo RIDS");
+  const logoMarkup = getLogoBase64()
+    ? `<img src="cid:${LOGO_CONTENT_ID}" width="116" alt="RIDS" style="display:block;border:0;outline:none;text-decoration:none;max-width:116px;height:auto;" />`
+    : `<strong style="font-size:24px;letter-spacing:.04em;color:#155fa0;">RIDS</strong>`;
 
   return `
-    <p>Hola ${safeRecipientName},</p>
-    <p>Adjuntamos el comprobante PDF de la entrega realizada para <strong>${safeCompanyName}</strong>.</p>
-    <p>Saludos,<br/>${safeSenderName}</p>
+    <!doctype html>
+    <html lang="es">
+      <body style="margin:0;padding:0;background:#f3f6fb;font-family:Arial,Helvetica,sans-serif;color:#101828;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f6fb;padding:28px 12px;">
+          <tr>
+            <td align="center">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#ffffff;border:1px solid #e5eaf2;border-radius:18px;overflow:hidden;">
+                <tr>
+                  <td style="background:#0f5f9f;padding:24px 28px;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td>${logoMarkup}</td>
+                        <td align="right" style="font-size:12px;font-weight:700;color:#d9ecff;text-transform:uppercase;letter-spacing:.08em;">Comprobante de entrega</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:30px 28px 10px;">
+                    <h1 style="margin:0;color:#101828;font-size:24px;line-height:1.25;font-weight:800;">Entrega registrada correctamente</h1>
+                    <p style="margin:14px 0 0;color:#475467;font-size:15px;line-height:1.7;">Hola ${safeRecipientName || "equipo"}, adjuntamos el comprobante PDF de la entrega realizada para <strong style="color:#101828;">${safeCompanyName}</strong>.</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:18px 28px;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f8fbff;border:1px solid #dbeafe;border-radius:14px;">
+                      <tr>
+                        <td style="padding:16px 18px;">
+                          <p style="margin:0 0 6px;color:#155fa0;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;">Empresa</p>
+                          <p style="margin:0;color:#101828;font-size:18px;font-weight:800;">${safeCompanyName}</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:0 28px 28px;">
+                    <p style="margin:0;color:#475467;font-size:14px;line-height:1.7;">El documento adjunto contiene el detalle de la evidencia, firma de recepción y fecha del registro.</p>
+                    <p style="margin:22px 0 0;color:#101828;font-size:14px;line-height:1.7;">Saludos,<br/><strong>${safeSenderName}</strong></p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="background:#f8fafc;border-top:1px solid #e5eaf2;padding:16px 28px;">
+                    <p style="margin:0;color:#667085;font-size:12px;line-height:1.6;">Este correo fue generado automáticamente por RIDS. Si tienes dudas, responde a este mensaje o contacta a soporte@rids.cl.</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+    </html>
   `;
 }
 
@@ -176,6 +245,16 @@ async function sendDeliveryPdfViaSmtp(input: SendDeliveryPdfInput) {
     subject: `Comprobante de entrega - ${input.companyName}`,
     html: buildDeliveryEmailHtml(input),
     attachments: [
+      ...(getLogoBase64()
+        ? [
+            {
+              cid: LOGO_CONTENT_ID,
+              content: Buffer.from(getLogoBase64(), "base64"),
+              contentType: "image/png",
+              filename: "logo-rids.png",
+            },
+          ]
+        : []),
       {
         filename: input.pdfFileName,
         content: Buffer.from(pdfBase64, "base64"),
@@ -229,6 +308,18 @@ async function sendDeliveryPdfViaGraph({
         },
       ],
       attachments: [
+        ...(getLogoBase64()
+          ? [
+              {
+                "@odata.type": "#microsoft.graph.fileAttachment",
+                contentBytes: getLogoBase64(),
+                contentId: LOGO_CONTENT_ID,
+                contentType: "image/png",
+                isInline: true,
+                name: "logo-rids.png",
+              },
+            ]
+          : []),
         {
           "@odata.type": "#microsoft.graph.fileAttachment",
           name: pdfFileName,

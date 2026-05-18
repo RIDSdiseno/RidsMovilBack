@@ -1,3 +1,5 @@
+import nodemailer from "nodemailer";
+
 type GraphTokenResponse = {
   access_token?: string;
   error_description?: string;
@@ -15,11 +17,19 @@ type SendDeliveryPdfInput = {
 
 const GRAPH_SCOPE = "https://graph.microsoft.com/.default";
 
+function getOptionalEnv(...keys: string[]) {
+  for (const key of keys) {
+    const value = process.env[key]?.trim();
+    if (value) return value;
+  }
+  return undefined;
+}
+
 function getGraphConfig() {
-  const tenantId = process.env.MICROSOFT_TENANT_ID;
-  const clientId = process.env.MICROSOFT_CLIENT_ID;
-  const clientSecret = process.env.MICROSOFT_CLIENT_SECRET;
-  const sender = process.env.MICROSOFT_MAIL_SENDER || process.env.MICROSOFT_FROM_EMAIL;
+  const tenantId = getOptionalEnv("MICROSOFT_TENANT_ID", "MS_TENANT_ID");
+  const clientId = getOptionalEnv("MICROSOFT_CLIENT_ID", "MS_CLIENT_ID", "CLIENT_ID");
+  const clientSecret = getOptionalEnv("MICROSOFT_CLIENT_SECRET", "MS_CLIENT_SECRET", "CLIENT_SECRET");
+  const sender = getOptionalEnv("MICROSOFT_MAIL_SENDER", "MICROSOFT_FROM_EMAIL", "EMAIL_USER");
 
   if (!tenantId || !clientId || !clientSecret || !sender) {
     throw new Error(
@@ -28,6 +38,24 @@ function getGraphConfig() {
   }
 
   return { clientId, clientSecret, sender, tenantId };
+}
+
+function getSmtpConfig() {
+  const host = getOptionalEnv("SMTP_HOST");
+  const portRaw = getOptionalEnv("SMTP_PORT");
+  const user = getOptionalEnv("SMTP_USER", "EMAIL_USER", "MAIL_USER");
+  const pass = getOptionalEnv("SMTP_PASSWORD", "SMTP_PASS", "EMAIL_PASSWORD", "MAIL_PASS");
+
+  if (!host || !user || !pass) return null;
+
+  const port = Number(portRaw || 587);
+  return {
+    host,
+    pass,
+    port,
+    secure: port === 465,
+    user,
+  };
 }
 
 async function getGraphAccessToken() {
@@ -63,7 +91,65 @@ async function downloadPdfAsBase64(url: string) {
   return Buffer.from(arrayBuffer).toString("base64");
 }
 
-export async function sendDeliveryPdfEmail({
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function buildDeliveryEmailHtml({
+  companyName,
+  recipientName,
+  senderName,
+}: Pick<SendDeliveryPdfInput, "companyName" | "recipientName" | "senderName">) {
+  const safeCompanyName = escapeHtml(companyName);
+  const safeRecipientName = escapeHtml(recipientName || "");
+  const safeSenderName = escapeHtml(senderName || "Equipo RIDS");
+
+  return `
+    <p>Hola ${safeRecipientName},</p>
+    <p>Adjuntamos el comprobante PDF de la entrega realizada para <strong>${safeCompanyName}</strong>.</p>
+    <p>Saludos,<br/>${safeSenderName}</p>
+  `;
+}
+
+async function sendDeliveryPdfViaSmtp(input: SendDeliveryPdfInput) {
+  const smtp = getSmtpConfig();
+  if (!smtp) return false;
+
+  const pdfBase64 = await downloadPdfAsBase64(input.pdfUrl);
+  const transporter = nodemailer.createTransport({
+    host: smtp.host,
+    port: smtp.port,
+    secure: smtp.secure,
+    auth: {
+      user: smtp.user,
+      pass: smtp.pass,
+    },
+  });
+
+  await transporter.sendMail({
+    from: `"Soporte RIDS" <${smtp.user}>`,
+    to: input.recipientEmail,
+    cc: input.ccEmail,
+    subject: `Comprobante de entrega - ${input.companyName}`,
+    html: buildDeliveryEmailHtml(input),
+    attachments: [
+      {
+        filename: input.pdfFileName,
+        content: Buffer.from(pdfBase64, "base64"),
+        contentType: "application/pdf",
+      },
+    ],
+  });
+
+  return true;
+}
+
+async function sendDeliveryPdfViaGraph({
   ccEmail,
   companyName,
   pdfFileName,
@@ -84,11 +170,7 @@ export async function sendDeliveryPdfEmail({
       subject,
       body: {
         contentType: "HTML",
-        content: `
-          <p>Hola ${recipientName || ""},</p>
-          <p>Adjuntamos el comprobante PDF de la entrega realizada para <strong>${companyName}</strong>.</p>
-          <p>Saludos,<br/>${senderName || "Equipo RIDS"}</p>
-        `,
+        content: buildDeliveryEmailHtml({ companyName, recipientName, senderName }),
       },
       toRecipients: [
         {
@@ -130,5 +212,43 @@ export async function sendDeliveryPdfEmail({
   if (!response.ok) {
     const text = await response.text();
     throw new Error(text || "Microsoft Graph no pudo enviar el correo");
+  }
+}
+
+export async function sendDeliveryPdfEmail({
+  ccEmail,
+  companyName,
+  pdfFileName,
+  pdfUrl,
+  recipientEmail,
+  recipientName,
+  senderName,
+}: SendDeliveryPdfInput) {
+  const input = {
+    ccEmail,
+    companyName,
+    pdfFileName,
+    pdfUrl,
+    recipientEmail,
+    recipientName,
+    senderName,
+  };
+
+  let smtpError: unknown;
+  try {
+    const sentBySmtp = await sendDeliveryPdfViaSmtp(input);
+    if (sentBySmtp) return;
+  } catch (error) {
+    smtpError = error;
+  }
+
+  try {
+    await sendDeliveryPdfViaGraph(input);
+  } catch (graphError) {
+    if (!smtpError) throw graphError;
+
+    const smtpMessage = smtpError instanceof Error ? smtpError.message : "SMTP no pudo enviar el correo";
+    const graphMessage = graphError instanceof Error ? graphError.message : "Graph no pudo enviar el correo";
+    throw new Error(`No se pudo enviar el correo. SMTP: ${smtpMessage}. Graph: ${graphMessage}`);
   }
 }

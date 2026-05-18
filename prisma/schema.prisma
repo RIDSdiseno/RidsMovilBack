@@ -97,22 +97,22 @@ model FichaTecnicaEmpresa {
   id                      Int       @id @default(autoincrement())
   empresaId               Int       @unique
   /// *
-  ///    * ===================== Técnicos / Visitas =====================
+  /// * ===================== Técnicos / Visitas =====================
   tecnicoPrincipal        String?
   tecnicosRespaldo        String?
   observacionesVisita     String?
   /// *
-  ///    * ===================== Software y sistemas =====================
+  /// * ===================== Software y sistemas =====================
   sistemasOperativos      String?
   /// *
-  ///    * ===================== Redes y conectividad =====================
+  /// * ===================== Redes y conectividad =====================
   proveedorInternet       String?
   /// *
-  ///    * ===================== Servicios digitales =====================
+  /// * ===================== Servicios digitales =====================
   dominioWeb              String?
   redesSociales           String?
   /// *
-  ///    * ===================== Respaldo y seguridad =====================
+  /// * ===================== Respaldo y seguridad =====================
   metodoRespaldo          String?
   frecuenciaRespaldo      String?
   responsableRespaldo     String?
@@ -130,7 +130,7 @@ model FichaTecnicaEmpresa {
   licenciasVigentes       String?
   otrosEquipos            String?
   /// *
-  ///    * ===================== Equipos y hardware =====================
+  /// * ===================== Equipos y hardware =====================
   pcsNotebooks            String?
   proximaVisitaProgramada DateTime?
   routersSwitches         String?
@@ -194,6 +194,7 @@ model Solicitante {
   microsoftUserId String?                 @unique
   accountType     AccountType?
   deletedAt       DateTime?
+  rut             String?                 @unique
   empresa         Empresa                 @relation(fields: [empresaId], references: [id_empresa])
   equipos         Equipo[]
   visitas         Visita[]                @relation("Solicitante_Visita")
@@ -359,6 +360,7 @@ model Equipo {
   empresaId              Int?
   origenCotizacionId     Int?
   productoId             Int?                    @unique
+  estado                 EstadoEquipo            @default(ACTIVO)
   solicitante            Solicitante?            @relation(fields: [idSolicitante], references: [id_solicitante])
   equipo                 DetalleEquipo[]
   adicionales            EquipoAdicional[]
@@ -369,6 +371,7 @@ model Equipo {
   @@index([empresaId])
   @@index([origenCotizacionId])
   @@index([productoId])
+  @@index([estado])
 }
 
 model EquipoAdicional {
@@ -1423,4 +1426,11 @@ enum TicketStatus {
 enum TipoAgenda {
   SEMANA
   SABADO
+}
+
+enum EstadoEquipo {
+  ACTIVO
+  EN_STOCK
+  DADO_DE_BAJA
+  EN_TALLER
 }

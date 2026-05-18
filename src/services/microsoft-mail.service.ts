@@ -143,8 +143,9 @@ function escapeHtml(value: string) {
 function getBrandConfig(brand?: SendDeliveryPdfInput["brand"]) {
   if (brand === "econnet") {
     return {
-      accentColor: "#1f7a3b",
+      accentColor: "#111827",
       alt: "Econnet",
+      labelColor: "#6B7280",
       logoFile: "logo-econnet.png",
       name: "Econnet",
     };
@@ -153,6 +154,7 @@ function getBrandConfig(brand?: SendDeliveryPdfInput["brand"]) {
   return {
     accentColor: "#155fa0",
     alt: "RIDS",
+    labelColor: "#155fa0",
     logoFile: "logo-rids.png",
     name: "RIDS",
   };
@@ -216,7 +218,7 @@ function buildDeliveryEmailHtml({
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f8fbff;border:1px solid #dbeafe;border-radius:14px;">
                       <tr>
                         <td style="padding:16px 18px;">
-                          <p style="margin:0 0 6px;color:${brandConfig.accentColor};font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;">Empresa</p>
+                          <p style="margin:0 0 6px;color:${brandConfig.labelColor};font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;">Empresa</p>
                           <p style="margin:0;color:#101828;font-size:18px;font-weight:800;">${safeCompanyName}</p>
                         </td>
                       </tr>

@@ -13,6 +13,8 @@ r.post("/logout", auth_controller_1.logout);
 r.post("/refresh", auth_controller_1.refresh);
 r.get("/usuarios", auth_controller_1.getAllUsers);
 r.get("/clientes", auth_controller_1.getAllClientes);
+r.get("/clientes/econnet", auth_middleware_1.authGuard, auth_controller_1.getClientesEconnet);
+r.post("/clientes/econnet", auth_middleware_1.authGuard, auth_controller_1.createClienteEconnet);
 r.delete("/deletecliente/:id", auth_controller_1.deleteCliente);
 r.get("/historial/:id", auth_middleware_1.authGuard, auth_controller_1.obtenerHistorialPorTecnico);
 //para cargar "masivamente" las empresas

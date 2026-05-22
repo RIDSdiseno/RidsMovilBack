@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.obtenerEmpresasConSucursales = exports.obtenerSucursalesPorEmpresa = exports.crearSucursal = exports.createSolicitante = exports.createEquipo = exports.createManyDetalle = exports.cambiarSolicitanteEquipo = exports.actualizarEquipo = exports.getAllEquipos = exports.updateSolicitante = exports.getSolicitantes = exports.createManyEquipos = exports.createManySolicitante = exports.obtenerHistorialPorTecnico = exports.completarVisita = exports.crearVisita = exports.createManyempresa = exports.refresh = exports.logout = exports.getAllUsers = exports.loginMicrosoft = exports.login = exports.createCliente = exports.deleteCliente = exports.getAllClientes = exports.registerUser = void 0;
+exports.obtenerEmpresasConSucursales = exports.obtenerSucursalesPorEmpresa = exports.crearSucursal = exports.createSolicitante = exports.createEquipo = exports.createManyDetalle = exports.cambiarSolicitanteEquipo = exports.actualizarEquipo = exports.getAllEquipos = exports.updateSolicitante = exports.getSolicitantes = exports.createManyEquipos = exports.createManySolicitante = exports.obtenerHistorialPorTecnico = exports.completarVisita = exports.crearVisita = exports.createManyempresa = exports.refresh = exports.logout = exports.getAllUsers = exports.loginMicrosoft = exports.login = exports.createCliente = exports.deleteCliente = exports.createClienteEconnet = exports.getClientesEconnet = exports.getAllClientes = exports.registerUser = void 0;
 const client_1 = require("@prisma/client");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
@@ -190,6 +190,112 @@ const getAllClientes = async (req, res) => {
     }
 };
 exports.getAllClientes = getAllClientes;
+function normalizeRutGestioo(value) {
+    if (!value)
+        return null;
+    const clean = value.replace(/[^0-9kK]/g, "").toUpperCase();
+    if (!clean)
+        return null;
+    if (clean.length <= 1)
+        return clean;
+    return `${clean.slice(0, -1)}-${clean.slice(-1)}`;
+}
+function rutKey(value) {
+    return (value ?? "").replace(/[^0-9kK]/g, "").toUpperCase();
+}
+function mapEntidadEconnetToCliente(entidad) {
+    return {
+        id_empresa: entidad.id,
+        nombre: entidad.nombre,
+        razonSocial: entidad.nombre,
+        detalleEmpresa: {
+            rut: entidad.rut,
+        },
+        correo: entidad.correo,
+        telefono: entidad.telefono,
+        direccion: entidad.direccion,
+        origen: "ECONNET",
+        tieneSucursales: false,
+    };
+}
+const getClientesEconnet = async (_req, res) => {
+    try {
+        const entidades = await prisma.entidadGestioo.findMany({
+            where: {
+                origen: client_1.OrigenGestioo.ECONNET,
+                tipo: client_1.TipoEntidadGestioo.EMPRESA,
+            },
+            orderBy: { nombre: "asc" },
+            select: {
+                id: true,
+                nombre: true,
+                rut: true,
+                correo: true,
+                telefono: true,
+                direccion: true,
+            },
+        });
+        return res.json(entidades.map(mapEntidadEconnetToCliente));
+    }
+    catch (error) {
+        console.error("Error al obtener clientes Econnet:", error);
+        return res.status(500).json({ error: "Error interno" });
+    }
+};
+exports.getClientesEconnet = getClientesEconnet;
+const createClienteEconnet = async (req, res) => {
+    try {
+        const nombre = String(req.body?.nombre || "").trim().replace(/\s+/g, " ").toUpperCase();
+        const rut = normalizeRutGestioo(req.body?.rut);
+        const correo = String(req.body?.correo || "").trim().toLowerCase() || null;
+        const telefono = String(req.body?.telefono || "").trim() || null;
+        const direccion = String(req.body?.direccion || "").trim() || null;
+        if (!nombre) {
+            return res.status(400).json({ error: "El nombre de la empresa es obligatorio" });
+        }
+        if (correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+            return res.status(400).json({ error: "Correo inválido" });
+        }
+        if (rut) {
+            const entidadesConRut = await prisma.entidadGestioo.findMany({
+                where: { rut: { not: null } },
+                select: { id: true, nombre: true, rut: true },
+            });
+            const existente = entidadesConRut.find((entidad) => rutKey(entidad.rut) === rutKey(rut));
+            if (existente) {
+                return res.status(409).json({ error: `Ya existe una empresa con este RUT: ${existente.nombre}` });
+            }
+        }
+        const entidad = await prisma.entidadGestioo.create({
+            data: {
+                nombre,
+                rut,
+                correo,
+                telefono,
+                direccion,
+                tipo: client_1.TipoEntidadGestioo.EMPRESA,
+                origen: client_1.OrigenGestioo.ECONNET,
+            },
+            select: {
+                id: true,
+                nombre: true,
+                rut: true,
+                correo: true,
+                telefono: true,
+                direccion: true,
+            },
+        });
+        return res.status(201).json(mapEntidadEconnetToCliente(entidad));
+    }
+    catch (error) {
+        if (error.code === "P2002") {
+            return res.status(409).json({ error: "El RUT ya está registrado" });
+        }
+        console.error("Error al crear cliente Econnet:", error);
+        return res.status(500).json({ error: "Error interno" });
+    }
+};
+exports.createClienteEconnet = createClienteEconnet;
 //DELETE /Auth/deleteCliente
 const deleteCliente = async (req, res) => {
     const { id } = req.body; // Ahora lees del body

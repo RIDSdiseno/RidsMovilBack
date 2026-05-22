@@ -9,6 +9,7 @@ import {
     createManyEquipos,
     getSolicitantes,
     getAllEquipos,
+    getClientesEconnet,
     updateSolicitante,
     actualizarEquipo,
     createManyDetalle,
@@ -17,7 +18,8 @@ import {
     crearSucursal,
     obtenerSucursalesPorEmpresa,
     obtenerEmpresasConSucursales,
-    cambiarSolicitanteEquipo
+    cambiarSolicitanteEquipo,
+    createClienteEconnet
 } from "../controllers/auth.controller";
 import { authGuard } from "../middlewares/auth.middleware";
 
@@ -33,6 +35,8 @@ r.post("/logout", logout)
 r.post("/refresh", refresh);
 r.get("/usuarios", getAllUsers);
 r.get("/clientes", getAllClientes)
+r.get("/clientes/econnet", authGuard, getClientesEconnet)
+r.post("/clientes/econnet", authGuard, createClienteEconnet)
 r.delete("/deletecliente/:id", deleteCliente)
 r.get("/historial/:id", authGuard, obtenerHistorialPorTecnico)
 //para cargar "masivamente" las empresas

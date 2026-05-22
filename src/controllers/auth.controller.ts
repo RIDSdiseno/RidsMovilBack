@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { EstadoVisita, Prisma, PrismaClient } from "@prisma/client";
+import { EstadoVisita, OrigenGestioo, Prisma, PrismaClient, TipoEntidadGestioo } from "@prisma/client";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import type { Secret } from "jsonwebtoken";
@@ -245,6 +245,125 @@ export const getAllClientes = async (req: Request, res: Response) => {
     return res.json(clientes);
   } catch (e) {
     console.error("Error al obtener categorias: ", JSON.stringify(e));
+    return res.status(500).json({ error: "Error interno" });
+  }
+};
+
+function normalizeRutGestioo(value?: string | null): string | null {
+  if (!value) return null;
+  const clean = value.replace(/[^0-9kK]/g, "").toUpperCase();
+  if (!clean) return null;
+  if (clean.length <= 1) return clean;
+  return `${clean.slice(0, -1)}-${clean.slice(-1)}`;
+}
+
+function rutKey(value?: string | null) {
+  return (value ?? "").replace(/[^0-9kK]/g, "").toUpperCase();
+}
+
+function mapEntidadEconnetToCliente(entidad: {
+  correo: string | null;
+  direccion: string | null;
+  id: number;
+  nombre: string;
+  rut: string | null;
+  telefono: string | null;
+}) {
+  return {
+    id_empresa: entidad.id,
+    nombre: entidad.nombre,
+    razonSocial: entidad.nombre,
+    detalleEmpresa: {
+      rut: entidad.rut,
+    },
+    correo: entidad.correo,
+    telefono: entidad.telefono,
+    direccion: entidad.direccion,
+    origen: "ECONNET",
+    tieneSucursales: false,
+  };
+}
+
+export const getClientesEconnet = async (_req: Request, res: Response) => {
+  try {
+    const entidades = await prisma.entidadGestioo.findMany({
+      where: {
+        origen: OrigenGestioo.ECONNET,
+        tipo: TipoEntidadGestioo.EMPRESA,
+      },
+      orderBy: { nombre: "asc" },
+      select: {
+        id: true,
+        nombre: true,
+        rut: true,
+        correo: true,
+        telefono: true,
+        direccion: true,
+      },
+    });
+
+    return res.json(entidades.map(mapEntidadEconnetToCliente));
+  } catch (error) {
+    console.error("Error al obtener clientes Econnet:", error);
+    return res.status(500).json({ error: "Error interno" });
+  }
+};
+
+export const createClienteEconnet = async (req: Request, res: Response) => {
+  try {
+    const nombre = String(req.body?.nombre || "").trim().replace(/\s+/g, " ").toUpperCase();
+    const rut = normalizeRutGestioo(req.body?.rut);
+    const correo = String(req.body?.correo || "").trim().toLowerCase() || null;
+    const telefono = String(req.body?.telefono || "").trim() || null;
+    const direccion = String(req.body?.direccion || "").trim() || null;
+
+    if (!nombre) {
+      return res.status(400).json({ error: "El nombre de la empresa es obligatorio" });
+    }
+
+    if (correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+      return res.status(400).json({ error: "Correo inválido" });
+    }
+
+    if (rut) {
+      const entidadesConRut = await prisma.entidadGestioo.findMany({
+        where: { rut: { not: null } },
+        select: { id: true, nombre: true, rut: true },
+      });
+      const existente = entidadesConRut.find((entidad) => rutKey(entidad.rut) === rutKey(rut));
+
+      if (existente) {
+        return res.status(409).json({ error: `Ya existe una empresa con este RUT: ${existente.nombre}` });
+      }
+    }
+
+    const entidad = await prisma.entidadGestioo.create({
+      data: {
+        nombre,
+        rut,
+        correo,
+        telefono,
+        direccion,
+        tipo: TipoEntidadGestioo.EMPRESA,
+        origen: OrigenGestioo.ECONNET,
+      },
+      select: {
+        id: true,
+        nombre: true,
+        rut: true,
+        correo: true,
+        telefono: true,
+        direccion: true,
+      },
+    });
+
+    return res.status(201).json(mapEntidadEconnetToCliente(entidad));
+  } catch (error: any) {
+    if (error.code === "P2002") {
+      return res.status(409).json({ error: "El RUT ya está registrado" });
+    }
+
+    console.error("Error al crear cliente Econnet:", error);
     return res.status(500).json({ error: "Error interno" });
   }
 };

@@ -828,9 +828,21 @@ export const completarVisita = async (req: Request, res: Response) => {
     if (!ids.length) return res.status(400).json({ error: "Debe venir al menos un solicitante" });
 
     const now = new Date();
+    const visitStart = v.inicio;
+    const totalMs = Math.max(0, now.getTime() - visitStart.getTime());
+    const getSolicitanteSlot = (index: number) => {
+      const startOffset = Math.round((totalMs * index) / ids.length);
+      const endOffset = Math.round((totalMs * (index + 1)) / ids.length);
+
+      return {
+        inicio: new Date(visitStart.getTime() + startOffset),
+        fin: index === ids.length - 1 ? now : new Date(visitStart.getTime() + endOffset),
+      };
+    };
 
     const result = await prisma.$transaction(async (tx) => {
       const updated: any[] = [];
+      const firstSlot = getSolicitanteSlot(0);
 
       // 1️⃣ Actualizar la visita existente (primer solicitante)
       const u = await tx.visita.update({
@@ -838,9 +850,10 @@ export const completarVisita = async (req: Request, res: Response) => {
         data: {
           ...payloadFlags,
           otrosDetalle: otrosDetalleValidado,
+          inicio: firstSlot.inicio,
           solicitanteId: ids[0],
           solicitante: names[0] || null,
-          fin: now,
+          fin: firstSlot.fin,
           status: EstadoVisita.COMPLETADA,
           direccion_visita: direccion_visita || v.direccion_visita,
           sucursalId: req.body.sucursalId ?? v.sucursalId ?? null,
@@ -882,12 +895,13 @@ export const completarVisita = async (req: Request, res: Response) => {
 
       // 3️⃣ Crear visitas adicionales para otros solicitantes
       for (let i = 1; i < ids.length; i++) {
+        const slot = getSolicitanteSlot(i);
         const nueva = await tx.visita.create({
           data: {
             tecnicoId: u.tecnicoId,
             empresaId: u.empresaId,
-            inicio: v.inicio,
-            fin: now,
+            inicio: slot.inicio,
+            fin: slot.fin,
             status: EstadoVisita.COMPLETADA,
             ...payloadFlags,
             otrosDetalle: otrosDetalleValidado,

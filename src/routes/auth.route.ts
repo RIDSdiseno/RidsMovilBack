@@ -1,7 +1,7 @@
 import { Router } from "express";
 import {
     login, loginMicrosoft, registerUser, createManyempresa, crearVisita,
-    completarVisita, logout, refresh, getAllUsers,
+    cancelarVisita, completarVisita, logout, refresh, getAllUsers,
     createCliente, getAllClientes,
     deleteCliente,
     obtenerHistorialPorTecnico,
@@ -55,6 +55,7 @@ r.put("/equipos/:id/solicitante",authGuard,cambiarSolicitanteEquipo)
 //Funcionalidad de visitas
 r.post("/crear_visita", authGuard, crearVisita)
 r.put("/finalizar_visita/:id", authGuard, completarVisita)
+r.put("/cancelar_visita/:id", authGuard, cancelarVisita)
 r.put('/equipos/:id', authGuard, actualizarEquipo)
 r.post("/crearequipo", authGuard, createEquipo)
 r.post('/createSolicitante', authGuard, createSolicitante)

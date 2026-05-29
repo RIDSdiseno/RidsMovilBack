@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.obtenerEmpresasConSucursales = exports.obtenerSucursalesPorEmpresa = exports.crearSucursal = exports.createSolicitante = exports.createEquipo = exports.createManyDetalle = exports.cambiarSolicitanteEquipo = exports.actualizarEquipo = exports.getAllEquipos = exports.updateSolicitante = exports.getSolicitantes = exports.createManyEquipos = exports.createManySolicitante = exports.obtenerHistorialPorTecnico = exports.completarVisita = exports.crearVisita = exports.createManyempresa = exports.refresh = exports.logout = exports.getAllUsers = exports.loginMicrosoft = exports.login = exports.createCliente = exports.deleteCliente = exports.createClienteEconnet = exports.getClientesEconnet = exports.getAllClientes = exports.registerUser = void 0;
+exports.obtenerEmpresasConSucursales = exports.obtenerSucursalesPorEmpresa = exports.crearSucursal = exports.createSolicitante = exports.createEquipo = exports.createManyDetalle = exports.cambiarSolicitanteEquipo = exports.actualizarEquipo = exports.getAllEquipos = exports.updateSolicitante = exports.getSolicitantes = exports.createManyEquipos = exports.createManySolicitante = exports.obtenerHistorialPorTecnico = exports.completarVisita = exports.cancelarVisita = exports.crearVisita = exports.createManyempresa = exports.refresh = exports.logout = exports.getAllUsers = exports.loginMicrosoft = exports.login = exports.createCliente = exports.deleteCliente = exports.createClienteEconnet = exports.getClientesEconnet = exports.getAllClientes = exports.registerUser = void 0;
 const client_1 = require("@prisma/client");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
@@ -26,6 +26,12 @@ const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || undefined;
 // 👇 muy importante si tus rutas están bajo /api/auth
 const COOKIE_PATH = process.env.COOKIE_PATH ?? "/api/auth";
 let microsoftKeysCache = null;
+function parseDateOrNow(value) {
+    if (typeof value !== "string" && !(value instanceof Date))
+        return new Date();
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? new Date() : date;
+}
 /* =========================
    HELPERS
 ========================= */
@@ -573,7 +579,7 @@ exports.createManyempresa = createManyempresa;
 const crearVisita = async (req, res) => {
     try {
         console.log("Datos recibidos para crear la visita:", req.body);
-        const { empresaId, tecnicoId, sucursalId, latitud, longitud } = req.body;
+        const { empresaId, tecnicoId, sucursalId, latitud, longitud, inicio } = req.body;
         if (!empresaId || !tecnicoId) {
             return res.status(400).json({ error: "empresaId y tecnicoId son obligatorios" });
         }
@@ -591,7 +597,7 @@ const crearVisita = async (req, res) => {
                 tecnicoId: tecnicoIdInt,
                 sucursalId: sucursalIdInt,
                 solicitante: 'No especificado',
-                inicio: new Date(),
+                inicio: parseDateOrNow(inicio),
                 status: client_1.EstadoVisita.PENDIENTE,
                 direccion_visita: coordenadas // ← Ahora guarda solo coordenadas
             },
@@ -613,6 +619,44 @@ const crearVisita = async (req, res) => {
     }
 };
 exports.crearVisita = crearVisita;
+const cancelarVisita = async (req, res) => {
+    try {
+        const visitaId = Number(req.params.id);
+        if (!Number.isFinite(visitaId)) {
+            return res.status(400).json({ error: "ID de visita inválido" });
+        }
+        const visita = await prisma.visita.findUnique({
+            where: { id_visita: visitaId },
+            select: { id_visita: true, status: true },
+        });
+        if (!visita)
+            return res.status(404).json({ error: "Visita no encontrada" });
+        if (visita.status === client_1.EstadoVisita.COMPLETADA) {
+            return res.status(409).json({ error: "No se puede cancelar una visita completada" });
+        }
+        const cancelada = await prisma.visita.update({
+            where: { id_visita: visitaId },
+            data: {
+                status: client_1.EstadoVisita.CANCELADA,
+                fin: new Date(),
+            },
+            select: {
+                id_visita: true,
+                status: true,
+                inicio: true,
+                fin: true,
+            },
+        });
+        return res.status(200).json({ visita: cancelada });
+    }
+    catch (error) {
+        console.error("Error al cancelar visita:", error);
+        return res.status(500).json({
+            error: `Error interno al cancelar la visita: ${error.message || error}`,
+        });
+    }
+};
+exports.cancelarVisita = cancelarVisita;
 const completarVisita = async (req, res) => {
     try {
         const visitaId = Number(req.params.id);

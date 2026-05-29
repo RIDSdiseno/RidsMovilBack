@@ -58,6 +58,12 @@ type MicrosoftJwk = {
 
 let microsoftKeysCache: { expiresAt: number; keys: MicrosoftJwk[] } | null = null;
 
+function parseDateOrNow(value: unknown) {
+  if (typeof value !== "string" && !(value instanceof Date)) return new Date();
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+}
+
 
 /* =========================
    HELPERS
@@ -677,7 +683,7 @@ export const createManyempresa = async (req: Request, res: Response) => {
 export const crearVisita = async (req: Request, res: Response) => {
   try {
     console.log("Datos recibidos para crear la visita:", req.body);
-    const { empresaId, tecnicoId, sucursalId, latitud, longitud } = req.body;
+    const { empresaId, tecnicoId, sucursalId, latitud, longitud, inicio } = req.body;
 
     if (!empresaId || !tecnicoId) {
       return res.status(400).json({ error: "empresaId y tecnicoId son obligatorios" });
@@ -700,7 +706,7 @@ export const crearVisita = async (req: Request, res: Response) => {
         tecnicoId: tecnicoIdInt,
         sucursalId: sucursalIdInt,
         solicitante: 'No especificado',
-        inicio: new Date(),
+        inicio: parseDateOrNow(inicio),
         status: EstadoVisita.PENDIENTE,
         direccion_visita: coordenadas // ← Ahora guarda solo coordenadas
       },
@@ -720,6 +726,47 @@ export const crearVisita = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error al crear la visita:', error);
     return res.status(500).json({ error: `Error interno al crear la visita: ${error.message || error}` });
+  }
+};
+
+export const cancelarVisita = async (req: Request, res: Response) => {
+  try {
+    const visitaId = Number(req.params.id);
+    if (!Number.isFinite(visitaId)) {
+      return res.status(400).json({ error: "ID de visita inválido" });
+    }
+
+    const visita = await prisma.visita.findUnique({
+      where: { id_visita: visitaId },
+      select: { id_visita: true, status: true },
+    });
+
+    if (!visita) return res.status(404).json({ error: "Visita no encontrada" });
+
+    if (visita.status === EstadoVisita.COMPLETADA) {
+      return res.status(409).json({ error: "No se puede cancelar una visita completada" });
+    }
+
+    const cancelada = await prisma.visita.update({
+      where: { id_visita: visitaId },
+      data: {
+        status: EstadoVisita.CANCELADA,
+        fin: new Date(),
+      },
+      select: {
+        id_visita: true,
+        status: true,
+        inicio: true,
+        fin: true,
+      },
+    });
+
+    return res.status(200).json({ visita: cancelada });
+  } catch (error: any) {
+    console.error("Error al cancelar visita:", error);
+    return res.status(500).json({
+      error: `Error interno al cancelar la visita: ${error.message || error}`,
+    });
   }
 };
 

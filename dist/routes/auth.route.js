@@ -30,6 +30,7 @@ r.put("/equipos/:id/solicitante", auth_middleware_1.authGuard, auth_controller_1
 //Funcionalidad de visitas
 r.post("/crear_visita", auth_middleware_1.authGuard, auth_controller_1.crearVisita);
 r.put("/finalizar_visita/:id", auth_middleware_1.authGuard, auth_controller_1.completarVisita);
+r.put("/cancelar_visita/:id", auth_middleware_1.authGuard, auth_controller_1.cancelarVisita);
 r.put('/equipos/:id', auth_middleware_1.authGuard, auth_controller_1.actualizarEquipo);
 r.post("/crearequipo", auth_middleware_1.authGuard, auth_controller_1.createEquipo);
 r.post('/createSolicitante', auth_middleware_1.authGuard, auth_controller_1.createSolicitante);

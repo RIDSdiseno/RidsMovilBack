@@ -195,6 +195,9 @@ model Solicitante {
   accountType     AccountType?
   deletedAt       DateTime?
   rut             String?                 @unique
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @default(now())
+  deactivatedAt   DateTime?
   empresa         Empresa                 @relation(fields: [empresaId], references: [id_empresa])
   equipos         Equipo[]
   visitas         Visita[]                @relation("Solicitante_Visita")
@@ -238,6 +241,7 @@ model EntidadGestioo {
   direccion        String?
   tipo             TipoEntidadGestioo      @default(EMPRESA)
   origen           OrigenGestioo           @default(RIDS)
+  empresaId        Int?
   productos        ProductoGestioo[]
   trabajos         DetalleTrabajoGestioo[]
   servicioGestioos ServicioGestioo[]
@@ -361,6 +365,8 @@ model Equipo {
   origenCotizacionId     Int?
   productoId             Int?                    @unique
   estado                 EstadoEquipo            @default(ACTIVO)
+  anioPc                 Int?
+  anioPcOrigen           String?                 @default("AUTO")
   solicitante            Solicitante?            @relation(fields: [idSolicitante], references: [id_solicitante])
   equipo                 DetalleEquipo[]
   adicionales            EquipoAdicional[]
@@ -1240,6 +1246,25 @@ model area_configs {
   updatedAt   DateTime
 }
 
+model AnalisisInventarioIA {
+  id              Int      @id @default(autoincrement())
+  empresaId       Int
+  mes             Int
+  ano             Int
+  totalEquipos    Int      @default(0)
+  resumen         String?
+  hallazgos       Json?
+  riesgos         Json?
+  recomendaciones Json?
+  generadoPorId   Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime
+
+  @@unique([empresaId, mes, ano])
+  @@index([empresaId])
+  @@index([mes, ano])
+}
+
 enum MonedaGestioo {
   CLP
   USD
@@ -1432,5 +1457,7 @@ enum EstadoEquipo {
   ACTIVO
   EN_STOCK
   DADO_DE_BAJA
-  EN_TALLER
+  EN_RIDS
+  EN_GARANTIA
+  EN_TALLER_EXTERNO
 }

@@ -747,21 +747,16 @@ export const cancelarVisita = async (req: Request, res: Response) => {
       return res.status(409).json({ error: "No se puede cancelar una visita completada" });
     }
 
-    const cancelada = await prisma.visita.update({
+    const eliminada = await prisma.visita.delete({
       where: { id_visita: visitaId },
-      data: {
-        status: EstadoVisita.CANCELADA,
-        fin: new Date(),
-      },
       select: {
         id_visita: true,
         status: true,
         inicio: true,
-        fin: true,
       },
     });
 
-    return res.status(200).json({ visita: cancelada });
+    return res.status(200).json({ visita: eliminada });
   } catch (error: any) {
     console.error("Error al cancelar visita:", error);
     return res.status(500).json({

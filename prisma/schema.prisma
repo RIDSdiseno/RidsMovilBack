@@ -485,7 +485,7 @@ model Tecnico {
   visitas          Visita[]
   detalleTrabajos  DetalleTrabajoGestioo[]
   entregas         Entrega[]
-  ubicaciones       UbicacionTecnico[]
+  ubicaciones      UbicacionTecnico[]
 
   @@index([empresaId])
 }
@@ -707,7 +707,6 @@ model AgendaVisita {
   empresaId            Int?
   tipo                 TipoAgenda   @default(SEMANA)
   estado               EstadoAgenda @default(PROGRAMADA)
-  fechaInicioRuta      DateTime?
   notificacionEnviada  Boolean      @default(false)
   notas                String?
   createdAt            DateTime     @default(now())
@@ -718,6 +717,7 @@ model AgendaVisita {
   recordatorioEnviado  Boolean?
   outlook_event_id     String?
   empresaExternaNombre String?
+  fechaInicioRuta      DateTime?
 
   @@index([empresaId])
   @@index([estado])
@@ -1471,9 +1471,9 @@ enum AuditAction {
 enum EstadoAgenda {
   PROGRAMADA
   NOTIFICADA
-  EN_RUTA
   COMPLETADA
   CANCELADA
+  EN_RUTA
 }
 
 enum EstadoDTE {

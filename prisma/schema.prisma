@@ -297,30 +297,32 @@ model ServicioGestioo {
 }
 
 model DetalleTrabajoGestioo {
-  id              Int              @id @default(autoincrement())
-  fecha           DateTime         @default(now())
-  tipoTrabajo     String
-  descripcion     String?
-  estado          String?          @default("pendiente")
-  notas           String?
-  area            AreaGestioo      @default(ENTRADA)
-  prioridad       PrioridadGestioo @default(NORMAL)
-  entidadId       Int?
-  productoId      Int?
-  servicioId      Int?
-  equipoId        Int?
-  tecnicoId       Int?
-  incluyeCargador Boolean          @default(false)
-  fechaIngreso    DateTime?
-  ordenGrupoId    Int?
-  numeroOrden     String?
-  origenTrabajo   OrigenTrabajo    @default(INDEPENDIENTE)
-  cotizacionId    Int?
-  tecnico         Tecnico?         @relation(fields: [tecnicoId], references: [id_tecnico])
-  entidad         EntidadGestioo?  @relation(fields: [entidadId], references: [id])
-  producto        ProductoGestioo? @relation(fields: [productoId], references: [id])
-  servicio        ServicioGestioo? @relation(fields: [servicioId], references: [id])
-  equipo          Equipo?          @relation("EquipoToTrabajoGestioo", fields: [equipoId], references: [id_equipo])
+  id                Int                 @id @default(autoincrement())
+  fecha             DateTime            @default(now())
+  tipoTrabajo       String
+  descripcion       String?
+  estado            String?             @default("pendiente")
+  notas             String?
+  area              AreaGestioo         @default(ENTRADA)
+  prioridad         PrioridadGestioo    @default(NORMAL)
+  entidadId         Int?
+  productoId        Int?
+  servicioId        Int?
+  equipoId          Int?
+  tecnicoId         Int?
+  incluyeCargador   Boolean             @default(false)
+  fechaIngreso      DateTime?
+  ordenGrupoId      Int?
+  numeroOrden       String?
+  origenTrabajo     OrigenTrabajo       @default(INDEPENDIENTE)
+  cotizacionId      Int?
+  destinoEquipo     DestinoEquipoTaller @default(SIN_DEFINIR)
+  destinoEquipoNota String?
+  tecnico           Tecnico?            @relation(fields: [tecnicoId], references: [id_tecnico])
+  entidad           EntidadGestioo?     @relation(fields: [entidadId], references: [id])
+  producto          ProductoGestioo?    @relation(fields: [productoId], references: [id])
+  servicio          ServicioGestioo?    @relation(fields: [servicioId], references: [id])
+  equipo            Equipo?             @relation("EquipoToTrabajoGestioo", fields: [equipoId], references: [id_equipo])
 
   @@index([productoId])
   @@index([servicioId])
@@ -328,6 +330,7 @@ model DetalleTrabajoGestioo {
   @@index([tecnicoId])
   @@index([cotizacionId])
   @@index([numeroOrden])
+  @@index([destinoEquipo])
 }
 
 model MarcaGestioo {
@@ -482,6 +485,7 @@ model Tecnico {
   visitas          Visita[]
   detalleTrabajos  DetalleTrabajoGestioo[]
   entregas         Entrega[]
+  ubicaciones       UbicacionTecnico[]
 
   @@index([empresaId])
 }
@@ -703,6 +707,7 @@ model AgendaVisita {
   empresaId            Int?
   tipo                 TipoAgenda   @default(SEMANA)
   estado               EstadoAgenda @default(PROGRAMADA)
+  fechaInicioRuta      DateTime?
   notificacionEnviada  Boolean      @default(false)
   notas                String?
   createdAt            DateTime     @default(now())
@@ -719,6 +724,24 @@ model AgendaVisita {
   @@index([fecha])
   @@index([notificacionEnviada])
   @@index([tipo])
+}
+
+model UbicacionTecnico {
+  id             Int      @id @default(autoincrement())
+  tecnicoId      Int
+  agendaId       Int?
+  latitud        Float
+  longitud       Float
+  precision      Float?
+  velocidad      Float?
+  estadoTracking String
+  createdAt      DateTime @default(now())
+  tecnico        Tecnico  @relation(fields: [tecnicoId], references: [id_tecnico])
+
+  @@index([agendaId])
+  @@index([createdAt])
+  @@index([estadoTracking])
+  @@index([tecnicoId])
 }
 
 model AuditLog {
@@ -1265,6 +1288,74 @@ model AnalisisInventarioIA {
   @@index([mes, ano])
 }
 
+model BitacoraTecnico {
+  id            Int                   @id @default(autoincrement())
+  fecha         DateTime              @default(now())
+  titulo        String?
+  descripcion   String
+  tipoActividad TipoBitacoraTecnico   @default(OTRO)
+  estado        EstadoBitacoraTecnico @default(REGISTRADA)
+  tecnicoId     Int
+  empresaId     Int?
+  solicitanteId Int?
+  ticketId      Int?
+  trabajoId     Int?
+  visitaId      Int?
+  mantencionId  Int?
+  equipoId      Int?
+  cotizacionId  Int?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime
+
+  @@index([cotizacionId])
+  @@index([empresaId])
+  @@index([equipoId])
+  @@index([estado])
+  @@index([fecha])
+  @@index([mantencionId])
+  @@index([solicitanteId])
+  @@index([tecnicoId])
+  @@index([ticketId])
+  @@index([tipoActividad])
+  @@index([trabajoId])
+  @@index([visitaId])
+}
+
+model ManualTutorial {
+  id             Int                @id @default(autoincrement())
+  titulo         String
+  descripcion    String?
+  categoria      String
+  problema       String
+  solucion       String
+  tipo           TipoManualTutorial @default(MANUAL)
+  empresaId      Int
+  urlArchivo     String?
+  urlVideo       String?
+  plataforma     String
+  visibleCliente Boolean            @default(false)
+  activo         Boolean            @default(true)
+  creadoPorId    Int?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime
+
+  @@index([activo])
+  @@index([categoria])
+  @@index([empresaId])
+  @@index([tipo])
+  @@index([visibleCliente])
+}
+
+model ManualTutorialArchivo {
+  id            Int      @id @default(autoincrement())
+  manualId      Int
+  nombreArchivo String
+  urlArchivo    String
+  createdAt     DateTime @default(now())
+
+  @@index([manualId])
+}
+
 enum MonedaGestioo {
   CLP
   USD
@@ -1380,6 +1471,7 @@ enum AuditAction {
 enum EstadoAgenda {
   PROGRAMADA
   NOTIFICADA
+  EN_RUTA
   COMPLETADA
   CANCELADA
 }
@@ -1460,4 +1552,36 @@ enum EstadoEquipo {
   EN_RIDS
   EN_GARANTIA
   EN_TALLER_EXTERNO
+}
+
+enum DestinoEquipoTaller {
+  SIN_DEFINIR
+  VENTA
+  RIDS
+  CLIENTE
+  BAJA
+}
+
+enum EstadoBitacoraTecnico {
+  REGISTRADA
+  REVISADA
+  ANULADA
+}
+
+enum TipoBitacoraTecnico {
+  SOPORTE
+  TERRENO
+  REMOTO
+  TALLER
+  INTERNO
+  ADMINISTRATIVO
+  REUNION
+  OTRO
+}
+
+enum TipoManualTutorial {
+  MANUAL
+  VIDEO
+  GUIA
+  PROCEDIMIENTO
 }

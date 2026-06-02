@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.obtenerEmpresasConSucursales = exports.obtenerSucursalesPorEmpresa = exports.crearSucursal = exports.createSolicitante = exports.createEquipo = exports.createManyDetalle = exports.cambiarSolicitanteEquipo = exports.actualizarEquipo = exports.getAllEquipos = exports.updateSolicitante = exports.getSolicitantes = exports.createManyEquipos = exports.createManySolicitante = exports.obtenerHistorialPorTecnico = exports.completarVisita = exports.cancelarVisita = exports.crearVisita = exports.createManyempresa = exports.refresh = exports.logout = exports.getAllUsers = exports.loginMicrosoft = exports.login = exports.createCliente = exports.deleteCliente = exports.createClienteEconnet = exports.getClientesEconnet = exports.getAllClientes = exports.registerUser = void 0;
+exports.obtenerEmpresasConSucursales = exports.obtenerSucursalesPorEmpresa = exports.crearSucursal = exports.createSolicitante = exports.createEquipo = exports.createManyDetalle = exports.cambiarSolicitanteEquipo = exports.actualizarEquipo = exports.getAllEquipos = exports.updateSolicitante = exports.getSolicitantes = exports.createManyEquipos = exports.createManySolicitante = exports.obtenerHistorialPorTecnico = exports.completarVisita = exports.cancelarVisita = exports.crearVisita = exports.registrarUbicacionTecnico = exports.iniciarRutaAgendaVisita = exports.obtenerMisVisitasAsignadasHoy = exports.createManyempresa = exports.refresh = exports.logout = exports.getAllUsers = exports.loginMicrosoft = exports.login = exports.createCliente = exports.deleteCliente = exports.createClienteEconnet = exports.getClientesEconnet = exports.getAllClientes = exports.registerUser = void 0;
 const client_1 = require("@prisma/client");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
@@ -31,6 +31,75 @@ function parseDateOrNow(value) {
         return new Date();
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? new Date() : date;
+}
+function getChileDateKey(date = new Date()) {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Santiago",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    }).formatToParts(date);
+    const year = parts.find((part) => part.type === "year")?.value;
+    const month = parts.find((part) => part.type === "month")?.value;
+    const day = parts.find((part) => part.type === "day")?.value;
+    return `${year}-${month}-${day}`;
+}
+function getDateRangeFromChileKey(dateKey) {
+    const start = new Date(`${dateKey}T00:00:00.000Z`);
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 1);
+    return { start, end };
+}
+function parseJsonCoordinates(value) {
+    const isRecord = (item) => typeof item === "object" && item !== null && !Array.isArray(item);
+    const toNumber = (item) => {
+        if (typeof item === "number" && Number.isFinite(item))
+            return item;
+        if (typeof item === "string" && item.trim()) {
+            const parsed = Number(item.replace(",", "."));
+            return Number.isFinite(parsed) ? parsed : null;
+        }
+        return null;
+    };
+    const readFromRecord = (item) => {
+        const latitud = toNumber(item.latitud) ??
+            toNumber(item.latitude) ??
+            toNumber(item.lat) ??
+            toNumber(item.y);
+        const longitud = toNumber(item.longitud) ??
+            toNumber(item.longitude) ??
+            toNumber(item.lng) ??
+            toNumber(item.lon) ??
+            toNumber(item.x);
+        if (latitud === null || longitud === null)
+            return null;
+        const direccion = typeof item.direccion === "string"
+            ? item.direccion
+            : typeof item.address === "string"
+                ? item.address
+                : null;
+        return { latitud, longitud, direccion };
+    };
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            if (!isRecord(item))
+                continue;
+            const result = readFromRecord(item);
+            if (result)
+                return result;
+        }
+    }
+    if (isRecord(value)) {
+        const direct = readFromRecord(value);
+        if (direct)
+            return direct;
+        for (const item of Object.values(value)) {
+            const nested = parseJsonCoordinates(item);
+            if (nested.latitud !== null && nested.longitud !== null)
+                return nested;
+        }
+    }
+    return { latitud: null, longitud: null };
 }
 /* =========================
    HELPERS
@@ -575,6 +644,271 @@ const createManyempresa = async (req, res) => {
     }
 };
 exports.createManyempresa = createManyempresa;
+function mapAgendaAsignada(visita, empresa) {
+    const coords = parseJsonCoordinates(empresa?.detalleEmpresa?.direcciones ?? null);
+    const direccion = coords.direccion ?? empresa?.detalleEmpresa?.direccion ?? null;
+    return {
+        id: visita.id,
+        agendaId: visita.id,
+        empresa: empresa
+            ? {
+                id_empresa: empresa.id_empresa,
+                nombre: empresa.nombre,
+                razonSocial: empresa.razonSocial,
+                rut: empresa.detalleEmpresa?.rut ?? null,
+            }
+            : visita.empresaExternaNombre
+                ? {
+                    id_empresa: null,
+                    nombre: visita.empresaExternaNombre,
+                    razonSocial: null,
+                    rut: null,
+                }
+                : null,
+        sucursal: null,
+        direccion,
+        latitud: coords.latitud,
+        longitud: coords.longitud,
+        fechaProgramada: visita.fecha.toISOString().slice(0, 10),
+        horaProgramada: visita.horaInicio,
+        horaInicio: visita.horaInicio,
+        horaFin: visita.horaFin,
+        estado: visita.estado,
+        observacion: visita.notas ?? visita.mensaje,
+        fechaInicioRuta: visita.fechaInicioRuta,
+    };
+}
+const obtenerMisVisitasAsignadasHoy = async (req, res) => {
+    try {
+        const tecnicoId = req.user?.id;
+        if (!tecnicoId)
+            return res.status(401).json({ error: "No autenticado" });
+        const dateKey = typeof req.query.fecha === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.fecha)
+            ? req.query.fecha
+            : getChileDateKey();
+        const { start, end } = getDateRangeFromChileKey(dateKey);
+        const asignaciones = await prisma.agendaTecnico.findMany({
+            where: { tecnicoId },
+            select: { agendaId: true },
+        });
+        const agendaIds = asignaciones.map((item) => item.agendaId);
+        if (!agendaIds.length) {
+            return res.json({ fecha: dateKey, visitas: [] });
+        }
+        const visitas = await prisma.agendaVisita.findMany({
+            where: {
+                id: { in: agendaIds },
+                fecha: { gte: start, lt: end },
+            },
+            orderBy: [
+                { horaInicio: "asc" },
+                { id: "asc" },
+            ],
+            select: {
+                id: true,
+                fecha: true,
+                empresaId: true,
+                estado: true,
+                notas: true,
+                horaInicio: true,
+                horaFin: true,
+                mensaje: true,
+                fechaInicioRuta: true,
+                empresaExternaNombre: true,
+            },
+        });
+        const empresaIds = visitas
+            .map((visita) => visita.empresaId)
+            .filter((id) => Number.isFinite(id));
+        const empresas = empresaIds.length
+            ? await prisma.empresa.findMany({
+                where: { id_empresa: { in: empresaIds } },
+                select: {
+                    id_empresa: true,
+                    nombre: true,
+                    razonSocial: true,
+                    detalleEmpresa: {
+                        select: {
+                            rut: true,
+                            direccion: true,
+                            direcciones: true,
+                        },
+                    },
+                },
+            })
+            : [];
+        const empresasById = new Map(empresas.map((empresa) => [empresa.id_empresa, empresa]));
+        const data = visitas.map((visita) => mapAgendaAsignada(visita, visita.empresaId ? empresasById.get(visita.empresaId) : undefined));
+        return res.json({ fecha: dateKey, visitas: data });
+    }
+    catch (error) {
+        console.error("Error al obtener visitas asignadas:", error);
+        return res.status(500).json({
+            error: `Error interno al obtener visitas asignadas: ${error.message || error}`,
+        });
+    }
+};
+exports.obtenerMisVisitasAsignadasHoy = obtenerMisVisitasAsignadasHoy;
+const iniciarRutaAgendaVisita = async (req, res) => {
+    try {
+        const tecnicoId = req.user?.id;
+        const agendaId = Number(req.params.id);
+        if (!tecnicoId)
+            return res.status(401).json({ error: "No autenticado" });
+        if (!Number.isFinite(agendaId))
+            return res.status(400).json({ error: "ID de visita inválido" });
+        const asignacion = await prisma.agendaTecnico.findUnique({
+            where: {
+                agendaId_tecnicoId: {
+                    agendaId,
+                    tecnicoId,
+                },
+            },
+            select: { agendaId: true },
+        });
+        if (!asignacion) {
+            return res.status(403).json({ error: "La visita no esta asignada a este tecnico" });
+        }
+        const visita = await prisma.agendaVisita.findUnique({
+            where: { id: agendaId },
+            select: { id: true, estado: true },
+        });
+        if (!visita)
+            return res.status(404).json({ error: "Visita asignada no encontrada" });
+        if (visita.estado === client_1.EstadoAgenda.COMPLETADA || visita.estado === client_1.EstadoAgenda.CANCELADA) {
+            return res.status(409).json({ error: "No se puede iniciar ruta para una visita finalizada o cancelada" });
+        }
+        const actualizada = await prisma.agendaVisita.update({
+            where: { id: agendaId },
+            data: {
+                estado: client_1.EstadoAgenda.EN_RUTA,
+                fechaInicioRuta: new Date(),
+            },
+            select: {
+                id: true,
+                fecha: true,
+                empresaId: true,
+                estado: true,
+                notas: true,
+                horaInicio: true,
+                horaFin: true,
+                mensaje: true,
+                fechaInicioRuta: true,
+                empresaExternaNombre: true,
+            },
+        });
+        const empresa = actualizada.empresaId
+            ? await prisma.empresa.findUnique({
+                where: { id_empresa: actualizada.empresaId },
+                select: {
+                    id_empresa: true,
+                    nombre: true,
+                    razonSocial: true,
+                    detalleEmpresa: {
+                        select: {
+                            rut: true,
+                            direccion: true,
+                            direcciones: true,
+                        },
+                    },
+                },
+            })
+            : null;
+        return res.json({
+            visita: mapAgendaAsignada(actualizada, empresa ?? undefined),
+        });
+    }
+    catch (error) {
+        console.error("Error al iniciar ruta:", error);
+        return res.status(500).json({
+            error: `Error interno al iniciar ruta: ${error.message || error}`,
+        });
+    }
+};
+exports.iniciarRutaAgendaVisita = iniciarRutaAgendaVisita;
+const registrarUbicacionTecnico = async (req, res) => {
+    try {
+        const tecnicoId = req.user?.id;
+        if (!tecnicoId)
+            return res.status(401).json({ error: "No autenticado" });
+        const { agendaId, latitud, longitud, precision, velocidad, estadoTracking, } = req.body ?? {};
+        const lat = Number(latitud);
+        const lon = Number(longitud);
+        const parsedAgendaId = agendaId === undefined || agendaId === null || agendaId === ""
+            ? null
+            : Number(agendaId);
+        const parsedPrecision = precision === undefined || precision === null ? null : Number(precision);
+        const parsedVelocidad = velocidad === undefined || velocidad === null ? null : Number(velocidad);
+        if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+            return res.status(400).json({ error: "latitud inválida" });
+        }
+        if (!Number.isFinite(lon) || lon < -180 || lon > 180) {
+            return res.status(400).json({ error: "longitud inválida" });
+        }
+        if (parsedAgendaId !== null && !Number.isFinite(parsedAgendaId)) {
+            return res.status(400).json({ error: "agendaId inválido" });
+        }
+        if (parsedPrecision !== null && !Number.isFinite(parsedPrecision)) {
+            return res.status(400).json({ error: "precision inválida" });
+        }
+        if (parsedVelocidad !== null && !Number.isFinite(parsedVelocidad)) {
+            return res.status(400).json({ error: "velocidad inválida" });
+        }
+        const tecnico = await prisma.tecnico.findUnique({
+            where: { id_tecnico: tecnicoId },
+            select: { id_tecnico: true, status: true },
+        });
+        if (!tecnico || !tecnico.status) {
+            return res.status(404).json({ error: "Técnico no encontrado o inactivo" });
+        }
+        if (parsedAgendaId !== null) {
+            const asignacion = await prisma.agendaTecnico.findUnique({
+                where: {
+                    agendaId_tecnicoId: {
+                        agendaId: parsedAgendaId,
+                        tecnicoId,
+                    },
+                },
+                select: { agendaId: true },
+            });
+            if (!asignacion) {
+                return res.status(403).json({ error: "La visita no esta asignada a este tecnico" });
+            }
+        }
+        const ubicacion = await prisma.ubicacionTecnico.create({
+            data: {
+                tecnicoId,
+                agendaId: parsedAgendaId,
+                latitud: lat,
+                longitud: lon,
+                precision: parsedPrecision,
+                velocidad: parsedVelocidad,
+                estadoTracking: typeof estadoTracking === "string" && estadoTracking.trim()
+                    ? estadoTracking.trim().slice(0, 40)
+                    : "EN_RUTA",
+            },
+            select: {
+                id: true,
+                tecnicoId: true,
+                agendaId: true,
+                latitud: true,
+                longitud: true,
+                precision: true,
+                velocidad: true,
+                estadoTracking: true,
+                createdAt: true,
+            },
+        });
+        return res.status(201).json({ ubicacion });
+    }
+    catch (error) {
+        console.error("Error al registrar ubicación:", error);
+        return res.status(500).json({
+            error: `Error interno al registrar ubicación: ${error.message || error}`,
+        });
+    }
+};
+exports.registrarUbicacionTecnico = registrarUbicacionTecnico;
 // En tu backend - modificar la función crearVisita
 const crearVisita = async (req, res) => {
     try {

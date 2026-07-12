@@ -86,6 +86,55 @@ function getDateRangeFromChileKey(dateKey: string) {
   return { start, end };
 }
 
+function getChileTimeParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Santiago",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "0");
+  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? "0");
+
+  return { hour, minute };
+}
+
+function getChileMinutesFromMidnight(date = new Date()) {
+  const { hour, minute } = getChileTimeParts(date);
+  return hour * 60 + minute;
+}
+
+function getAgendaDateKey(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function parseHoraProgramada(value: string | null | undefined) {
+  if (!value) return null;
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!match) return null;
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+
+  if (!Number.isInteger(hour) || !Number.isInteger(minute)) return null;
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+
+  return {
+    hour,
+    minute,
+    minutes: hour * 60 + minute,
+    label: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+  };
+}
+
+function formatMinutesAsTime(minutes: number) {
+  const normalized = Math.max(0, Math.min(minutes, 23 * 60 + 59));
+  const hour = Math.floor(normalized / 60);
+  const minute = normalized % 60;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
 function parseJsonCoordinates(value: unknown): { latitud: number | null; longitud: number | null; direccion?: string | null } {
   const isRecord = (item: unknown): item is Record<string, unknown> =>
     typeof item === "object" && item !== null && !Array.isArray(item);
@@ -917,18 +966,76 @@ export const iniciarRutaAgendaVisita = async (req: Request, res: Response) => {
     });
 
     if (!asignacion) {
-      return res.status(403).json({ error: "La visita no esta asignada a este tecnico" });
+      return res.status(403).json({ error: "No puedes iniciar ruta para una visita que no te pertenece." });
     }
 
     const visita = await prisma.agendaVisita.findUnique({
       where: { id: agendaId },
-      select: { id: true, estado: true },
+      select: {
+        id: true,
+        fecha: true,
+        empresaId: true,
+        estado: true,
+        notas: true,
+        horaInicio: true,
+        horaFin: true,
+        mensaje: true,
+        fechaInicioRuta: true,
+        empresaExternaNombre: true,
+      },
     });
 
     if (!visita) return res.status(404).json({ error: "Visita asignada no encontrada" });
 
     if (visita.estado === EstadoAgenda.COMPLETADA || visita.estado === EstadoAgenda.CANCELADA) {
-      return res.status(409).json({ error: "No se puede iniciar ruta para una visita finalizada o cancelada" });
+      return res.status(409).json({ error: "No puedes iniciar ruta en una visita finalizada o cancelada." });
+    }
+
+    const cargarEmpresa = (empresaId: number | null) =>
+      empresaId
+        ? prisma.empresa.findUnique({
+          where: { id_empresa: empresaId },
+          select: {
+            id_empresa: true,
+            nombre: true,
+            razonSocial: true,
+            detalleEmpresa: {
+              select: {
+                rut: true,
+                direccion: true,
+                direcciones: true,
+              },
+            },
+          },
+        })
+        : Promise.resolve(null);
+
+    if (visita.estado === EstadoAgenda.EN_RUTA) {
+      const empresa = await cargarEmpresa(visita.empresaId);
+      return res.json({
+        visita: mapAgendaAsignada(visita, empresa ?? undefined),
+      });
+    }
+
+    const hoyChile = getChileDateKey();
+    const fechaVisita = getAgendaDateKey(visita.fecha);
+
+    if (fechaVisita !== hoyChile) {
+      return res.status(403).json({ error: "Solo puedes iniciar ruta el día de la visita." });
+    }
+
+    const horaProgramada = parseHoraProgramada(visita.horaInicio);
+    if (!horaProgramada) {
+      return res.status(400).json({ error: "La visita no tiene una hora programada válida para iniciar ruta." });
+    }
+
+    const inicioPermitido = Math.max(0, horaProgramada.minutes - 60);
+    const minutosChileAhora = getChileMinutesFromMidnight();
+
+    if (minutosChileAhora < inicioPermitido) {
+      return res.status(403).json({
+        error: `Puedes iniciar ruta desde ${formatMinutesAsTime(inicioPermitido)}.`,
+      });
     }
 
     const actualizada = await prisma.agendaVisita.update({
@@ -951,23 +1058,7 @@ export const iniciarRutaAgendaVisita = async (req: Request, res: Response) => {
       },
     });
 
-    const empresa = actualizada.empresaId
-      ? await prisma.empresa.findUnique({
-        where: { id_empresa: actualizada.empresaId },
-        select: {
-          id_empresa: true,
-          nombre: true,
-          razonSocial: true,
-          detalleEmpresa: {
-            select: {
-              rut: true,
-              direccion: true,
-              direcciones: true,
-            },
-          },
-        },
-      })
-      : null;
+    const empresa = await cargarEmpresa(actualizada.empresaId);
 
     return res.json({
       visita: mapAgendaAsignada(actualizada, empresa ?? undefined),

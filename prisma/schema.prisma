@@ -748,6 +748,7 @@ model AgendaVisita {
   outlook_event_id     String?
   empresaExternaNombre String?
   fechaInicioRuta      DateTime?
+  fechaInicioVisita    DateTime?
 
   @@index([empresaId])
   @@index([estado])
@@ -1615,6 +1616,7 @@ enum EstadoAgenda {
   COMPLETADA
   CANCELADA
   EN_RUTA
+  INICIADA
 }
 
 enum EstadoDTE {

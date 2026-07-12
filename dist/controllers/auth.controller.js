@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.obtenerEmpresasConSucursales = exports.obtenerSucursalesPorEmpresa = exports.crearSucursal = exports.createSolicitante = exports.createEquipo = exports.createManyDetalle = exports.cambiarSolicitanteEquipo = exports.actualizarEquipo = exports.getAllEquipos = exports.updateSolicitante = exports.getSolicitantes = exports.createManyEquipos = exports.createManySolicitante = exports.obtenerHistorialPorTecnico = exports.completarVisita = exports.cancelarVisita = exports.crearVisita = exports.registrarUbicacionTecnico = exports.iniciarRutaAgendaVisita = exports.obtenerMisVisitasAsignadasHoy = exports.createManyempresa = exports.refresh = exports.logout = exports.getAllUsers = exports.loginMicrosoft = exports.login = exports.createCliente = exports.deleteCliente = exports.createClienteEconnet = exports.getClientesEconnet = exports.getAllClientes = exports.registerUser = void 0;
+exports.obtenerEmpresasConSucursales = exports.obtenerSucursalesPorEmpresa = exports.crearSucursal = exports.createSolicitante = exports.createEquipo = exports.createManyDetalle = exports.cambiarSolicitanteEquipo = exports.actualizarEquipo = exports.getAllEquipos = exports.updateSolicitante = exports.getSolicitantes = exports.createManyEquipos = exports.createManySolicitante = exports.obtenerHistorialPorTecnico = exports.completarVisita = exports.cancelarVisita = exports.crearVisita = exports.registrarUbicacionTecnico = exports.iniciarVisitaAgendaVisita = exports.iniciarRutaAgendaVisita = exports.obtenerMisVisitasAsignadasHoy = exports.createManyempresa = exports.refresh = exports.logout = exports.getAllUsers = exports.loginMicrosoft = exports.login = exports.createCliente = exports.deleteCliente = exports.createClienteEconnet = exports.getClientesEconnet = exports.getAllClientes = exports.registerUser = void 0;
 const client_1 = require("@prisma/client");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
@@ -719,7 +719,27 @@ function mapAgendaAsignada(visita, empresa) {
         estado: visita.estado,
         observacion: visita.notas ?? visita.mensaje,
         fechaInicioRuta: visita.fechaInicioRuta,
+        fechaInicioVisita: visita.fechaInicioVisita,
     };
+}
+function cargarEmpresaAgenda(empresaId) {
+    return empresaId
+        ? prisma.empresa.findUnique({
+            where: { id_empresa: empresaId },
+            select: {
+                id_empresa: true,
+                nombre: true,
+                razonSocial: true,
+                detalleEmpresa: {
+                    select: {
+                        rut: true,
+                        direccion: true,
+                        direcciones: true,
+                    },
+                },
+            },
+        })
+        : Promise.resolve(null);
 }
 const obtenerMisVisitasAsignadasHoy = async (req, res) => {
     try {
@@ -757,6 +777,7 @@ const obtenerMisVisitasAsignadasHoy = async (req, res) => {
                 horaFin: true,
                 mensaje: true,
                 fechaInicioRuta: true,
+                fechaInicioVisita: true,
                 empresaExternaNombre: true,
             },
         });
@@ -824,6 +845,7 @@ const iniciarRutaAgendaVisita = async (req, res) => {
                 horaFin: true,
                 mensaje: true,
                 fechaInicioRuta: true,
+                fechaInicioVisita: true,
                 empresaExternaNombre: true,
             },
         });
@@ -832,25 +854,11 @@ const iniciarRutaAgendaVisita = async (req, res) => {
         if (visita.estado === client_1.EstadoAgenda.COMPLETADA || visita.estado === client_1.EstadoAgenda.CANCELADA) {
             return res.status(409).json({ error: "No puedes iniciar ruta en una visita finalizada o cancelada." });
         }
-        const cargarEmpresa = (empresaId) => empresaId
-            ? prisma.empresa.findUnique({
-                where: { id_empresa: empresaId },
-                select: {
-                    id_empresa: true,
-                    nombre: true,
-                    razonSocial: true,
-                    detalleEmpresa: {
-                        select: {
-                            rut: true,
-                            direccion: true,
-                            direcciones: true,
-                        },
-                    },
-                },
-            })
-            : Promise.resolve(null);
+        if (visita.estado === client_1.EstadoAgenda.INICIADA) {
+            return res.status(409).json({ error: "La visita ya fue iniciada." });
+        }
         if (visita.estado === client_1.EstadoAgenda.EN_RUTA) {
-            const empresa = await cargarEmpresa(visita.empresaId);
+            const empresa = await cargarEmpresaAgenda(visita.empresaId);
             return res.json({
                 visita: mapAgendaAsignada(visita, empresa ?? undefined),
             });
@@ -887,10 +895,11 @@ const iniciarRutaAgendaVisita = async (req, res) => {
                 horaFin: true,
                 mensaje: true,
                 fechaInicioRuta: true,
+                fechaInicioVisita: true,
                 empresaExternaNombre: true,
             },
         });
-        const empresa = await cargarEmpresa(actualizada.empresaId);
+        const empresa = await cargarEmpresaAgenda(actualizada.empresaId);
         return res.json({
             visita: mapAgendaAsignada(actualizada, empresa ?? undefined),
         });
@@ -903,6 +912,92 @@ const iniciarRutaAgendaVisita = async (req, res) => {
     }
 };
 exports.iniciarRutaAgendaVisita = iniciarRutaAgendaVisita;
+const iniciarVisitaAgendaVisita = async (req, res) => {
+    try {
+        const tecnicoId = req.user?.id;
+        const agendaId = Number(req.params.id);
+        if (!tecnicoId)
+            return res.status(401).json({ error: "No autenticado" });
+        if (!Number.isFinite(agendaId))
+            return res.status(400).json({ error: "ID de visita inválido" });
+        const asignacion = await prisma.agendaTecnico.findUnique({
+            where: {
+                agendaId_tecnicoId: {
+                    agendaId,
+                    tecnicoId,
+                },
+            },
+            select: { agendaId: true },
+        });
+        if (!asignacion) {
+            return res.status(403).json({ error: "No puedes iniciar una visita que no te pertenece." });
+        }
+        const visita = await prisma.agendaVisita.findUnique({
+            where: { id: agendaId },
+            select: {
+                id: true,
+                fecha: true,
+                empresaId: true,
+                estado: true,
+                notas: true,
+                horaInicio: true,
+                horaFin: true,
+                mensaje: true,
+                fechaInicioRuta: true,
+                fechaInicioVisita: true,
+                empresaExternaNombre: true,
+            },
+        });
+        if (!visita)
+            return res.status(404).json({ error: "Visita asignada no encontrada" });
+        if (visita.estado === client_1.EstadoAgenda.COMPLETADA || visita.estado === client_1.EstadoAgenda.CANCELADA) {
+            return res.status(409).json({ error: "No puedes iniciar una visita finalizada o cancelada." });
+        }
+        if (visita.estado === client_1.EstadoAgenda.PROGRAMADA || visita.estado === client_1.EstadoAgenda.NOTIFICADA) {
+            return res.status(409).json({ error: "Debes iniciar ruta antes de iniciar la visita." });
+        }
+        if (visita.estado === client_1.EstadoAgenda.INICIADA) {
+            const empresa = await cargarEmpresaAgenda(visita.empresaId);
+            return res.json({
+                visita: mapAgendaAsignada(visita, empresa ?? undefined),
+            });
+        }
+        if (visita.estado !== client_1.EstadoAgenda.EN_RUTA) {
+            return res.status(409).json({ error: "Debes iniciar ruta antes de iniciar la visita." });
+        }
+        const actualizada = await prisma.agendaVisita.update({
+            where: { id: agendaId },
+            data: {
+                estado: client_1.EstadoAgenda.INICIADA,
+                fechaInicioVisita: visita.fechaInicioVisita ?? new Date(),
+            },
+            select: {
+                id: true,
+                fecha: true,
+                empresaId: true,
+                estado: true,
+                notas: true,
+                horaInicio: true,
+                horaFin: true,
+                mensaje: true,
+                fechaInicioRuta: true,
+                fechaInicioVisita: true,
+                empresaExternaNombre: true,
+            },
+        });
+        const empresa = await cargarEmpresaAgenda(actualizada.empresaId);
+        return res.json({
+            visita: mapAgendaAsignada(actualizada, empresa ?? undefined),
+        });
+    }
+    catch (error) {
+        console.error("Error al iniciar visita:", error);
+        return res.status(500).json({
+            error: `Error interno al iniciar visita: ${error.message || error}`,
+        });
+    }
+};
+exports.iniciarVisitaAgendaVisita = iniciarVisitaAgendaVisita;
 const registrarUbicacionTecnico = async (req, res) => {
     try {
         const tecnicoId = req.user?.id;

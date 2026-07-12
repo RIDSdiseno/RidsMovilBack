@@ -30,6 +30,7 @@ r.put("/equipos/:id/solicitante", auth_middleware_1.authGuard, auth_controller_1
 //Funcionalidad de visitas
 r.get("/agenda/mis-visitas/hoy", auth_middleware_1.authGuard, auth_controller_1.obtenerMisVisitasAsignadasHoy);
 r.post("/agenda/:id/iniciar-ruta", auth_middleware_1.authGuard, auth_controller_1.iniciarRutaAgendaVisita);
+r.post("/agenda/:id/iniciar-visita", auth_middleware_1.authGuard, auth_controller_1.iniciarVisitaAgendaVisita);
 r.post("/ubicaciones", auth_middleware_1.authGuard, auth_controller_1.registrarUbicacionTecnico);
 r.post("/crear_visita", auth_middleware_1.authGuard, auth_controller_1.crearVisita);
 r.put("/finalizar_visita/:id", auth_middleware_1.authGuard, auth_controller_1.completarVisita);

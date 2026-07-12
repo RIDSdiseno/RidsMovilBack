@@ -351,29 +351,48 @@ model ModeloGestioo {
 }
 
 model Equipo {
-  id_equipo              Int                     @id @default(autoincrement())
-  idSolicitante          Int?
-  serial                 String?                 @unique
-  marca                  String
-  modelo                 String
-  procesador             String?
-  ram                    String?
-  disco                  String?
-  propiedad              String                  @default("Empresa")
-  tipo                   TipoEquipo              @default(GENERICO)
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @default(now())
-  deletedAt              DateTime?
-  empresaId              Int?
-  origenCotizacionId     Int?
-  productoId             Int?                    @unique
-  estado                 EstadoEquipo            @default(ACTIVO)
-  anioPc                 Int?
-  anioPcOrigen           String?                 @default("AUTO")
-  solicitante            Solicitante?            @relation(fields: [idSolicitante], references: [id_solicitante])
-  equipo                 DetalleEquipo[]
-  adicionales            EquipoAdicional[]
-  detalleTrabajosGestioo DetalleTrabajoGestioo[] @relation("EquipoToTrabajoGestioo")
+  id_equipo                   Int                     @id @default(autoincrement())
+  idSolicitante               Int?
+  serial                      String?                 @unique
+  marca                       String
+  modelo                      String
+  procesador                  String?
+  ram                         String?
+  disco                       String?
+  propiedad                   String                  @default("Empresa")
+  tipo                        TipoEquipo              @default(GENERICO)
+  createdAt                   DateTime                @default(now())
+  updatedAt                   DateTime                @default(now())
+  deletedAt                   DateTime?
+  empresaId                   Int?
+  origenCotizacionId          Int?
+  productoId                  Int?                    @unique
+  estado                      EstadoEquipo            @default(ACTIVO)
+  anioPc                      Int?
+  anioPcOrigen                String?                 @default("AUTO")
+  agenteActivo                Boolean                 @default(false)
+  agenteVersion               String?
+  diskFreeGb                  Float?
+  diskTotalGb                 Float?
+  dominio                     String?
+  estadoAgente                EstadoAgenteEquipo      @default(SIN_AGENTE)
+  hostname                    String?
+  lastBootAt                  DateTime?
+  lastSeenAt                  DateTime?
+  localIp                     String?
+  macAddress                  String?
+  motivoRevisionSolicitante   String?
+  publicIp                    String?
+  ramGb                       Float?
+  requiereRevisionSolicitante Boolean                 @default(false)
+  solicitanteDetectadoEmail   String?
+  solicitanteDetectadoId      Int?
+  usuarioActual               String?
+  observaciones               String?
+  solicitante                 Solicitante?            @relation(fields: [idSolicitante], references: [id_solicitante])
+  equipo                      DetalleEquipo[]
+  adicionales                 EquipoAdicional[]
+  detalleTrabajosGestioo      DetalleTrabajoGestioo[] @relation("EquipoToTrabajoGestioo")
 
   @@index([idSolicitante])
   @@index([deletedAt])
@@ -381,6 +400,11 @@ model Equipo {
   @@index([origenCotizacionId])
   @@index([productoId])
   @@index([estado])
+  @@index([agenteActivo])
+  @@index([estadoAgente])
+  @@index([hostname])
+  @@index([lastSeenAt])
+  @@index([requiereRevisionSolicitante])
 }
 
 model EquipoAdicional {
@@ -398,8 +422,8 @@ model EquipoAdicional {
 }
 
 model DetalleEquipo {
-  id                Int     @id @default(autoincrement()) @map("id_detalle_equipo")
-  idEquipo          Int     @unique
+  id                Int      @id @default(autoincrement()) @map("id_detalle_equipo")
+  idEquipo          Int      @unique
   macWifi           String?
   so                String?
   tipoDd            String?
@@ -415,7 +439,13 @@ model DetalleEquipo {
   usuarioEmpresa    String?
   usuarioPersonal   String?
   redEthernet       String?
-  equipo            Equipo? @relation(fields: [idEquipo], references: [id_equipo])
+  antivirusActivo   Boolean?
+  antivirusNombre   String?
+  bitlockerEstado   String?
+  firewallActivo    Boolean?
+  observacionAgente String?
+  windowsUpdate     String?
+  equipo            Equipo?  @relation(fields: [idEquipo], references: [id_equipo])
 
   @@index([idEquipo])
 }
@@ -1044,19 +1074,6 @@ model ReporteIA {
   @@unique([empresaId, periodo])
 }
 
-model RolePermission {
-  id        Int      @id @default(autoincrement())
-  rol       String
-  permiso   String
-  permitido Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime
-
-  @@unique([rol, permiso])
-  @@index([permiso])
-  @@index([rol])
-}
-
 model Servidor {
   id            Int      @id @default(autoincrement())
   empresaId     Int
@@ -1356,6 +1373,130 @@ model ManualTutorialArchivo {
   @@index([manualId])
 }
 
+model EquipoAgenteEvento {
+  id        Int      @id @default(autoincrement())
+  equipoId  Int
+  tipo      String
+  mensaje   String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([equipoId])
+  @@index([tipo])
+}
+
+model EquipoSoftware {
+  id          Int       @id @default(autoincrement())
+  equipoId    Int
+  nombre      String
+  version     String?
+  publisher   String?
+  installDate DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime
+
+  @@unique([equipoId, nombre, version])
+  @@index([equipoId])
+  @@index([nombre])
+}
+
+model CotizacionMasivaEjecucion {
+  id                Int      @id @default(autoincrement())
+  plantillaId       Int
+  fecha             DateTime @default(now())
+  nombre            String?
+  totalCotizaciones Int      @default(0)
+
+  @@index([fecha])
+  @@index([plantillaId])
+}
+
+model CotizacionMasivaPlantilla {
+  id          Int      @id @default(autoincrement())
+  nombre      String
+  descripcion String?
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+  tecnicoId   Int?
+
+  @@index([activo])
+  @@index([tecnicoId])
+}
+
+model CotizacionMasivaPlantillaCantidad {
+  id                 Int @id @default(autoincrement())
+  plantillaEntidadId Int
+  productoId         Int
+  cantidad           Int @default(1)
+
+  @@unique([plantillaEntidadId, productoId])
+  @@index([plantillaEntidadId])
+  @@index([productoId])
+}
+
+model CotizacionMasivaPlantillaEntidad {
+  id          Int @id @default(autoincrement())
+  plantillaId Int
+  entidadId   Int
+
+  @@unique([plantillaId, entidadId])
+  @@index([entidadId])
+  @@index([plantillaId])
+}
+
+model CotizacionMasivaPlantillaItem {
+  id          Int @id @default(autoincrement())
+  plantillaId Int
+  productoId  Int
+
+  @@unique([plantillaId, productoId])
+  @@index([plantillaId])
+  @@index([productoId])
+}
+
+model EquipoMantencion {
+  id               Int       @id @default(autoincrement())
+  equipoId         Int?
+  empresaId        Int?
+  solicitanteId    Int?
+  tecnicoId        Int?
+  tipo             String
+  estado           String
+  origen           String    @default("MANT_GENERAL_RIDS")
+  fechaInicio      DateTime
+  fechaFin         DateTime?
+  duracionSegundos Int?
+  duracionTexto    String?
+  tareasRealizadas Json      @default("[]")
+  tareasConError   Json      @default("[]")
+  resumen          String?
+  reporteTexto     String?
+  serial           String?
+  hostname         String?
+  usuarioActual    String?
+  localIp          String?
+  macAddress       String?
+  marca            String?
+  modelo           String?
+  agenteVersion    String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime
+
+  @@index([empresaId])
+  @@index([equipoId])
+  @@index([estado])
+  @@index([fechaInicio])
+  @@index([hostname])
+  @@index([macAddress])
+  @@index([origen])
+  @@index([serial])
+  @@index([solicitanteId])
+  @@index([tecnicoId])
+  @@index([tipo])
+}
+
 enum MonedaGestioo {
   CLP
   USD
@@ -1584,4 +1725,12 @@ enum TipoManualTutorial {
   VIDEO
   GUIA
   PROCEDIMIENTO
+}
+
+enum EstadoAgenteEquipo {
+  SIN_AGENTE
+  ACTIVO
+  SIN_CONEXION
+  ADVERTENCIA
+  CRITICO
 }

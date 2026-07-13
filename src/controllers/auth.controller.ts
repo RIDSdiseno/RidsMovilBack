@@ -1175,6 +1175,103 @@ export const iniciarVisitaAgendaVisita = async (req: Request, res: Response) => 
   }
 };
 
+export const finalizarAgendaVisita = async (req: Request, res: Response) => {
+  try {
+    const tecnicoId = req.user?.id;
+    const agendaId = Number(req.params.id);
+
+    if (!tecnicoId) return res.status(401).json({ error: "No autenticado" });
+    if (!Number.isFinite(agendaId)) return res.status(400).json({ error: "ID de visita inválido" });
+
+    const asignacion = await prisma.agendaTecnico.findUnique({
+      where: {
+        agendaId_tecnicoId: {
+          agendaId,
+          tecnicoId,
+        },
+      },
+      select: { agendaId: true },
+    });
+
+    if (!asignacion) {
+      return res.status(403).json({ error: "No puedes finalizar una visita que no te pertenece." });
+    }
+
+    const visita = await prisma.agendaVisita.findUnique({
+      where: { id: agendaId },
+      select: {
+        id: true,
+        fecha: true,
+        empresaId: true,
+        estado: true,
+        notas: true,
+        horaInicio: true,
+        horaFin: true,
+        mensaje: true,
+        fechaInicioRuta: true,
+        fechaInicioVisita: true,
+        empresaExternaNombre: true,
+      },
+    });
+
+    if (!visita) return res.status(404).json({ error: "Visita asignada no encontrada" });
+
+    if (visita.estado === EstadoAgenda.COMPLETADA) {
+      const empresa = await cargarEmpresaAgenda(visita.empresaId);
+      return res.json({
+        visita: mapAgendaAsignada(visita, empresa ?? undefined),
+      });
+    }
+
+    if (visita.estado === EstadoAgenda.CANCELADA) {
+      return res.status(409).json({ error: "No puedes finalizar una visita cancelada." });
+    }
+
+    if (
+      visita.estado === EstadoAgenda.PROGRAMADA ||
+      visita.estado === EstadoAgenda.NOTIFICADA ||
+      visita.estado === EstadoAgenda.EN_RUTA
+    ) {
+      return res.status(409).json({ error: "Debes iniciar la visita antes de finalizarla." });
+    }
+
+    if (visita.estado !== EstadoAgenda.INICIADA) {
+      return res.status(409).json({ error: "Debes iniciar la visita antes de finalizarla." });
+    }
+
+    const actualizada = await prisma.agendaVisita.update({
+      where: { id: agendaId },
+      data: {
+        estado: EstadoAgenda.COMPLETADA,
+      },
+      select: {
+        id: true,
+        fecha: true,
+        empresaId: true,
+        estado: true,
+        notas: true,
+        horaInicio: true,
+        horaFin: true,
+        mensaje: true,
+        fechaInicioRuta: true,
+        fechaInicioVisita: true,
+        empresaExternaNombre: true,
+      },
+    });
+
+    const empresa = await cargarEmpresaAgenda(actualizada.empresaId);
+
+    return res.json({
+      visita: mapAgendaAsignada(actualizada, empresa ?? undefined),
+    });
+  } catch (error: any) {
+    console.error("Error al finalizar visita de agenda:", error);
+    return res.status(500).json({
+      error: `Error interno al finalizar visita de agenda: ${error.message || error}`,
+    });
+  }
+};
+
 export const registrarUbicacionTecnico = async (req: Request, res: Response) => {
   try {
     const tecnicoId = req.user?.id;

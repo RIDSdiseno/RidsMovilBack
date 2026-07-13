@@ -2,7 +2,7 @@ import { Router } from "express";
 import {
     login, loginMicrosoft, registerUser, createManyempresa, crearVisita,
     cancelarVisita, completarVisita, logout, refresh, getAllUsers,
-    iniciarRutaAgendaVisita, iniciarVisitaAgendaVisita, obtenerMisVisitasAsignadasHoy,
+    finalizarAgendaVisita, iniciarRutaAgendaVisita, iniciarVisitaAgendaVisita, obtenerMisVisitasAsignadasHoy,
     registrarUbicacionTecnico,
     createCliente, getAllClientes,
     deleteCliente,
@@ -58,6 +58,7 @@ r.put("/equipos/:id/solicitante",authGuard,cambiarSolicitanteEquipo)
 r.get("/agenda/mis-visitas/hoy", authGuard, obtenerMisVisitasAsignadasHoy)
 r.post("/agenda/:id/iniciar-ruta", authGuard, iniciarRutaAgendaVisita)
 r.post("/agenda/:id/iniciar-visita", authGuard, iniciarVisitaAgendaVisita)
+r.post("/agenda/:id/finalizar-visita", authGuard, finalizarAgendaVisita)
 r.post("/ubicaciones", authGuard, registrarUbicacionTecnico)
 r.post("/crear_visita", authGuard, crearVisita)
 r.put("/finalizar_visita/:id", authGuard, completarVisita)

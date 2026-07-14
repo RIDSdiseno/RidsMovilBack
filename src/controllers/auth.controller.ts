@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { EstadoAgenda, EstadoVisita, OrigenGestioo, Prisma, PrismaClient, TipoEntidadGestioo } from "@prisma/client";
+import { EstadoAgenda, EstadoVisita, OrigenGestioo, OrigenVisita, Prisma, PrismaClient, TipoEntidadGestioo } from "@prisma/client";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import type { Secret } from "jsonwebtoken";
@@ -822,6 +822,11 @@ function mapAgendaAsignada(
     fechaInicioRuta: Date | null;
     fechaInicioVisita: Date | null;
     empresaExternaNombre: string | null;
+    visita?: {
+      id_visita: number;
+      status: EstadoVisita;
+      origen: OrigenVisita;
+    } | null;
   },
   empresa?: {
     id_empresa: number;
@@ -867,6 +872,9 @@ function mapAgendaAsignada(
     observacion: visita.notas ?? visita.mensaje,
     fechaInicioRuta: visita.fechaInicioRuta,
     fechaInicioVisita: visita.fechaInicioVisita,
+    visitaId: visita.visita?.id_visita ?? null,
+    visitaStatus: visita.visita?.status ?? null,
+    visitaOrigen: visita.visita?.origen ?? null,
   };
 }
 
@@ -931,6 +939,13 @@ export const obtenerMisVisitasAsignadasHoy = async (req: Request, res: Response)
         fechaInicioRuta: true,
         fechaInicioVisita: true,
         empresaExternaNombre: true,
+        visita: {
+          select: {
+            id_visita: true,
+            status: true,
+            origen: true,
+          },
+        },
       },
     });
 
@@ -966,6 +981,53 @@ export const obtenerMisVisitasAsignadasHoy = async (req: Request, res: Response)
     console.error("Error al obtener visitas asignadas:", error);
     return res.status(500).json({
       error: `Error interno al obtener visitas asignadas: ${error.message || error}`,
+    });
+  }
+};
+
+export const obtenerVisitaDeAgenda = async (req: Request, res: Response) => {
+  try {
+    const tecnicoId = req.user?.id;
+    const agendaId = Number(req.params.id);
+
+    if (!tecnicoId) return res.status(401).json({ error: "No autenticado" });
+    if (!Number.isFinite(agendaId)) return res.status(400).json({ error: "ID de visita inválido" });
+
+    const asignacion = await prisma.agendaTecnico.findUnique({
+      where: {
+        agendaId_tecnicoId: {
+          agendaId,
+          tecnicoId,
+        },
+      },
+      select: { agendaId: true },
+    });
+
+    if (!asignacion) {
+      return res.status(403).json({ error: "No puedes consultar una visita que no te pertenece." });
+    }
+
+    const visita = await prisma.visita.findUnique({
+      where: { agendaId },
+      select: {
+        id_visita: true,
+        empresaId: true,
+        tecnicoId: true,
+        sucursalId: true,
+        inicio: true,
+        fin: true,
+        status: true,
+        direccion_visita: true,
+        agendaId: true,
+        origen: true,
+      },
+    });
+
+    return res.json({ visita });
+  } catch (error: any) {
+    console.error("Error al obtener visita de agenda:", error);
+    return res.status(500).json({
+      error: `Error interno al obtener visita de agenda: ${error.message || error}`,
     });
   }
 };
@@ -1211,6 +1273,14 @@ export const finalizarAgendaVisita = async (req: Request, res: Response) => {
         fechaInicioRuta: true,
         fechaInicioVisita: true,
         empresaExternaNombre: true,
+        visita: {
+          select: {
+            id_visita: true,
+            status: true,
+            origen: true,
+            agendaId: true,
+          },
+        },
       },
     });
 
@@ -1239,6 +1309,40 @@ export const finalizarAgendaVisita = async (req: Request, res: Response) => {
       return res.status(409).json({ error: "Debes iniciar la visita antes de finalizarla." });
     }
 
+    const formulario = visita.visita ?? await prisma.visita.findUnique({
+      where: { agendaId },
+      select: {
+        id_visita: true,
+        status: true,
+        origen: true,
+        agendaId: true,
+      },
+    });
+
+    if (!formulario) {
+      return res.status(409).json({
+        error: "No existe un formulario de visita asociado a esta agenda.",
+      });
+    }
+
+    if (formulario.agendaId !== agendaId) {
+      return res.status(409).json({
+        error: "El formulario de visita no corresponde a esta agenda.",
+      });
+    }
+
+    if (formulario.status === EstadoVisita.PENDIENTE) {
+      return res.status(409).json({
+        error: "El formulario de visita debe estar completado antes de cerrar la agenda.",
+      });
+    }
+
+    if (formulario.status !== EstadoVisita.COMPLETADA) {
+      return res.status(409).json({
+        error: "El formulario de visita debe estar completado antes de cerrar la agenda.",
+      });
+    }
+
     const actualizada = await prisma.agendaVisita.update({
       where: { id: agendaId },
       data: {
@@ -1256,6 +1360,13 @@ export const finalizarAgendaVisita = async (req: Request, res: Response) => {
         fechaInicioRuta: true,
         fechaInicioVisita: true,
         empresaExternaNombre: true,
+        visita: {
+          select: {
+            id_visita: true,
+            status: true,
+            origen: true,
+          },
+        },
       },
     });
 
@@ -1373,11 +1484,156 @@ export const registrarUbicacionTecnico = async (req: Request, res: Response) => 
   }
 };
 
-// En tu backend - modificar la función crearVisita
+const visitaInicialSelect = {
+  id_visita: true,
+  empresaId: true,
+  tecnicoId: true,
+  sucursalId: true,
+  inicio: true,
+  status: true,
+  direccion_visita: true,
+  agendaId: true,
+  origen: true,
+} satisfies Prisma.VisitaSelect;
+
+function coordenadasVisita(latitud: unknown, longitud: unknown) {
+  return latitud && longitud ? `${latitud},${longitud}` : null;
+}
+
+function parseOptionalInt(value: unknown) {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) ? parsed : NaN;
+}
+
+async function crearVisitaInicial(params: {
+  empresaId: number;
+  tecnicoId: number;
+  sucursalId: number | null;
+  latitud?: unknown;
+  longitud?: unknown;
+  inicio?: unknown;
+  agendaId?: number | null;
+  origen: OrigenVisita;
+}) {
+  return prisma.visita.create({
+    data: {
+      empresaId: params.empresaId,
+      tecnicoId: params.tecnicoId,
+      sucursalId: params.sucursalId,
+      solicitante: "No especificado",
+      inicio: parseDateOrNow(params.inicio),
+      status: EstadoVisita.PENDIENTE,
+      direccion_visita: coordenadasVisita(params.latitud, params.longitud),
+      agendaId: params.agendaId ?? null,
+      origen: params.origen,
+    },
+    select: visitaInicialSelect,
+  });
+}
+
 export const crearVisita = async (req: Request, res: Response) => {
   try {
     console.log("Datos recibidos para crear la visita:", req.body);
-    const { empresaId, tecnicoId, sucursalId, latitud, longitud, inicio } = req.body;
+    const { empresaId, tecnicoId, sucursalId, latitud, longitud, inicio, agendaId } = req.body ?? {};
+    const parsedAgendaId = parseOptionalInt(agendaId);
+
+    if (Number.isNaN(parsedAgendaId)) {
+      return res.status(400).json({ error: "agendaId inválido" });
+    }
+
+    if (parsedAgendaId !== null) {
+      const tecnicoAutenticadoId = req.user?.id;
+      if (!tecnicoAutenticadoId) return res.status(401).json({ error: "No autenticado" });
+
+      const empresaIdInt = Number(empresaId);
+      const sucursalIdInt = parseOptionalInt(sucursalId);
+
+      if (!Number.isInteger(empresaIdInt)) {
+        return res.status(400).json({ error: "empresaId es obligatorio y debe ser válido" });
+      }
+
+      if (Number.isNaN(sucursalIdInt)) {
+        return res.status(400).json({ error: "sucursalId inválido" });
+      }
+
+      const agenda = await prisma.agendaVisita.findUnique({
+        where: { id: parsedAgendaId },
+        select: {
+          id: true,
+          empresaId: true,
+          estado: true,
+        },
+      });
+
+      if (!agenda) {
+        return res.status(404).json({ error: "Agenda no encontrada" });
+      }
+
+      const asignacion = await prisma.agendaTecnico.findUnique({
+        where: {
+          agendaId_tecnicoId: {
+            agendaId: parsedAgendaId,
+            tecnicoId: tecnicoAutenticadoId,
+          },
+        },
+        select: { agendaId: true },
+      });
+
+      if (!asignacion) {
+        return res.status(403).json({ error: "La agenda no pertenece al técnico autenticado" });
+      }
+
+      if (agenda.estado !== EstadoAgenda.INICIADA) {
+        return res.status(409).json({ error: "La agenda debe estar iniciada para crear el formulario de visita" });
+      }
+
+      if (!agenda.empresaId) {
+        return res.status(409).json({ error: "La agenda no tiene una empresa definida" });
+      }
+
+      if (agenda.empresaId !== empresaIdInt) {
+        return res.status(409).json({ error: "La empresa enviada no coincide con la empresa de la agenda" });
+      }
+
+      const existente = await prisma.visita.findUnique({
+        where: { agendaId: parsedAgendaId },
+        select: visitaInicialSelect,
+      });
+
+      if (existente) {
+        return res.status(200).json({ visita: existente, reutilizada: true });
+      }
+
+      let nuevaVisita;
+      try {
+        nuevaVisita = await crearVisitaInicial({
+          empresaId: agenda.empresaId,
+          tecnicoId: tecnicoAutenticadoId,
+          sucursalId: sucursalIdInt,
+          latitud,
+          longitud,
+          inicio,
+          agendaId: agenda.id,
+          origen: OrigenVisita.AGENDA,
+        });
+      } catch (error: any) {
+        if (error?.code === "P2002") {
+          const visitaReutilizada = await prisma.visita.findUnique({
+            where: { agendaId: parsedAgendaId },
+            select: visitaInicialSelect,
+          });
+
+          if (visitaReutilizada) {
+            return res.status(200).json({ visita: visitaReutilizada, reutilizada: true });
+          }
+        }
+
+        throw error;
+      }
+
+      return res.status(201).json({ visita: nuevaVisita, reutilizada: false });
+    }
 
     if (!empresaId || !tecnicoId) {
       return res.status(400).json({ error: "empresaId y tecnicoId son obligatorios" });
@@ -1385,34 +1641,21 @@ export const crearVisita = async (req: Request, res: Response) => {
 
     const empresaIdInt = Number(empresaId);
     const tecnicoIdInt = Number(tecnicoId);
-    const sucursalIdInt = sucursalId ? Number(sucursalId) : null;
+    const sucursalIdInt = parseOptionalInt(sucursalId);
 
-    if (isNaN(empresaIdInt) || isNaN(tecnicoIdInt)) {
+    if (isNaN(empresaIdInt) || isNaN(tecnicoIdInt) || Number.isNaN(sucursalIdInt)) {
       return res.status(400).json({ error: "Los IDs deben ser números válidos" });
     }
 
-    // Guardar coordenadas en formato string "lat,lon"
-    const coordenadas = latitud && longitud ? `${latitud},${longitud}` : null;
-
-    const nuevaVisita = await prisma.visita.create({
-      data: {
-        empresaId: empresaIdInt,
-        tecnicoId: tecnicoIdInt,
-        sucursalId: sucursalIdInt,
-        solicitante: 'No especificado',
-        inicio: parseDateOrNow(inicio),
-        status: EstadoVisita.PENDIENTE,
-        direccion_visita: coordenadas // ← Ahora guarda solo coordenadas
-      },
-      select: {
-        id_visita: true,
-        empresaId: true,
-        tecnicoId: true,
-        sucursalId: true,
-        inicio: true,
-        status: true,
-        direccion_visita: true
-      }
+    const nuevaVisita = await crearVisitaInicial({
+      empresaId: empresaIdInt,
+      tecnicoId: tecnicoIdInt,
+      sucursalId: sucursalIdInt,
+      latitud,
+      longitud,
+      inicio,
+      agendaId: null,
+      origen: OrigenVisita.MANUAL,
     });
 
     return res.status(201).json({ visita: nuevaVisita });
@@ -1475,6 +1718,8 @@ export const completarVisita = async (req: Request, res: Response) => {
         sucursalId: true,
         direccion_visita: true,
         inicio: true,
+        agendaId: true,
+        origen: true,
       },
     });
 
@@ -1557,7 +1802,7 @@ export const completarVisita = async (req: Request, res: Response) => {
           solicitanteId: true, solicitante: true, status: true,
           ccleaner: true, actualizaciones: true, antivirus: true, estadoDisco: true,
           licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true, ecografo: true,
-          direccion_visita: true, sucursalId: true,
+          direccion_visita: true, sucursalId: true, agendaId: true, origen: true,
         },
       });
 
@@ -1603,13 +1848,15 @@ export const completarVisita = async (req: Request, res: Response) => {
             solicitante: names[i] || null,
             direccion_visita: direccion_visita || v.direccion_visita,
             sucursalId: req.body.sucursalId ?? v.sucursalId ?? null,
+            agendaId: null,
+            origen: v.origen,
           },
           select: {
             id_visita: true, tecnicoId: true, empresaId: true, inicio: true, fin: true,
             solicitanteId: true, solicitante: true, status: true,
             ccleaner: true, actualizaciones: true, antivirus: true, estadoDisco: true,
             licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true, ecografo: true,
-            direccion_visita: true, sucursalId: true,
+            direccion_visita: true, sucursalId: true, agendaId: true, origen: true,
           },
         });
 

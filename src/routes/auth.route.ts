@@ -3,6 +3,7 @@ import {
     login, loginMicrosoft, registerUser, createManyempresa, crearVisita,
     cancelarVisita, completarVisita, logout, refresh, getAllUsers,
     finalizarAgendaVisita, iniciarRutaAgendaVisita, iniciarVisitaAgendaVisita, obtenerMisVisitasAsignadasHoy,
+    obtenerVisitaDeAgenda,
     registrarUbicacionTecnico,
     createCliente, getAllClientes,
     deleteCliente,
@@ -56,6 +57,7 @@ r.put("/equipos/:id/solicitante",authGuard,cambiarSolicitanteEquipo)
 
 //Funcionalidad de visitas
 r.get("/agenda/mis-visitas/hoy", authGuard, obtenerMisVisitasAsignadasHoy)
+r.get("/agenda/:id/visita", authGuard, obtenerVisitaDeAgenda)
 r.post("/agenda/:id/iniciar-ruta", authGuard, iniciarRutaAgendaVisita)
 r.post("/agenda/:id/iniciar-visita", authGuard, iniciarVisitaAgendaVisita)
 r.post("/agenda/:id/finalizar-visita", authGuard, finalizarAgendaVisita)

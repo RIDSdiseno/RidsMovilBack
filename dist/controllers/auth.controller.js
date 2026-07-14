@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.obtenerEmpresasConSucursales = exports.obtenerSucursalesPorEmpresa = exports.crearSucursal = exports.createSolicitante = exports.createEquipo = exports.createManyDetalle = exports.cambiarSolicitanteEquipo = exports.actualizarEquipo = exports.getAllEquipos = exports.updateSolicitante = exports.getSolicitantes = exports.createManyEquipos = exports.createManySolicitante = exports.obtenerHistorialPorTecnico = exports.completarVisita = exports.cancelarVisita = exports.crearVisita = exports.registrarUbicacionTecnico = exports.finalizarAgendaVisita = exports.iniciarVisitaAgendaVisita = exports.iniciarRutaAgendaVisita = exports.obtenerMisVisitasAsignadasHoy = exports.createManyempresa = exports.refresh = exports.logout = exports.getAllUsers = exports.loginMicrosoft = exports.login = exports.createCliente = exports.deleteCliente = exports.createClienteEconnet = exports.getClientesEconnet = exports.getAllClientes = exports.registerUser = void 0;
+exports.obtenerEmpresasConSucursales = exports.obtenerSucursalesPorEmpresa = exports.crearSucursal = exports.createSolicitante = exports.createEquipo = exports.createManyDetalle = exports.cambiarSolicitanteEquipo = exports.actualizarEquipo = exports.getAllEquipos = exports.updateSolicitante = exports.getSolicitantes = exports.createManyEquipos = exports.createManySolicitante = exports.obtenerHistorialPorTecnico = exports.completarVisita = exports.cancelarVisita = exports.crearVisita = exports.registrarUbicacionTecnico = exports.finalizarAgendaVisita = exports.iniciarVisitaAgendaVisita = exports.iniciarRutaAgendaVisita = exports.obtenerVisitaDeAgenda = exports.obtenerMisVisitasAsignadasHoy = exports.createManyempresa = exports.refresh = exports.logout = exports.getAllUsers = exports.loginMicrosoft = exports.login = exports.createCliente = exports.deleteCliente = exports.createClienteEconnet = exports.getClientesEconnet = exports.getAllClientes = exports.registerUser = void 0;
 const client_1 = require("@prisma/client");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
@@ -720,6 +720,9 @@ function mapAgendaAsignada(visita, empresa) {
         observacion: visita.notas ?? visita.mensaje,
         fechaInicioRuta: visita.fechaInicioRuta,
         fechaInicioVisita: visita.fechaInicioVisita,
+        visitaId: visita.visita?.id_visita ?? null,
+        visitaStatus: visita.visita?.status ?? null,
+        visitaOrigen: visita.visita?.origen ?? null,
     };
 }
 function cargarEmpresaAgenda(empresaId) {
@@ -779,6 +782,13 @@ const obtenerMisVisitasAsignadasHoy = async (req, res) => {
                 fechaInicioRuta: true,
                 fechaInicioVisita: true,
                 empresaExternaNombre: true,
+                visita: {
+                    select: {
+                        id_visita: true,
+                        status: true,
+                        origen: true,
+                    },
+                },
             },
         });
         const empresaIds = visitas
@@ -813,6 +823,51 @@ const obtenerMisVisitasAsignadasHoy = async (req, res) => {
     }
 };
 exports.obtenerMisVisitasAsignadasHoy = obtenerMisVisitasAsignadasHoy;
+const obtenerVisitaDeAgenda = async (req, res) => {
+    try {
+        const tecnicoId = req.user?.id;
+        const agendaId = Number(req.params.id);
+        if (!tecnicoId)
+            return res.status(401).json({ error: "No autenticado" });
+        if (!Number.isFinite(agendaId))
+            return res.status(400).json({ error: "ID de visita inválido" });
+        const asignacion = await prisma.agendaTecnico.findUnique({
+            where: {
+                agendaId_tecnicoId: {
+                    agendaId,
+                    tecnicoId,
+                },
+            },
+            select: { agendaId: true },
+        });
+        if (!asignacion) {
+            return res.status(403).json({ error: "No puedes consultar una visita que no te pertenece." });
+        }
+        const visita = await prisma.visita.findUnique({
+            where: { agendaId },
+            select: {
+                id_visita: true,
+                empresaId: true,
+                tecnicoId: true,
+                sucursalId: true,
+                inicio: true,
+                fin: true,
+                status: true,
+                direccion_visita: true,
+                agendaId: true,
+                origen: true,
+            },
+        });
+        return res.json({ visita });
+    }
+    catch (error) {
+        console.error("Error al obtener visita de agenda:", error);
+        return res.status(500).json({
+            error: `Error interno al obtener visita de agenda: ${error.message || error}`,
+        });
+    }
+};
+exports.obtenerVisitaDeAgenda = obtenerVisitaDeAgenda;
 const iniciarRutaAgendaVisita = async (req, res) => {
     try {
         const tecnicoId = req.user?.id;
@@ -1032,6 +1087,14 @@ const finalizarAgendaVisita = async (req, res) => {
                 fechaInicioRuta: true,
                 fechaInicioVisita: true,
                 empresaExternaNombre: true,
+                visita: {
+                    select: {
+                        id_visita: true,
+                        status: true,
+                        origen: true,
+                        agendaId: true,
+                    },
+                },
             },
         });
         if (!visita)
@@ -1053,6 +1116,35 @@ const finalizarAgendaVisita = async (req, res) => {
         if (visita.estado !== client_1.EstadoAgenda.INICIADA) {
             return res.status(409).json({ error: "Debes iniciar la visita antes de finalizarla." });
         }
+        const formulario = visita.visita ?? await prisma.visita.findUnique({
+            where: { agendaId },
+            select: {
+                id_visita: true,
+                status: true,
+                origen: true,
+                agendaId: true,
+            },
+        });
+        if (!formulario) {
+            return res.status(409).json({
+                error: "No existe un formulario de visita asociado a esta agenda.",
+            });
+        }
+        if (formulario.agendaId !== agendaId) {
+            return res.status(409).json({
+                error: "El formulario de visita no corresponde a esta agenda.",
+            });
+        }
+        if (formulario.status === client_1.EstadoVisita.PENDIENTE) {
+            return res.status(409).json({
+                error: "El formulario de visita debe estar completado antes de cerrar la agenda.",
+            });
+        }
+        if (formulario.status !== client_1.EstadoVisita.COMPLETADA) {
+            return res.status(409).json({
+                error: "El formulario de visita debe estar completado antes de cerrar la agenda.",
+            });
+        }
         const actualizada = await prisma.agendaVisita.update({
             where: { id: agendaId },
             data: {
@@ -1070,6 +1162,13 @@ const finalizarAgendaVisita = async (req, res) => {
                 fechaInicioRuta: true,
                 fechaInicioVisita: true,
                 empresaExternaNombre: true,
+                visita: {
+                    select: {
+                        id_visita: true,
+                        status: true,
+                        origen: true,
+                    },
+                },
             },
         });
         const empresa = await cargarEmpresaAgenda(actualizada.empresaId);
@@ -1168,41 +1267,146 @@ const registrarUbicacionTecnico = async (req, res) => {
     }
 };
 exports.registrarUbicacionTecnico = registrarUbicacionTecnico;
-// En tu backend - modificar la función crearVisita
+const visitaInicialSelect = {
+    id_visita: true,
+    empresaId: true,
+    tecnicoId: true,
+    sucursalId: true,
+    inicio: true,
+    status: true,
+    direccion_visita: true,
+    agendaId: true,
+    origen: true,
+};
+function coordenadasVisita(latitud, longitud) {
+    return latitud && longitud ? `${latitud},${longitud}` : null;
+}
+function parseOptionalInt(value) {
+    if (value === undefined || value === null || value === "")
+        return null;
+    const parsed = Number(value);
+    return Number.isInteger(parsed) ? parsed : NaN;
+}
+async function crearVisitaInicial(params) {
+    return prisma.visita.create({
+        data: {
+            empresaId: params.empresaId,
+            tecnicoId: params.tecnicoId,
+            sucursalId: params.sucursalId,
+            solicitante: "No especificado",
+            inicio: parseDateOrNow(params.inicio),
+            status: client_1.EstadoVisita.PENDIENTE,
+            direccion_visita: coordenadasVisita(params.latitud, params.longitud),
+            agendaId: params.agendaId ?? null,
+            origen: params.origen,
+        },
+        select: visitaInicialSelect,
+    });
+}
 const crearVisita = async (req, res) => {
     try {
         console.log("Datos recibidos para crear la visita:", req.body);
-        const { empresaId, tecnicoId, sucursalId, latitud, longitud, inicio } = req.body;
+        const { empresaId, tecnicoId, sucursalId, latitud, longitud, inicio, agendaId } = req.body ?? {};
+        const parsedAgendaId = parseOptionalInt(agendaId);
+        if (Number.isNaN(parsedAgendaId)) {
+            return res.status(400).json({ error: "agendaId inválido" });
+        }
+        if (parsedAgendaId !== null) {
+            const tecnicoAutenticadoId = req.user?.id;
+            if (!tecnicoAutenticadoId)
+                return res.status(401).json({ error: "No autenticado" });
+            const empresaIdInt = Number(empresaId);
+            const sucursalIdInt = parseOptionalInt(sucursalId);
+            if (!Number.isInteger(empresaIdInt)) {
+                return res.status(400).json({ error: "empresaId es obligatorio y debe ser válido" });
+            }
+            if (Number.isNaN(sucursalIdInt)) {
+                return res.status(400).json({ error: "sucursalId inválido" });
+            }
+            const agenda = await prisma.agendaVisita.findUnique({
+                where: { id: parsedAgendaId },
+                select: {
+                    id: true,
+                    empresaId: true,
+                    estado: true,
+                },
+            });
+            if (!agenda) {
+                return res.status(404).json({ error: "Agenda no encontrada" });
+            }
+            const asignacion = await prisma.agendaTecnico.findUnique({
+                where: {
+                    agendaId_tecnicoId: {
+                        agendaId: parsedAgendaId,
+                        tecnicoId: tecnicoAutenticadoId,
+                    },
+                },
+                select: { agendaId: true },
+            });
+            if (!asignacion) {
+                return res.status(403).json({ error: "La agenda no pertenece al técnico autenticado" });
+            }
+            if (agenda.estado !== client_1.EstadoAgenda.INICIADA) {
+                return res.status(409).json({ error: "La agenda debe estar iniciada para crear el formulario de visita" });
+            }
+            if (!agenda.empresaId) {
+                return res.status(409).json({ error: "La agenda no tiene una empresa definida" });
+            }
+            if (agenda.empresaId !== empresaIdInt) {
+                return res.status(409).json({ error: "La empresa enviada no coincide con la empresa de la agenda" });
+            }
+            const existente = await prisma.visita.findUnique({
+                where: { agendaId: parsedAgendaId },
+                select: visitaInicialSelect,
+            });
+            if (existente) {
+                return res.status(200).json({ visita: existente, reutilizada: true });
+            }
+            let nuevaVisita;
+            try {
+                nuevaVisita = await crearVisitaInicial({
+                    empresaId: agenda.empresaId,
+                    tecnicoId: tecnicoAutenticadoId,
+                    sucursalId: sucursalIdInt,
+                    latitud,
+                    longitud,
+                    inicio,
+                    agendaId: agenda.id,
+                    origen: client_1.OrigenVisita.AGENDA,
+                });
+            }
+            catch (error) {
+                if (error?.code === "P2002") {
+                    const visitaReutilizada = await prisma.visita.findUnique({
+                        where: { agendaId: parsedAgendaId },
+                        select: visitaInicialSelect,
+                    });
+                    if (visitaReutilizada) {
+                        return res.status(200).json({ visita: visitaReutilizada, reutilizada: true });
+                    }
+                }
+                throw error;
+            }
+            return res.status(201).json({ visita: nuevaVisita, reutilizada: false });
+        }
         if (!empresaId || !tecnicoId) {
             return res.status(400).json({ error: "empresaId y tecnicoId son obligatorios" });
         }
         const empresaIdInt = Number(empresaId);
         const tecnicoIdInt = Number(tecnicoId);
-        const sucursalIdInt = sucursalId ? Number(sucursalId) : null;
-        if (isNaN(empresaIdInt) || isNaN(tecnicoIdInt)) {
+        const sucursalIdInt = parseOptionalInt(sucursalId);
+        if (isNaN(empresaIdInt) || isNaN(tecnicoIdInt) || Number.isNaN(sucursalIdInt)) {
             return res.status(400).json({ error: "Los IDs deben ser números válidos" });
         }
-        // Guardar coordenadas en formato string "lat,lon"
-        const coordenadas = latitud && longitud ? `${latitud},${longitud}` : null;
-        const nuevaVisita = await prisma.visita.create({
-            data: {
-                empresaId: empresaIdInt,
-                tecnicoId: tecnicoIdInt,
-                sucursalId: sucursalIdInt,
-                solicitante: 'No especificado',
-                inicio: parseDateOrNow(inicio),
-                status: client_1.EstadoVisita.PENDIENTE,
-                direccion_visita: coordenadas // ← Ahora guarda solo coordenadas
-            },
-            select: {
-                id_visita: true,
-                empresaId: true,
-                tecnicoId: true,
-                sucursalId: true,
-                inicio: true,
-                status: true,
-                direccion_visita: true
-            }
+        const nuevaVisita = await crearVisitaInicial({
+            empresaId: empresaIdInt,
+            tecnicoId: tecnicoIdInt,
+            sucursalId: sucursalIdInt,
+            latitud,
+            longitud,
+            inicio,
+            agendaId: null,
+            origen: client_1.OrigenVisita.MANUAL,
         });
         return res.status(201).json({ visita: nuevaVisita });
     }
@@ -1260,6 +1464,8 @@ const completarVisita = async (req, res) => {
                 sucursalId: true,
                 direccion_visita: true,
                 inicio: true,
+                agendaId: true,
+                origen: true,
             },
         });
         if (!v)
@@ -1328,7 +1534,7 @@ const completarVisita = async (req, res) => {
                     solicitanteId: true, solicitante: true, status: true,
                     ccleaner: true, actualizaciones: true, antivirus: true, estadoDisco: true,
                     licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true, ecografo: true,
-                    direccion_visita: true, sucursalId: true,
+                    direccion_visita: true, sucursalId: true, agendaId: true, origen: true,
                 },
             });
             updated.push(u);
@@ -1371,13 +1577,15 @@ const completarVisita = async (req, res) => {
                         solicitante: names[i] || null,
                         direccion_visita: direccion_visita || v.direccion_visita,
                         sucursalId: req.body.sucursalId ?? v.sucursalId ?? null,
+                        agendaId: null,
+                        origen: v.origen,
                     },
                     select: {
                         id_visita: true, tecnicoId: true, empresaId: true, inicio: true, fin: true,
                         solicitanteId: true, solicitante: true, status: true,
                         ccleaner: true, actualizaciones: true, antivirus: true, estadoDisco: true,
                         licenciaWindows: true, licenciaOffice: true, rendimientoEquipo: true, mantenimientoReloj: true, ecografo: true,
-                        direccion_visita: true, sucursalId: true,
+                        direccion_visita: true, sucursalId: true, agendaId: true, origen: true,
                     },
                 });
                 updated.push(nueva);

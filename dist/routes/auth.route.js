@@ -29,6 +29,7 @@ r.get("/equipos", auth_controller_1.getAllEquipos);
 r.put("/equipos/:id/solicitante", auth_middleware_1.authGuard, auth_controller_1.cambiarSolicitanteEquipo);
 //Funcionalidad de visitas
 r.get("/agenda/mis-visitas/hoy", auth_middleware_1.authGuard, auth_controller_1.obtenerMisVisitasAsignadasHoy);
+r.get("/agenda/:id/visita", auth_middleware_1.authGuard, auth_controller_1.obtenerVisitaDeAgenda);
 r.post("/agenda/:id/iniciar-ruta", auth_middleware_1.authGuard, auth_controller_1.iniciarRutaAgendaVisita);
 r.post("/agenda/:id/iniciar-visita", auth_middleware_1.authGuard, auth_controller_1.iniciarVisitaAgendaVisita);
 r.post("/agenda/:id/finalizar-visita", auth_middleware_1.authGuard, auth_controller_1.finalizarAgendaVisita);

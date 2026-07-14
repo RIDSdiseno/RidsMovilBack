@@ -389,6 +389,14 @@ model Equipo {
   solicitanteDetectadoId      Int?
   usuarioActual               String?
   observaciones               String?
+  mantGeneralConfigPath       String?
+  mantGeneralExePath          String?
+  mantGeneralInstalado        Boolean                 @default(false)
+  mantGeneralInstalledAt      DateTime?
+  mantGeneralLastSeenAt       DateTime?
+  mantGeneralTecnicoId        Int?
+  mantGeneralVersion          String?
+  propietarioExterno          String?
   solicitante                 Solicitante?            @relation(fields: [idSolicitante], references: [id_solicitante])
   equipo                      DetalleEquipo[]
   adicionales                 EquipoAdicional[]
@@ -405,6 +413,9 @@ model Equipo {
   @@index([hostname])
   @@index([lastSeenAt])
   @@index([requiereRevisionSolicitante])
+  @@index([mantGeneralInstalado])
+  @@index([mantGeneralLastSeenAt])
+  @@index([mantGeneralTecnicoId])
 }
 
 model EquipoAdicional {

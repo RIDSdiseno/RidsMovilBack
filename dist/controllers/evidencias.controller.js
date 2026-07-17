@@ -4,7 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.listarEvidenciasPorEntrega = exports.confirmarEvidencia = exports.solicitarFirmaSubida = void 0;
 const client_1 = require("@prisma/client");
 const cloudinary_js_1 = require("../config/cloudinary.js");
-const prisma = new client_1.PrismaClient();
+const prisma_js_1 = require("../lib/prisma.js");
 const ALLOWED_IMAGE_FORMATS = new Set(["png", "jpg", "jpeg"]);
 const ALLOWED_PDF_FORMATS = new Set(["pdf"]);
 const ALLOWED_FORMATS = new Set([...ALLOWED_IMAGE_FORMATS, ...ALLOWED_PDF_FORMATS]);
@@ -60,7 +60,7 @@ function buildPublicId(tipo, entregaId, nombreArchivo) {
     return `${prefix}-${entregaId}-${Date.now()}-${rand}`;
 }
 async function findEntrega(entregaId) {
-    return prisma.entrega.findUnique({
+    return prisma_js_1.prisma.entrega.findUnique({
         where: { id_entrega: entregaId },
         select: { id_entrega: true },
     });
@@ -79,7 +79,7 @@ async function validarEntrega(res, entregaId) {
 }
 async function validarLimitesEvidencia(entregaId, tipo) {
     if (tipo === client_1.TipoEvidenciaEntrega.FIRMA || tipo === client_1.TipoEvidenciaEntrega.PDF) {
-        const existing = await prisma.evidenciaEntrega.findFirst({
+        const existing = await prisma_js_1.prisma.evidenciaEntrega.findFirst({
             where: { entregaId, tipo },
             select: { id: true },
         });
@@ -90,7 +90,7 @@ async function validarLimitesEvidencia(entregaId, tipo) {
         }
         return null;
     }
-    const fotos = await prisma.evidenciaEntrega.count({
+    const fotos = await prisma_js_1.prisma.evidenciaEntrega.count({
         where: { entregaId, tipo: client_1.TipoEvidenciaEntrega.FOTO },
     });
     if (fotos >= MAX_FOTOS_POR_ENTREGA) {
@@ -189,7 +189,7 @@ const confirmarEvidencia = async (req, res) => {
         if (limiteMsg) {
             return res.status(409).json({ error: limiteMsg });
         }
-        const evidencia = await prisma.evidenciaEntrega.create({
+        const evidencia = await prisma_js_1.prisma.evidenciaEntrega.create({
             data: {
                 entregaId: entrega.id_entrega,
                 tipo,
@@ -224,7 +224,7 @@ const listarEvidenciasPorEntrega = async (req, res) => {
         const entrega = await validarEntrega(res, entregaId);
         if (!entrega)
             return;
-        const evidencias = await prisma.evidenciaEntrega.findMany({
+        const evidencias = await prisma_js_1.prisma.evidenciaEntrega.findMany({
             where: { entregaId: entrega.id_entrega },
             orderBy: { creadoEn: "desc" },
         });

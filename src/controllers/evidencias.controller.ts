@@ -1,10 +1,9 @@
 // src/controllers/evidencias.controller.ts
 
 import type { Request, Response } from "express";
-import { Prisma, PrismaClient, TipoEvidenciaEntrega } from "@prisma/client";
+import { Prisma, TipoEvidenciaEntrega } from "@prisma/client";
 import { buildEntregaFolder, createUploadSignature } from "../config/cloudinary.js";
-
-const prisma = new PrismaClient();
+import { prisma } from "../lib/prisma.js";
 
 const ALLOWED_IMAGE_FORMATS = new Set(["png", "jpg", "jpeg"]);
 const ALLOWED_PDF_FORMATS = new Set(["pdf"]);

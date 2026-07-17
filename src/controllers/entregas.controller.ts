@@ -1,8 +1,7 @@
 import type { Request, Response } from "express";
-import { PrismaClient, TipoEvidenciaEntrega } from "@prisma/client";
+import { TipoEvidenciaEntrega } from "@prisma/client";
 import { sendDeliveryPdfEmail } from "../services/microsoft-mail.service.js";
-
-const prisma = new PrismaClient();
+import { prisma } from "../lib/prisma.js";
 
 /* =========================
    CREAR ENTREGA

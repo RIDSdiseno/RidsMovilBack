@@ -9,7 +9,7 @@ const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const crypto_1 = __importDefault(require("crypto"));
 const argon2_1 = __importDefault(require("argon2"));
-const prisma = new client_1.PrismaClient;
+const prisma_js_1 = require("../lib/prisma.js");
 /* =========================
    CONFIG / CONSTANTES
 ========================= */
@@ -266,11 +266,11 @@ const registerUser = async (req, res) => {
         }
         //Se normaliza el email
         const emailNorm = String(email).trim().toLowerCase();
-        const existing = await prisma.tecnico.findUnique({ where: { email: emailNorm } });
+        const existing = await prisma_js_1.prisma.tecnico.findUnique({ where: { email: emailNorm } });
         if (existing)
             return res.status(409).json({ error: "Usuario ya existe" });
         const passwordHash = await bcrypt_1.default.hash(password, 10);
-        const newUser = await prisma.tecnico.create({
+        const newUser = await prisma_js_1.prisma.tecnico.create({
             data: {
                 nombre,
                 email: emailNorm,
@@ -290,7 +290,7 @@ exports.registerUser = registerUser;
 //GET /Auth/getAllClientes
 const getAllClientes = async (req, res) => {
     try {
-        const clientes = await prisma.empresa.findMany({
+        const clientes = await prisma_js_1.prisma.empresa.findMany({
             orderBy: { nombre: "asc" },
             include: {
                 detalleEmpresa: {
@@ -338,7 +338,7 @@ function mapEntidadEconnetToCliente(entidad) {
 }
 const getClientesEconnet = async (_req, res) => {
     try {
-        const entidades = await prisma.entidadGestioo.findMany({
+        const entidades = await prisma_js_1.prisma.entidadGestioo.findMany({
             where: {
                 origen: client_1.OrigenGestioo.ECONNET,
                 tipo: client_1.TipoEntidadGestioo.EMPRESA,
@@ -375,7 +375,7 @@ const createClienteEconnet = async (req, res) => {
             return res.status(400).json({ error: "Correo inválido" });
         }
         if (rut) {
-            const entidadesConRut = await prisma.entidadGestioo.findMany({
+            const entidadesConRut = await prisma_js_1.prisma.entidadGestioo.findMany({
                 where: { rut: { not: null } },
                 select: { id: true, nombre: true, rut: true },
             });
@@ -384,7 +384,7 @@ const createClienteEconnet = async (req, res) => {
                 return res.status(409).json({ error: `Ya existe una empresa con este RUT: ${existente.nombre}` });
             }
         }
-        const entidad = await prisma.entidadGestioo.create({
+        const entidad = await prisma_js_1.prisma.entidadGestioo.create({
             data: {
                 nombre,
                 rut,
@@ -420,7 +420,7 @@ const deleteCliente = async (req, res) => {
     if (!id)
         return res.status(400).json({ error: 'ID requerido' });
     try {
-        await prisma.empresa.delete({ where: { id_empresa: Number(id) } });
+        await prisma_js_1.prisma.empresa.delete({ where: { id_empresa: Number(id) } });
         return res.status(204).send();
     }
     catch (e) {
@@ -438,7 +438,7 @@ const createCliente = async (req, res) => {
         return res.status(400).json({ error: "El nombre de cliente es obligatorio" });
     }
     try {
-        const cliente = await prisma.empresa.create({ data: { nombre } });
+        const cliente = await prisma_js_1.prisma.empresa.create({ data: { nombre } });
         return res.status(201).json(cliente);
     }
     catch (e) {
@@ -455,7 +455,7 @@ const login = async (req, res) => {
             return res.status(400).json({ error: "Correo y contraseña son obligatorios" });
         }
         const emailNorm = email.trim().toLowerCase();
-        const user = await prisma.tecnico.findUnique({
+        const user = await prisma_js_1.prisma.tecnico.findUnique({
             where: { email: emailNorm },
             select: {
                 id_tecnico: true,
@@ -495,7 +495,7 @@ const login = async (req, res) => {
         // userAgent / ip como string | null (no undefined)
         const userAgent = req.get("user-agent") ?? null;
         const ip = (req.ip ?? req.socket?.remoteAddress ?? null);
-        await prisma.refreshToken.create({
+        await prisma_js_1.prisma.refreshToken.create({
             data: {
                 userId: user.id_tecnico,
                 rtHash: rtDigest,
@@ -523,7 +523,7 @@ const loginMicrosoft = async (req, res) => {
             return res.status(400).json({ error: "Token Microsoft requerido" });
         }
         const microsoftUser = await verifyMicrosoftIdToken(idToken);
-        const user = await prisma.tecnico.findUnique({
+        const user = await prisma_js_1.prisma.tecnico.findUnique({
             where: { email: microsoftUser.email },
             select: {
                 id_tecnico: true,
@@ -552,7 +552,7 @@ const loginMicrosoft = async (req, res) => {
 exports.loginMicrosoft = loginMicrosoft;
 const getAllUsers = async (_req, res) => {
     try {
-        const users = await prisma.tecnico.findMany({
+        const users = await prisma_js_1.prisma.tecnico.findMany({
             select: {
                 id_tecnico: true,
                 nombre: true,
@@ -574,9 +574,9 @@ const logout = async (req, res) => {
         const rt = req.cookies?.rt;
         if (rt) {
             const digest = hashRT(rt);
-            const row = await prisma.refreshToken.findFirst({ where: { rtHash: digest } });
+            const row = await prisma_js_1.prisma.refreshToken.findFirst({ where: { rtHash: digest } });
             if (row && !row.revokedAt) {
-                await prisma.refreshToken.update({
+                await prisma_js_1.prisma.refreshToken.update({
                     where: { id: row.id },
                     data: { revokedAt: new Date() },
                 });
@@ -599,7 +599,7 @@ const refresh = async (req, res) => {
         if (!rt)
             return res.status(401).json({ error: "Sin refresh token" });
         const digest = hashRT(rt);
-        const row = await prisma.refreshToken.findFirst({
+        const row = await prisma_js_1.prisma.refreshToken.findFirst({
             where: { rtHash: digest },
             include: { user: true },
         });
@@ -608,7 +608,7 @@ const refresh = async (req, res) => {
             return res.status(401).json({ error: "Refresh inválido" });
         }
         if (row.revokedAt) {
-            await prisma.refreshToken.updateMany({
+            await prisma_js_1.prisma.refreshToken.updateMany({
                 where: { userId: row.userId, revokedAt: null },
                 data: { revokedAt: new Date() },
             });
@@ -620,7 +620,7 @@ const refresh = async (req, res) => {
             return res.status(401).json({ error: "Refresh expirado" });
         }
         if (!row.user.status) {
-            await prisma.refreshToken.update({
+            await prisma_js_1.prisma.refreshToken.update({
                 where: { id: row.id },
                 data: { revokedAt: new Date() },
             });
@@ -635,7 +635,7 @@ const refresh = async (req, res) => {
         // userAgent / ip como string | null
         const ua = req.get("user-agent") ?? null;
         const ipAddr = (req.ip ?? req.socket?.remoteAddress ?? null);
-        await prisma.$transaction(async (tx) => {
+        await prisma_js_1.prisma.$transaction(async (tx) => {
             await tx.refreshToken.update({
                 where: { id: row.id },
                 data: { revokedAt: new Date() },
@@ -673,7 +673,7 @@ const createManyempresa = async (req, res) => {
         return res.status(400).json({ error: "Debes enviar un arreglo de empresa" });
     }
     try {
-        const result = await prisma.empresa.createMany({
+        const result = await prisma_js_1.prisma.empresa.createMany({
             data: empresa.map((e) => ({ nombre: e.nombre })),
             skipDuplicates: true, // evita error si alguna ya existe
         });
@@ -727,7 +727,7 @@ function mapAgendaAsignada(visita, empresa) {
 }
 function cargarEmpresaAgenda(empresaId) {
     return empresaId
-        ? prisma.empresa.findUnique({
+        ? prisma_js_1.prisma.empresa.findUnique({
             where: { id_empresa: empresaId },
             select: {
                 id_empresa: true,
@@ -753,7 +753,7 @@ const obtenerMisVisitasAsignadasHoy = async (req, res) => {
             ? req.query.fecha
             : getChileDateKey();
         const { start, end } = getDateRangeFromChileKey(dateKey);
-        const asignaciones = await prisma.agendaTecnico.findMany({
+        const asignaciones = await prisma_js_1.prisma.agendaTecnico.findMany({
             where: { tecnicoId },
             select: { agendaId: true },
         });
@@ -761,7 +761,7 @@ const obtenerMisVisitasAsignadasHoy = async (req, res) => {
         if (!agendaIds.length) {
             return res.json({ fecha: dateKey, visitas: [] });
         }
-        const visitas = await prisma.agendaVisita.findMany({
+        const visitas = await prisma_js_1.prisma.agendaVisita.findMany({
             where: {
                 id: { in: agendaIds },
                 fecha: { gte: start, lt: end },
@@ -795,7 +795,7 @@ const obtenerMisVisitasAsignadasHoy = async (req, res) => {
             .map((visita) => visita.empresaId)
             .filter((id) => Number.isFinite(id));
         const empresas = empresaIds.length
-            ? await prisma.empresa.findMany({
+            ? await prisma_js_1.prisma.empresa.findMany({
                 where: { id_empresa: { in: empresaIds } },
                 select: {
                     id_empresa: true,
@@ -831,7 +831,7 @@ const obtenerVisitaDeAgenda = async (req, res) => {
             return res.status(401).json({ error: "No autenticado" });
         if (!Number.isFinite(agendaId))
             return res.status(400).json({ error: "ID de visita inválido" });
-        const asignacion = await prisma.agendaTecnico.findUnique({
+        const asignacion = await prisma_js_1.prisma.agendaTecnico.findUnique({
             where: {
                 agendaId_tecnicoId: {
                     agendaId,
@@ -843,7 +843,7 @@ const obtenerVisitaDeAgenda = async (req, res) => {
         if (!asignacion) {
             return res.status(403).json({ error: "No puedes consultar una visita que no te pertenece." });
         }
-        const visita = await prisma.visita.findUnique({
+        const visita = await prisma_js_1.prisma.visita.findUnique({
             where: { agendaId },
             select: {
                 id_visita: true,
@@ -876,7 +876,7 @@ const iniciarRutaAgendaVisita = async (req, res) => {
             return res.status(401).json({ error: "No autenticado" });
         if (!Number.isFinite(agendaId))
             return res.status(400).json({ error: "ID de visita inválido" });
-        const asignacion = await prisma.agendaTecnico.findUnique({
+        const asignacion = await prisma_js_1.prisma.agendaTecnico.findUnique({
             where: {
                 agendaId_tecnicoId: {
                     agendaId,
@@ -888,7 +888,7 @@ const iniciarRutaAgendaVisita = async (req, res) => {
         if (!asignacion) {
             return res.status(403).json({ error: "No puedes iniciar ruta para una visita que no te pertenece." });
         }
-        const visita = await prisma.agendaVisita.findUnique({
+        const visita = await prisma_js_1.prisma.agendaVisita.findUnique({
             where: { id: agendaId },
             select: {
                 id: true,
@@ -934,7 +934,7 @@ const iniciarRutaAgendaVisita = async (req, res) => {
                 error: `Puedes iniciar ruta desde ${formatMinutesAsTime(inicioPermitido)}.`,
             });
         }
-        const actualizada = await prisma.agendaVisita.update({
+        const actualizada = await prisma_js_1.prisma.agendaVisita.update({
             where: { id: agendaId },
             data: {
                 estado: client_1.EstadoAgenda.EN_RUTA,
@@ -975,7 +975,7 @@ const iniciarVisitaAgendaVisita = async (req, res) => {
             return res.status(401).json({ error: "No autenticado" });
         if (!Number.isFinite(agendaId))
             return res.status(400).json({ error: "ID de visita inválido" });
-        const asignacion = await prisma.agendaTecnico.findUnique({
+        const asignacion = await prisma_js_1.prisma.agendaTecnico.findUnique({
             where: {
                 agendaId_tecnicoId: {
                     agendaId,
@@ -987,7 +987,7 @@ const iniciarVisitaAgendaVisita = async (req, res) => {
         if (!asignacion) {
             return res.status(403).json({ error: "No puedes iniciar una visita que no te pertenece." });
         }
-        const visita = await prisma.agendaVisita.findUnique({
+        const visita = await prisma_js_1.prisma.agendaVisita.findUnique({
             where: { id: agendaId },
             select: {
                 id: true,
@@ -1020,7 +1020,7 @@ const iniciarVisitaAgendaVisita = async (req, res) => {
         if (visita.estado !== client_1.EstadoAgenda.EN_RUTA) {
             return res.status(409).json({ error: "Debes iniciar ruta antes de iniciar la visita." });
         }
-        const actualizada = await prisma.agendaVisita.update({
+        const actualizada = await prisma_js_1.prisma.agendaVisita.update({
             where: { id: agendaId },
             data: {
                 estado: client_1.EstadoAgenda.INICIADA,
@@ -1061,7 +1061,7 @@ const finalizarAgendaVisita = async (req, res) => {
             return res.status(401).json({ error: "No autenticado" });
         if (!Number.isFinite(agendaId))
             return res.status(400).json({ error: "ID de visita inválido" });
-        const asignacion = await prisma.agendaTecnico.findUnique({
+        const asignacion = await prisma_js_1.prisma.agendaTecnico.findUnique({
             where: {
                 agendaId_tecnicoId: {
                     agendaId,
@@ -1073,7 +1073,7 @@ const finalizarAgendaVisita = async (req, res) => {
         if (!asignacion) {
             return res.status(403).json({ error: "No puedes finalizar una visita que no te pertenece." });
         }
-        const visita = await prisma.agendaVisita.findUnique({
+        const visita = await prisma_js_1.prisma.agendaVisita.findUnique({
             where: { id: agendaId },
             select: {
                 id: true,
@@ -1116,7 +1116,7 @@ const finalizarAgendaVisita = async (req, res) => {
         if (visita.estado !== client_1.EstadoAgenda.INICIADA) {
             return res.status(409).json({ error: "Debes iniciar la visita antes de finalizarla." });
         }
-        const formulario = visita.visita ?? await prisma.visita.findUnique({
+        const formulario = visita.visita ?? await prisma_js_1.prisma.visita.findUnique({
             where: { agendaId },
             select: {
                 id_visita: true,
@@ -1145,7 +1145,7 @@ const finalizarAgendaVisita = async (req, res) => {
                 error: "El formulario de visita debe estar completado antes de cerrar la agenda.",
             });
         }
-        const actualizada = await prisma.agendaVisita.update({
+        const actualizada = await prisma_js_1.prisma.agendaVisita.update({
             where: { id: agendaId },
             data: {
                 estado: client_1.EstadoAgenda.COMPLETADA,
@@ -1212,7 +1212,7 @@ const registrarUbicacionTecnico = async (req, res) => {
         if (parsedVelocidad !== null && !Number.isFinite(parsedVelocidad)) {
             return res.status(400).json({ error: "velocidad inválida" });
         }
-        const tecnico = await prisma.tecnico.findUnique({
+        const tecnico = await prisma_js_1.prisma.tecnico.findUnique({
             where: { id_tecnico: tecnicoId },
             select: { id_tecnico: true, status: true },
         });
@@ -1220,7 +1220,7 @@ const registrarUbicacionTecnico = async (req, res) => {
             return res.status(404).json({ error: "Técnico no encontrado o inactivo" });
         }
         if (parsedAgendaId !== null) {
-            const asignacion = await prisma.agendaTecnico.findUnique({
+            const asignacion = await prisma_js_1.prisma.agendaTecnico.findUnique({
                 where: {
                     agendaId_tecnicoId: {
                         agendaId: parsedAgendaId,
@@ -1233,7 +1233,7 @@ const registrarUbicacionTecnico = async (req, res) => {
                 return res.status(403).json({ error: "La visita no esta asignada a este tecnico" });
             }
         }
-        const ubicacion = await prisma.ubicacionTecnico.create({
+        const ubicacion = await prisma_js_1.prisma.ubicacionTecnico.create({
             data: {
                 tecnicoId,
                 agendaId: parsedAgendaId,
@@ -1288,7 +1288,7 @@ function parseOptionalInt(value) {
     return Number.isInteger(parsed) ? parsed : NaN;
 }
 async function crearVisitaInicial(params) {
-    return prisma.visita.create({
+    return prisma_js_1.prisma.visita.create({
         data: {
             empresaId: params.empresaId,
             tecnicoId: params.tecnicoId,
@@ -1323,7 +1323,7 @@ const crearVisita = async (req, res) => {
             if (Number.isNaN(sucursalIdInt)) {
                 return res.status(400).json({ error: "sucursalId inválido" });
             }
-            const agenda = await prisma.agendaVisita.findUnique({
+            const agenda = await prisma_js_1.prisma.agendaVisita.findUnique({
                 where: { id: parsedAgendaId },
                 select: {
                     id: true,
@@ -1334,7 +1334,7 @@ const crearVisita = async (req, res) => {
             if (!agenda) {
                 return res.status(404).json({ error: "Agenda no encontrada" });
             }
-            const asignacion = await prisma.agendaTecnico.findUnique({
+            const asignacion = await prisma_js_1.prisma.agendaTecnico.findUnique({
                 where: {
                     agendaId_tecnicoId: {
                         agendaId: parsedAgendaId,
@@ -1355,7 +1355,7 @@ const crearVisita = async (req, res) => {
             if (agenda.empresaId !== empresaIdInt) {
                 return res.status(409).json({ error: "La empresa enviada no coincide con la empresa de la agenda" });
             }
-            const existente = await prisma.visita.findUnique({
+            const existente = await prisma_js_1.prisma.visita.findUnique({
                 where: { agendaId: parsedAgendaId },
                 select: visitaInicialSelect,
             });
@@ -1377,7 +1377,7 @@ const crearVisita = async (req, res) => {
             }
             catch (error) {
                 if (error?.code === "P2002") {
-                    const visitaReutilizada = await prisma.visita.findUnique({
+                    const visitaReutilizada = await prisma_js_1.prisma.visita.findUnique({
                         where: { agendaId: parsedAgendaId },
                         select: visitaInicialSelect,
                     });
@@ -1422,7 +1422,7 @@ const cancelarVisita = async (req, res) => {
         if (!Number.isFinite(visitaId)) {
             return res.status(400).json({ error: "ID de visita inválido" });
         }
-        const visita = await prisma.visita.findUnique({
+        const visita = await prisma_js_1.prisma.visita.findUnique({
             where: { id_visita: visitaId },
             select: { id_visita: true, status: true },
         });
@@ -1431,7 +1431,7 @@ const cancelarVisita = async (req, res) => {
         if (visita.status === client_1.EstadoVisita.COMPLETADA) {
             return res.status(409).json({ error: "No se puede cancelar una visita completada" });
         }
-        const eliminada = await prisma.visita.delete({
+        const eliminada = await prisma_js_1.prisma.visita.delete({
             where: { id_visita: visitaId },
             select: {
                 id_visita: true,
@@ -1455,7 +1455,7 @@ const completarVisita = async (req, res) => {
         if (!Number.isFinite(visitaId)) {
             return res.status(400).json({ error: "ID de visita inválido" });
         }
-        const v = await prisma.visita.findUnique({
+        const v = await prisma_js_1.prisma.visita.findUnique({
             where: { id_visita: visitaId },
             select: {
                 id_visita: true,
@@ -1512,7 +1512,7 @@ const completarVisita = async (req, res) => {
                 fin: index === ids.length - 1 ? now : new Date(visitStart.getTime() + endOffset),
             };
         };
-        const result = await prisma.$transaction(async (tx) => {
+        const result = await prisma_js_1.prisma.$transaction(async (tx) => {
             const updated = [];
             const firstSlot = getSolicitanteSlot(0);
             // 1️⃣ Actualizar la visita existente (primer solicitante)
@@ -1641,10 +1641,10 @@ const obtenerHistorialPorTecnico = async (req, res) => {
     const skip = (page - 1) * limit;
     try {
         const [total, historial] = await Promise.all([
-            prisma.historial.count({
+            prisma_js_1.prisma.historial.count({
                 where: { tecnicoId },
             }),
-            prisma.historial.findMany({
+            prisma_js_1.prisma.historial.findMany({
                 where: { tecnicoId },
                 orderBy: { fin: "desc" },
                 skip,
@@ -1692,7 +1692,7 @@ const createManySolicitante = async (req, res) => {
         return res.status(400).json({ error: 'Debes enviar un arreglo de solicitantes' });
     }
     try {
-        const result = await prisma.solicitante.createMany({
+        const result = await prisma_js_1.prisma.solicitante.createMany({
             data: solicitantes.map((s) => ({
                 nombre: s.nombre,
                 empresaId: s.empresaId
@@ -1715,7 +1715,7 @@ const createManyEquipos = async (req, res) => {
         return res.status(400).json({ error: 'Debes enviar un arreglo de equipos' });
     }
     try {
-        const result = await prisma.equipo.createMany({
+        const result = await prisma_js_1.prisma.equipo.createMany({
             data: equipos.map((e) => ({
                 idSolicitante: e.idSolicitante,
                 serial: e.serial,
@@ -1752,7 +1752,7 @@ const getSolicitantes = async (req, res) => {
             return res.status(400).json({ error: "El parámetro empresaId debe ser un número válido" });
         }
         // Realizar la consulta con el 'empresaId' validado
-        const solicitantes = await prisma.solicitante.findMany({
+        const solicitantes = await prisma_js_1.prisma.solicitante.findMany({
             where: {
                 empresaId: empresaIdNumber, // Usamos el 'empresaId' convertido a número
             },
@@ -1785,10 +1785,10 @@ const updateSolicitante = async (req, res) => {
                 return res.status(400).json({ error: "Faltan parámetros necesarios en uno de los solicitantes." });
             }
             // Verificar si el email ya está registrado en otro solicitante
-            const emailExistente = await prisma.solicitante.findFirst({
+            const emailExistente = await prisma_js_1.prisma.solicitante.findFirst({
                 where: { email: email, NOT: { id_solicitante: id_solicitante } },
             });
-            const solicitanteExistente = await prisma.solicitante.findUnique({
+            const solicitanteExistente = await prisma_js_1.prisma.solicitante.findUnique({
                 where: { id_solicitante: id_solicitante },
             });
             if (!solicitanteExistente) {
@@ -1796,7 +1796,7 @@ const updateSolicitante = async (req, res) => {
             }
             const telefonoFinal = telefono === "" ? "" : telefono;
             try {
-                const updatedSolicitante = await prisma.solicitante.update({
+                const updatedSolicitante = await prisma_js_1.prisma.solicitante.update({
                     where: { id_solicitante: id_solicitante },
                     data: {
                         email: email,
@@ -1824,7 +1824,7 @@ exports.updateSolicitante = updateSolicitante;
 //GET Auth/getAllEquipos
 const getAllEquipos = async (req, res) => {
     try {
-        const equipos = await prisma.equipo.findMany({
+        const equipos = await prisma_js_1.prisma.equipo.findMany({
             select: {
                 id_equipo: true,
                 serial: true,
@@ -1961,7 +1961,7 @@ const actualizarEquipo = async (req, res) => {
             return value || null;
         };
         // Verifica que el equipo exista (importante si solo viene tipoDd)
-        const existe = await prisma.equipo.findUnique({
+        const existe = await prisma_js_1.prisma.equipo.findUnique({
             where: { id_equipo: id },
             select: { id_equipo: true }
         });
@@ -2026,7 +2026,7 @@ const actualizarEquipo = async (req, res) => {
                 serialAdicional: normNullable(item.serialAdicional),
             }))
             : undefined;
-        const result = await prisma.$transaction(async (tx) => {
+        const result = await prisma_js_1.prisma.$transaction(async (tx) => {
             // 1) Actualizar Equipo si corresponde
             const updatedEquipo = (Object.keys(dataEquipo).length > 0)
                 ? await tx.equipo.update({
@@ -2102,7 +2102,7 @@ const cambiarSolicitanteEquipo = async (req, res) => {
             return res.status(400).json({ error: "IDs inválidos" });
         }
         // Verificar que el equipo exista
-        const equipo = await prisma.equipo.findUnique({
+        const equipo = await prisma_js_1.prisma.equipo.findUnique({
             where: { id_equipo: equipoId },
             select: { id_equipo: true }
         });
@@ -2110,7 +2110,7 @@ const cambiarSolicitanteEquipo = async (req, res) => {
             return res.status(404).json({ error: "Equipo no encontrado" });
         }
         // Verificar que el solicitante exista
-        const solicitante = await prisma.solicitante.findUnique({
+        const solicitante = await prisma_js_1.prisma.solicitante.findUnique({
             where: { id_solicitante: Number(solicitanteId) },
             select: { id_solicitante: true }
         });
@@ -2118,7 +2118,7 @@ const cambiarSolicitanteEquipo = async (req, res) => {
             return res.status(404).json({ error: "Solicitante no encontrado" });
         }
         // Actualizar dueño del equipo
-        const actualizado = await prisma.equipo.update({
+        const actualizado = await prisma_js_1.prisma.equipo.update({
             where: { id_equipo: equipoId },
             data: { idSolicitante: Number(solicitanteId) },
             select: {
@@ -2163,7 +2163,7 @@ const createManyDetalle = async (req, res) => {
             usuarioPersonal: e.usuarioPersonal?.trim(),
             passwordPersonal: e.passwordPersonal?.trim(),
         }));
-        const result = await prisma.detalleEquipo.createMany({
+        const result = await prisma_js_1.prisma.detalleEquipo.createMany({
             data
         });
         return res.status(201).json({ message: `Se agregaron ${result.count} detalle(s)` });
@@ -2187,7 +2187,7 @@ const createEquipo = async (req, res) => {
     const marca = body.marca.trim();
     const modelo = body.modelo.trim();
     try {
-        const equipo = await prisma.$transaction(async (tx) => {
+        const equipo = await prisma_js_1.prisma.$transaction(async (tx) => {
             const created = await tx.equipo.create({
                 data: {
                     idSolicitante: body.idSolicitante,
@@ -2283,7 +2283,7 @@ const createSolicitante = async (req, res) => {
             data.clienteId = Number(clienteId);
         }
         // Crear el solicitante
-        const solicitante = await prisma.solicitante.create({
+        const solicitante = await prisma_js_1.prisma.solicitante.create({
             data,
             include: {
                 empresa: {
@@ -2325,11 +2325,11 @@ const crearSucursal = async (req, res) => {
         return res.status(400).json({ error: 'Debe indicar nombre y empresaId' });
     }
     try {
-        const sucursal = await prisma.sucursal.create({
+        const sucursal = await prisma_js_1.prisma.sucursal.create({
             data: { nombre, direccion, telefono, empresaId },
         });
         // marcar automáticamente a la empresa como que tiene sucursales
-        await prisma.empresa.update({
+        await prisma_js_1.prisma.empresa.update({
             where: { id_empresa: empresaId },
             data: { tieneSucursales: true },
         });
@@ -2348,7 +2348,7 @@ const obtenerSucursalesPorEmpresa = async (req, res) => {
         return res.status(400).json({ error: 'ID de empresa inválido' });
     }
     try {
-        const sucursales = await prisma.sucursal.findMany({
+        const sucursales = await prisma_js_1.prisma.sucursal.findMany({
             where: { empresaId },
             orderBy: { nombre: 'asc' },
         });
@@ -2369,7 +2369,7 @@ exports.obtenerSucursalesPorEmpresa = obtenerSucursalesPorEmpresa;
 // GET /api/empresasConSucursales
 const obtenerEmpresasConSucursales = async (req, res) => {
     try {
-        const empresas = await prisma.empresa.findMany({
+        const empresas = await prisma_js_1.prisma.empresa.findMany({
             where: { tieneSucursales: true },
             orderBy: { nombre: 'asc' },
             include: {

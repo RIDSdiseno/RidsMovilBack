@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.enviarPdfEntrega = exports.obtenerEntrega = exports.listarEntregas = exports.crearEntrega = void 0;
 const client_1 = require("@prisma/client");
 const microsoft_mail_service_js_1 = require("../services/microsoft-mail.service.js");
-const prisma = new client_1.PrismaClient();
+const prisma_js_1 = require("../lib/prisma.js");
 /* =========================
    CREAR ENTREGA
 ========================= */
@@ -23,7 +23,7 @@ const crearEntrega = async (req, res) => {
         if (Number.isNaN(parsedFecha.getTime())) {
             return res.status(400).json({ error: "fecha inválida" });
         }
-        const entrega = await prisma.entrega.create({
+        const entrega = await prisma_js_1.prisma.entrega.create({
             data: {
                 empresaNombre: empresaNombre.trim(),
                 receptorNombre: receptorNombre.trim(),
@@ -52,16 +52,16 @@ const listarEntregas = async (req, res) => {
         const includeEvidencias = req.query.includeEvidencias !== "false";
         const where = { tecnicoId };
         const [total, entregas] = await Promise.all([
-            prisma.entrega.count({ where }),
+            prisma_js_1.prisma.entrega.count({ where }),
             includeEvidencias
-                ? prisma.entrega.findMany({
+                ? prisma_js_1.prisma.entrega.findMany({
                     where,
                     orderBy: { fecha: "desc" },
                     skip,
                     take: limit,
                     include: { evidencias: true },
                 })
-                : prisma.entrega.findMany({
+                : prisma_js_1.prisma.entrega.findMany({
                     where,
                     orderBy: { fecha: "desc" },
                     skip,
@@ -101,7 +101,7 @@ const obtenerEntrega = async (req, res) => {
         if (!Number.isFinite(id)) {
             return res.status(400).json({ error: "ID inválido" });
         }
-        const entrega = await prisma.entrega.findUnique({
+        const entrega = await prisma_js_1.prisma.entrega.findUnique({
             where: { id_entrega: id },
             include: {
                 evidencias: true,
@@ -150,7 +150,7 @@ const enviarPdfEntrega = async (req, res) => {
         if (pdfFile && pdfFile.mimetype !== "application/pdf") {
             return res.status(400).json({ error: "El adjunto debe ser un PDF" });
         }
-        const entrega = await prisma.entrega.findFirst({
+        const entrega = await prisma_js_1.prisma.entrega.findFirst({
             where: { id_entrega: entregaId, tecnicoId },
             include: {
                 evidencias: {

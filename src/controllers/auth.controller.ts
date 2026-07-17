@@ -1,13 +1,13 @@
 import type { Request, Response } from "express";
-import { EstadoAgenda, EstadoVisita, OrigenGestioo, OrigenVisita, Prisma, PrismaClient, TipoEntidadGestioo } from "@prisma/client";
+import { EstadoAgenda, EstadoVisita, OrigenGestioo, OrigenVisita, Prisma, TipoEntidadGestioo } from "@prisma/client";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import type { Secret } from "jsonwebtoken";
 import crypto from "crypto";
 
 import argon2 from "argon2";
+import { prisma } from "../lib/prisma.js";
 
-const prisma = new PrismaClient
 /* =========================
    CONFIG / CONSTANTES
 ========================= */

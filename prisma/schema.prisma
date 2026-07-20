@@ -25,6 +25,7 @@ model Empresa {
   fichaEmpresa        FichaEmpresa?
   fichaTecnicaEmpresa FichaTecnicaEmpresa?
   historials          Historial[]
+  agendasVisita       AgendaVisita[]        @relation("Empresa_AgendaVisita")
 }
 
 model Sucursal {
@@ -527,41 +528,42 @@ model Tecnico {
   detalleTrabajos  DetalleTrabajoGestioo[]
   entregas         Entrega[]
   ubicaciones      UbicacionTecnico[]
+  agendasAsignadas AgendaTecnico[]
 
   @@index([empresaId])
 }
 
 model Visita {
-  id_visita          Int          @id @default(autoincrement())
+  id_visita          Int           @id @default(autoincrement())
   empresaId          Int
   tecnicoId          Int
   solicitante        String
   inicio             DateTime
   fin                DateTime?
-  confImpresoras     Boolean      @default(false)
-  confTelefonos      Boolean      @default(false)
-  confPiePagina      Boolean      @default(false)
-  otros              Boolean      @default(false)
+  confImpresoras     Boolean       @default(false)
+  confTelefonos      Boolean       @default(false)
+  confPiePagina      Boolean       @default(false)
+  otros              Boolean       @default(false)
   otrosDetalle       String?
-  status             EstadoVisita @default(PENDIENTE)
+  status             EstadoVisita  @default(PENDIENTE)
   solicitanteId      Int?
-  actualizaciones    Boolean      @default(false)
-  antivirus          Boolean      @default(false)
-  ccleaner           Boolean      @default(false)
-  estadoDisco        Boolean      @default(false)
-  licenciaOffice     Boolean      @default(false)
-  licenciaWindows    Boolean      @default(false)
-  mantenimientoReloj Boolean      @default(false)
-  rendimientoEquipo  Boolean      @default(false)
+  actualizaciones    Boolean       @default(false)
+  antivirus          Boolean       @default(false)
+  ccleaner           Boolean       @default(false)
+  estadoDisco        Boolean       @default(false)
+  licenciaOffice     Boolean       @default(false)
+  licenciaWindows    Boolean       @default(false)
+  mantenimientoReloj Boolean       @default(false)
+  rendimientoEquipo  Boolean       @default(false)
   direccion_visita   String?
-  ecografo           Boolean      @default(false)
+  ecografo           Boolean       @default(false)
   sucursalId         Int?
-  agendaId           Int?         @unique
-  origen             OrigenVisita @default(MANUAL)
-  empresa            Empresa      @relation("Empresa_Visita", fields: [empresaId], references: [id_empresa])
-  tecnico            Tecnico      @relation(fields: [tecnicoId], references: [id_tecnico])
-  solicitanteRef     Solicitante? @relation("Solicitante_Visita", fields: [solicitanteId], references: [id_solicitante])
-  sucursal           Sucursal?    @relation(fields: [sucursalId], references: [id_sucursal])
+  agendaId           Int?          @unique
+  origen             OrigenVisita  @default(MANUAL)
+  empresa            Empresa       @relation("Empresa_Visita", fields: [empresaId], references: [id_empresa])
+  tecnico            Tecnico       @relation(fields: [tecnicoId], references: [id_tecnico])
+  solicitanteRef     Solicitante?  @relation("Solicitante_Visita", fields: [solicitanteId], references: [id_solicitante])
+  sucursal           Sucursal?     @relation(fields: [sucursalId], references: [id_sucursal])
   agenda             AgendaVisita? @relation(fields: [agendaId], references: [id])
 
   @@index([empresaId])
@@ -736,9 +738,11 @@ model EvidenciaEntrega {
 }
 
 model AgendaTecnico {
-  id        Int @id @default(autoincrement())
+  id        Int          @id @default(autoincrement())
   agendaId  Int
   tecnicoId Int
+  agenda    AgendaVisita @relation(fields: [agendaId], references: [id], onDelete: Cascade)
+  tecnico   Tecnico      @relation(fields: [tecnicoId], references: [id_tecnico])
 
   @@unique([agendaId, tecnicoId])
   @@index([agendaId])
@@ -746,14 +750,14 @@ model AgendaTecnico {
 }
 
 model AgendaVisita {
-  id                   Int          @id @default(autoincrement())
-  fecha                DateTime     @db.Date
+  id                   Int             @id @default(autoincrement())
+  fecha                DateTime        @db.Date
   empresaId            Int?
-  tipo                 TipoAgenda   @default(SEMANA)
-  estado               EstadoAgenda @default(PROGRAMADA)
-  notificacionEnviada  Boolean      @default(false)
+  tipo                 TipoAgenda      @default(SEMANA)
+  estado               EstadoAgenda    @default(PROGRAMADA)
+  notificacionEnviada  Boolean         @default(false)
   notas                String?
-  createdAt            DateTime     @default(now())
+  createdAt            DateTime        @default(now())
   updatedAt            DateTime
   horaFin              String?
   horaInicio           String?
@@ -763,6 +767,8 @@ model AgendaVisita {
   empresaExternaNombre String?
   fechaInicioRuta      DateTime?
   fechaInicioVisita    DateTime?
+  empresa              Empresa?        @relation("Empresa_AgendaVisita", fields: [empresaId], references: [id_empresa])
+  tecnicos             AgendaTecnico[]
   visita               Visita?
 
   @@index([empresaId])

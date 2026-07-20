@@ -690,6 +690,10 @@ exports.createManyempresa = createManyempresa;
 function mapAgendaAsignada(visita, empresa) {
     const coords = parseJsonCoordinates(empresa?.detalleEmpresa?.direcciones ?? null);
     const direccion = coords.direccion ?? empresa?.detalleEmpresa?.direccion ?? null;
+    const inconsistenciaEstado = visita.visita?.status === client_1.EstadoVisita.COMPLETADA &&
+        visita.estado !== client_1.EstadoAgenda.COMPLETADA
+        ? "VISITA_COMPLETADA_AGENDA_NO_COMPLETADA"
+        : null;
     return {
         id: visita.id,
         agendaId: visita.id,
@@ -723,6 +727,7 @@ function mapAgendaAsignada(visita, empresa) {
         visitaId: visita.visita?.id_visita ?? null,
         visitaStatus: visita.visita?.status ?? null,
         visitaOrigen: visita.visita?.origen ?? null,
+        inconsistenciaEstado,
     };
 }
 function cargarEmpresaAgenda(empresaId) {
@@ -902,10 +907,23 @@ const iniciarRutaAgendaVisita = async (req, res) => {
                 fechaInicioRuta: true,
                 fechaInicioVisita: true,
                 empresaExternaNombre: true,
+                visita: {
+                    select: {
+                        id_visita: true,
+                        status: true,
+                        origen: true,
+                    },
+                },
             },
         });
         if (!visita)
             return res.status(404).json({ error: "Visita asignada no encontrada" });
+        if (visita.visita?.status === client_1.EstadoVisita.COMPLETADA) {
+            return res.status(409).json({
+                error: "El formulario de esta visita ya está completado. La agenda debe cerrarse antes de iniciar otra ruta.",
+                code: "AGENDA_CIERRE_PENDIENTE",
+            });
+        }
         if (visita.estado === client_1.EstadoAgenda.COMPLETADA || visita.estado === client_1.EstadoAgenda.CANCELADA) {
             return res.status(409).json({ error: "No puedes iniciar ruta en una visita finalizada o cancelada." });
         }
@@ -1108,14 +1126,6 @@ const finalizarAgendaVisita = async (req, res) => {
         if (visita.estado === client_1.EstadoAgenda.CANCELADA) {
             return res.status(409).json({ error: "No puedes finalizar una visita cancelada." });
         }
-        if (visita.estado === client_1.EstadoAgenda.PROGRAMADA ||
-            visita.estado === client_1.EstadoAgenda.NOTIFICADA ||
-            visita.estado === client_1.EstadoAgenda.EN_RUTA) {
-            return res.status(409).json({ error: "Debes iniciar la visita antes de finalizarla." });
-        }
-        if (visita.estado !== client_1.EstadoAgenda.INICIADA) {
-            return res.status(409).json({ error: "Debes iniciar la visita antes de finalizarla." });
-        }
         const formulario = visita.visita ?? await prisma_js_1.prisma.visita.findUnique({
             where: { agendaId },
             select: {
@@ -1144,6 +1154,15 @@ const finalizarAgendaVisita = async (req, res) => {
             return res.status(409).json({
                 error: "El formulario de visita debe estar completado antes de cerrar la agenda.",
             });
+        }
+        if (visita.estado !== client_1.EstadoAgenda.INICIADA &&
+            visita.estado !== client_1.EstadoAgenda.PROGRAMADA &&
+            visita.estado !== client_1.EstadoAgenda.NOTIFICADA &&
+            visita.estado !== client_1.EstadoAgenda.EN_RUTA) {
+            return res.status(409).json({ error: "La agenda no se puede finalizar desde su estado actual." });
+        }
+        if (visita.estado !== client_1.EstadoAgenda.INICIADA) {
+            console.warn(`[AGENDA] Reparando agenda #${agendaId}: formulario #${formulario.id_visita} COMPLETADA con agenda ${visita.estado}.`);
         }
         const actualizada = await prisma_js_1.prisma.agendaVisita.update({
             where: { id: agendaId },

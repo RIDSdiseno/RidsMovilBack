@@ -15,6 +15,8 @@ model Empresa {
   tieneSucursales     Boolean               @default(false)
   razonSocial         String?
   dominios            String[]              @default([])
+  deactivatedAt       DateTime?
+  isActive            Boolean               @default(true)
   solicitantes        Solicitante[]
   visitas             Visita[]              @relation("Empresa_Visita")
   tickets             FreshdeskTicket[]
@@ -26,6 +28,9 @@ model Empresa {
   fichaTecnicaEmpresa FichaTecnicaEmpresa?
   historials          Historial[]
   agendasVisita       AgendaVisita[]        @relation("Empresa_AgendaVisita")
+
+  @@index([isActive])
+  @@index([deactivatedAt])
 }
 
 model Sucursal {
@@ -457,12 +462,20 @@ model DetalleEquipo {
   usuarioPersonal   String?
   redEthernet       String?
   antivirusActivo   Boolean?
-  antivirusNombre   String?
-  bitlockerEstado   String?
-  firewallActivo    Boolean?
-  observacionAgente String?
-  windowsUpdate     String?
-  equipo            Equipo?  @relation(fields: [idEquipo], references: [id_equipo])
+  antivirusNombre     String?
+  bitlockerEstado     String?
+  firewallActivo      Boolean?
+  observacionAgente   String?
+  windowsUpdate       String?
+  oneDrive            String?
+  oneDriveDetalle     Json?
+  oneDriveEnEjecucion Boolean?
+  oneDriveEstado      String?
+  oneDriveInstalado   Boolean?
+  oneDriveOperativo   Boolean?
+  oneDriveUsuario     String?
+  oneDriveVersion     String?
+  equipo              Equipo?  @relation(fields: [idEquipo], references: [id_equipo])
 
   @@index([idEquipo])
 }

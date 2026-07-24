@@ -291,6 +291,7 @@ exports.registerUser = registerUser;
 const getAllClientes = async (req, res) => {
     try {
         const clientes = await prisma_js_1.prisma.empresa.findMany({
+            where: { isActive: true },
             orderBy: { nombre: "asc" },
             include: {
                 detalleEmpresa: {
@@ -801,7 +802,7 @@ const obtenerMisVisitasAsignadasHoy = async (req, res) => {
             .filter((id) => Number.isFinite(id));
         const empresas = empresaIds.length
             ? await prisma_js_1.prisma.empresa.findMany({
-                where: { id_empresa: { in: empresaIds } },
+                where: { id_empresa: { in: empresaIds }, isActive: true },
                 select: {
                     id_empresa: true,
                     nombre: true,
@@ -2404,7 +2405,7 @@ exports.obtenerSucursalesPorEmpresa = obtenerSucursalesPorEmpresa;
 const obtenerEmpresasConSucursales = async (req, res) => {
     try {
         const empresas = await prisma_js_1.prisma.empresa.findMany({
-            where: { tieneSucursales: true },
+            where: { tieneSucursales: true, isActive: true },
             orderBy: { nombre: 'asc' },
             include: {
                 sucursales: {

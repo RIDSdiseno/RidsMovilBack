@@ -2153,7 +2153,23 @@ export const updateSolicitante = async (req: Request, res: Response) => {
 //GET Auth/getAllEquipos
 export const getAllEquipos = async (req: Request, res: Response) => {
   try {
+    // Oculta equipos de empresas desactivadas (Empresa.isActive), igual que
+    // la intranet. Se consulta en vivo cada vez: al desactivar una empresa
+    // nueva, sus equipos dejan de aparecer aqui sin tocar codigo.
+    const empresasInactivas = await prisma.empresa.findMany({
+      where: { isActive: false },
+      select: { id_empresa: true },
+    });
+    const idsEmpresasInactivas = empresasInactivas.map((e) => e.id_empresa);
+
     const equipos = await prisma.equipo.findMany({
+      where: {
+        OR: [
+          { empresaId: { not: null, notIn: idsEmpresasInactivas } },
+          { empresaId: null, solicitante: { is: { empresa: { is: { isActive: true } } } } },
+          { empresaId: null, solicitante: null },
+        ],
+      },
       select: {
         id_equipo: true,
         serial: true,

@@ -2317,9 +2317,11 @@ export const getAllEquipos = async (req: Request, res: Response) => {
 };
 
 // GET /auth/equipos/:id -- ficha completa de un equipo (para "ver/editar" en la app).
-// Trae detalle tecnico, adicionales, quien lo creo y cuando, y los eventos
-// del agente de inventario. Se pide solo al abrir el detalle de un equipo,
-// no en el listado, para no cargar auditoria de los 400+ equipos de una vez.
+// Trae detalle tecnico, adicionales y quien lo creo y cuando. Los eventos del
+// agente se ven solo desde la intranet: en la app basta con los iconos de
+// agente/mantencion del listado, y no vale la pena cargar ese detalle aqui.
+// Se pide solo al abrir el detalle de un equipo, no en el listado, para no
+// cargar auditoria de los 400+ equipos de una vez.
 export const getEquipoDetalleMovil = async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
@@ -2340,15 +2342,10 @@ export const getEquipoDetalleMovil = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Equipo no encontrado' });
     }
 
-    const [createLog, eventosAgente, softwares] = await Promise.all([
+    const [createLog, softwares] = await Promise.all([
       prisma.auditLog.findFirst({
         where: { entity: 'Equipo', entityId: String(id), action: 'CREATE' },
         orderBy: { createdAt: 'asc' },
-      }),
-      prisma.equipoAgenteEvento.findMany({
-        where: { equipoId: id },
-        orderBy: { createdAt: 'desc' },
-        take: 50,
       }),
       prisma.equipoSoftware.findMany({
         where: { equipoId: id },
@@ -2404,12 +2401,6 @@ export const getEquipoDetalleMovil = async (req: Request, res: Response) => {
       creadoPor,
       creadoEn: createLog?.createdAt ?? equipo.createdAt,
       creacionAuditada: Boolean(createLog),
-      eventosAgente: eventosAgente.map((ev) => ({
-        id: ev.id,
-        tipo: ev.tipo,
-        mensaje: ev.mensaje,
-        createdAt: ev.createdAt,
-      })),
       diskFreeGb: equipo.diskFreeGb ?? null,
       diskTotalGb: equipo.diskTotalGb ?? null,
       antivirusNombre: detalle?.antivirusNombre ?? null,

@@ -1204,6 +1204,25 @@ const finalizarAgendaVisita = async (req, res) => {
     }
 };
 exports.finalizarAgendaVisita = finalizarAgendaVisita;
+// Ventana horaria de jornada laboral (hora de Chile) durante la cual se
+// acepta guardar ubicaciones de tecnicos. Es el mismo horario que decide el
+// celular para prender/apagar el tracking, pero se valida tambien aca como
+// candado de seguridad: si el reloj del dispositivo esta mal, o llega una
+// ubicacion fuera de horario por cualquier motivo, no se guarda.
+const UBICACION_VENTANA_INICIO_MINUTOS = 8 * 60; // 08:00
+const UBICACION_VENTANA_FIN_MINUTOS = 18 * 60 + 30; // 18:30
+function estaDentroDeVentanaLaboral(fecha = new Date()) {
+    const partes = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/Santiago",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+    }).formatToParts(fecha);
+    const hora = Number(partes.find((p) => p.type === "hour")?.value ?? "0");
+    const minuto = Number(partes.find((p) => p.type === "minute")?.value ?? "0");
+    const minutos = hora * 60 + minuto;
+    return minutos >= UBICACION_VENTANA_INICIO_MINUTOS && minutos <= UBICACION_VENTANA_FIN_MINUTOS;
+}
 const registrarUbicacionTecnico = async (req, res) => {
     try {
         const tecnicoId = req.user?.id;
@@ -1231,6 +1250,14 @@ const registrarUbicacionTecnico = async (req, res) => {
         }
         if (parsedVelocidad !== null && !Number.isFinite(parsedVelocidad)) {
             return res.status(400).json({ error: "velocidad inválida" });
+        }
+        if (!estaDentroDeVentanaLaboral()) {
+            // 422 (no 403): el cliente clasifica 401/403 como error de autenticación
+            // y reintenta indefinidamente asumiendo sesión vencida. Esto es una
+            // regla de negocio (fuera de horario), no un problema de sesión, y
+            // reintentar más tarde no tiene sentido -- 422 se descarta como
+            // "permanent" en la cola local en vez de reintentarse para siempre.
+            return res.status(422).json({ error: "Fuera de la ventana horaria de jornada laboral (08:00-18:30)" });
         }
         const tecnico = await prisma_js_1.prisma.tecnico.findUnique({
             where: { id_tecnico: tecnicoId },

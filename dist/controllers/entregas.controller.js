@@ -13,7 +13,7 @@ const crearEntrega = async (req, res) => {
         if (!tecnicoId) {
             return res.status(401).json({ error: "Técnico no autenticado" });
         }
-        const { empresaNombre, receptorNombre, fecha } = req.body ?? {};
+        const { empresaNombre, receptorNombre, fecha, origen, tipo } = req.body ?? {};
         if (!empresaNombre?.trim() || !receptorNombre?.trim()) {
             return res
                 .status(400)
@@ -23,12 +23,18 @@ const crearEntrega = async (req, res) => {
         if (Number.isNaN(parsedFecha.getTime())) {
             return res.status(400).json({ error: "fecha inválida" });
         }
+        // Origen (marca) y tipo de operación llegan desde la app: se normalizan a
+        // los valores esperados y, si no vienen, quedan nulos (entregas antiguas).
+        const origenNormalizado = origen === "econnet" ? "econnet" : origen === "rids" ? "rids" : null;
+        const tipoNormalizado = tipo === "retiro" ? "retiro" : tipo === "entrega" ? "entrega" : null;
         const entrega = await prisma_js_1.prisma.entrega.create({
             data: {
                 empresaNombre: empresaNombre.trim(),
                 receptorNombre: receptorNombre.trim(),
                 fecha: parsedFecha,
                 tecnicoId,
+                origen: origenNormalizado,
+                tipo: tipoNormalizado,
             },
         });
         return res.status(201).json({ entrega });

@@ -369,6 +369,11 @@ const createClienteEconnet = async (req, res) => {
         const correo = String(req.body?.correo || "").trim().toLowerCase() || null;
         const telefono = String(req.body?.telefono || "").trim() || null;
         const direccion = String(req.body?.direccion || "").trim() || null;
+        // Tipo de entidad, igual que en el módulo Clientes de la intranet
+        // (EMPRESA o PERSONA). Se mantiene origen fijo ECONNET.
+        const tipo = String(req.body?.tipo || "").trim().toUpperCase() === "PERSONA"
+            ? client_1.TipoEntidadGestioo.PERSONA
+            : client_1.TipoEntidadGestioo.EMPRESA;
         if (!nombre) {
             return res.status(400).json({ error: "El nombre de la empresa es obligatorio" });
         }
@@ -392,7 +397,7 @@ const createClienteEconnet = async (req, res) => {
                 correo,
                 telefono,
                 direccion,
-                tipo: client_1.TipoEntidadGestioo.EMPRESA,
+                tipo,
                 origen: client_1.OrigenGestioo.ECONNET,
             },
             select: {

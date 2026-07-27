@@ -2323,7 +2323,7 @@ export const getEquipoDetalleMovil = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Equipo no encontrado' });
     }
 
-    const [createLog, eventosAgente] = await Promise.all([
+    const [createLog, eventosAgente, softwares] = await Promise.all([
       prisma.auditLog.findFirst({
         where: { entity: 'Equipo', entityId: String(id), action: 'CREATE' },
         orderBy: { createdAt: 'asc' },
@@ -2332,6 +2332,10 @@ export const getEquipoDetalleMovil = async (req: Request, res: Response) => {
         where: { equipoId: id },
         orderBy: { createdAt: 'desc' },
         take: 50,
+      }),
+      prisma.equipoSoftware.findMany({
+        where: { equipoId: id },
+        orderBy: { nombre: 'asc' },
       }),
     ]);
 
@@ -2388,6 +2392,19 @@ export const getEquipoDetalleMovil = async (req: Request, res: Response) => {
         tipo: ev.tipo,
         mensaje: ev.mensaje,
         createdAt: ev.createdAt,
+      })),
+      diskFreeGb: equipo.diskFreeGb ?? null,
+      diskTotalGb: equipo.diskTotalGb ?? null,
+      antivirusNombre: detalle?.antivirusNombre ?? null,
+      antivirusActivo: detalle?.antivirusActivo ?? null,
+      firewallActivo: detalle?.firewallActivo ?? null,
+      bitlockerEstado: detalle?.bitlockerEstado ?? null,
+      windowsUpdate: detalle?.windowsUpdate ?? null,
+      softwares: softwares.map((sw) => ({
+        id: sw.id,
+        nombre: sw.nombre,
+        version: sw.version,
+        publisher: sw.publisher,
       })),
     });
   } catch (e) {

@@ -12,6 +12,7 @@ import {
     createManyEquipos,
     getSolicitantes,
     getAllEquipos,
+    getEquipoDetalleMovil,
     getClientesEconnet,
     updateSolicitante,
     actualizarEquipo,
@@ -53,6 +54,7 @@ r.post("/detalles", createManyDetalle)
 
 
 r.get("/equipos", getAllEquipos)
+r.get("/equipos/:id", authGuard, getEquipoDetalleMovil)
 r.put("/equipos/:id/solicitante",authGuard,cambiarSolicitanteEquipo)
 
 //Funcionalidad de visitas

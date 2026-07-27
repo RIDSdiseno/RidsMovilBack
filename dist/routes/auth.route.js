@@ -26,6 +26,7 @@ r.get("/solicitantes", auth_controller_1.getSolicitantes);
 r.put("/updateSolicitante", auth_controller_1.updateSolicitante);
 r.post("/detalles", auth_controller_1.createManyDetalle);
 r.get("/equipos", auth_controller_1.getAllEquipos);
+r.get("/equipos/:id", auth_middleware_1.authGuard, auth_controller_1.getEquipoDetalleMovil);
 r.put("/equipos/:id/solicitante", auth_middleware_1.authGuard, auth_controller_1.cambiarSolicitanteEquipo);
 //Funcionalidad de visitas
 r.get("/agenda/mis-visitas/hoy", auth_middleware_1.authGuard, auth_controller_1.obtenerMisVisitasAsignadasHoy);

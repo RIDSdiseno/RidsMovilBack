@@ -2208,6 +2208,11 @@ export const getAllEquipos = async (req: Request, res: Response) => {
         serial: true,
         marca: true,
         modelo: true,
+        tipo: true,
+        estado: true,
+        anioPc: true,
+        createdAt: true,
+        updatedAt: true,
         procesador: true,
         ram: true,
         disco: true,
@@ -2294,6 +2299,103 @@ export const getAllEquipos = async (req: Request, res: Response) => {
   }
 };
 
+// GET /auth/equipos/:id -- ficha completa de un equipo (para "ver/editar" en la app).
+// Trae detalle tecnico, adicionales, quien lo creo y cuando, y los eventos
+// del agente de inventario. Se pide solo al abrir el detalle de un equipo,
+// no en el listado, para no cargar auditoria de los 400+ equipos de una vez.
+export const getEquipoDetalleMovil = async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+
+    const equipo = await prisma.equipo.findUnique({
+      where: { id_equipo: id },
+      include: {
+        solicitante: { include: { empresa: true } },
+        equipo: { orderBy: { id: 'desc' }, take: 1 },
+        adicionales: true,
+      },
+    });
+
+    if (!equipo) {
+      return res.status(404).json({ error: 'Equipo no encontrado' });
+    }
+
+    const [createLog, eventosAgente] = await Promise.all([
+      prisma.auditLog.findFirst({
+        where: { entity: 'Equipo', entityId: String(id), action: 'CREATE' },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.equipoAgenteEvento.findMany({
+        where: { equipoId: id },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      }),
+    ]);
+
+    let creadoPor: { id_tecnico: number; nombre: string; email: string | null } | null = null;
+    if (createLog?.actorId) {
+      const tecnico = await prisma.tecnico.findUnique({
+        where: { id_tecnico: createLog.actorId },
+        select: { id_tecnico: true, nombre: true, email: true },
+      });
+      if (tecnico) creadoPor = tecnico;
+    }
+
+    const detalle = equipo.equipo[0] ?? null;
+
+    return res.status(200).json({
+      id_equipo: equipo.id_equipo,
+      serial: equipo.serial,
+      marca: equipo.marca,
+      modelo: equipo.modelo,
+      tipo: equipo.tipo,
+      estado: equipo.estado,
+      anioPc: equipo.anioPc,
+      procesador: equipo.procesador,
+      ram: equipo.ram,
+      disco: equipo.disco,
+      propiedad: equipo.propiedad,
+      propietarioExterno: equipo.propietarioExterno,
+      idSolicitante: equipo.idSolicitante,
+      nombreSolicitante: equipo.solicitante?.nombre ?? 'S/A',
+      empresaId: equipo.solicitante?.empresaId ?? null,
+      createdAt: equipo.createdAt,
+      updatedAt: equipo.updatedAt,
+      macWifi: detalle?.macWifi ?? '',
+      redEthernet: detalle?.redEthernet ?? '',
+      so: detalle?.so ?? '',
+      tipoDd: detalle?.tipoDd ?? '',
+      estadoAlm: detalle?.estadoAlm ?? '',
+      office: detalle?.office ?? '',
+      teamViewer: detalle?.teamViewer ?? '',
+      claveTv: detalle?.claveTv ?? '',
+      revisado: detalle?.revisado ?? '',
+      adminRidsUsuario: detalle?.adminRidsUsuario ?? '',
+      adminRidsPassword: detalle?.adminRidsPassword ?? '',
+      usuarioEmpresa: detalle?.usuarioEmpresa ?? '',
+      passwordEmpresa: detalle?.passwordEmpresa ?? '',
+      usuarioPersonal: detalle?.usuarioPersonal ?? '',
+      passwordPersonal: detalle?.passwordPersonal ?? '',
+      adicionales: equipo.adicionales ?? [],
+      creadoPor,
+      creadoEn: createLog?.createdAt ?? equipo.createdAt,
+      creacionAuditada: Boolean(createLog),
+      eventosAgente: eventosAgente.map((ev) => ({
+        id: ev.id,
+        tipo: ev.tipo,
+        mensaje: ev.mensaje,
+        createdAt: ev.createdAt,
+      })),
+    });
+  } catch (e) {
+    console.error('Error al obtener detalle de equipo:', e);
+    return res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
 export const actualizarEquipo = async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
@@ -2307,6 +2409,10 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
       procesador,
       ram,
       propiedad,
+      propietarioExterno,
+      tipo,
+      estado,
+      anioPc,
       macWifi,
       redEthernet,
       so,
@@ -2333,6 +2439,10 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
       "procesador",
       "ram",
       "propiedad",
+      "propietarioExterno",
+      "tipo",
+      "estado",
+      "anioPc",
       "macWifi",
       "redEthernet",
       "so",
@@ -2400,7 +2510,42 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
     if (typeof vDisco !== "undefined") dataEquipo.disco = vDisco;
     if (typeof vProc !== "undefined") dataEquipo.procesador = vProc;
     if (typeof vRam !== "undefined") dataEquipo.ram = vRam;
-    if (typeof vPropiedad !== "undefined") dataEquipo.propiedad = vPropiedad;
+
+    if (typeof vPropiedad !== "undefined") {
+      const propiedadNormalizada = normalizarPropiedadEquipoMovil(vPropiedad);
+      dataEquipo.propiedad = propiedadNormalizada;
+      dataEquipo.propietarioExterno = normalizarPropietarioExternoMovil(propiedadNormalizada, propietarioExterno);
+    } else if (typeof propietarioExterno !== "undefined") {
+      return res.status(400).json({ error: "Para actualizar propietarioExterno también debes enviar propiedad" });
+    }
+
+    if (typeof tipo !== "undefined") {
+      if (!(Object.values(TipoEquipo) as string[]).includes(String(tipo))) {
+        return res.status(400).json({ error: "tipo inválido" });
+      }
+      dataEquipo.tipo = tipo as TipoEquipo;
+    }
+
+    if (typeof estado !== "undefined") {
+      if (!(Object.values(EstadoEquipo) as string[]).includes(String(estado))) {
+        return res.status(400).json({ error: "estado inválido" });
+      }
+      dataEquipo.estado = estado as EstadoEquipo;
+    }
+
+    if (typeof anioPc !== "undefined") {
+      if (anioPc === null || anioPc === "") {
+        dataEquipo.anioPc = null;
+        dataEquipo.anioPcOrigen = "NO_DETERMINADO";
+      } else {
+        const anioNum = Number(anioPc);
+        if (!Number.isFinite(anioNum)) {
+          return res.status(400).json({ error: "anioPc inválido" });
+        }
+        dataEquipo.anioPc = anioNum;
+        dataEquipo.anioPcOrigen = "MANUAL";
+      }
+    }
 
     const detalleData: Record<string, string | null | undefined> = {
       macWifi: normNullable(macWifi),
@@ -2411,7 +2556,7 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
       office: normNullable(office),
       teamViewer: normNullable(teamViewer),
       claveTv: normNullable(claveTv),
-      revisado: normNullable(revisado),
+      revisado: typeof revisado === "undefined" ? undefined : normalizarFechaRevisado(revisado),
       adminRidsUsuario: normNullable(adminRidsUsuario),
       adminRidsPassword: normNullable(adminRidsPassword),
       usuarioEmpresa: normNullable(usuarioEmpresa),

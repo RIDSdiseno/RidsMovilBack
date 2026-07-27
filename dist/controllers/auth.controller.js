@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.obtenerEmpresasConSucursales = exports.obtenerSucursalesPorEmpresa = exports.crearSucursal = exports.createSolicitante = exports.createEquipo = exports.createManyDetalle = exports.cambiarSolicitanteEquipo = exports.actualizarEquipo = exports.getAllEquipos = exports.updateSolicitante = exports.getSolicitantes = exports.createManyEquipos = exports.createManySolicitante = exports.obtenerHistorialPorTecnico = exports.completarVisita = exports.cancelarVisita = exports.crearVisita = exports.registrarUbicacionTecnico = exports.finalizarAgendaVisita = exports.iniciarVisitaAgendaVisita = exports.iniciarRutaAgendaVisita = exports.obtenerVisitaDeAgenda = exports.obtenerMisVisitasAsignadasHoy = exports.createManyempresa = exports.refresh = exports.logout = exports.getAllUsers = exports.loginMicrosoft = exports.login = exports.createCliente = exports.deleteCliente = exports.createClienteEconnet = exports.getClientesEconnet = exports.getAllClientes = exports.registerUser = void 0;
+exports.obtenerEmpresasConSucursales = exports.obtenerSucursalesPorEmpresa = exports.crearSucursal = exports.createSolicitante = exports.createEquipo = exports.createManyDetalle = exports.cambiarSolicitanteEquipo = exports.actualizarEquipo = exports.getEquipoDetalleMovil = exports.getAllEquipos = exports.updateSolicitante = exports.getSolicitantes = exports.createManyEquipos = exports.createManySolicitante = exports.obtenerHistorialPorTecnico = exports.completarVisita = exports.cancelarVisita = exports.crearVisita = exports.registrarUbicacionTecnico = exports.finalizarAgendaVisita = exports.iniciarVisitaAgendaVisita = exports.iniciarRutaAgendaVisita = exports.obtenerVisitaDeAgenda = exports.obtenerMisVisitasAsignadasHoy = exports.createManyempresa = exports.refresh = exports.logout = exports.getAllUsers = exports.loginMicrosoft = exports.login = exports.createCliente = exports.deleteCliente = exports.createClienteEconnet = exports.getClientesEconnet = exports.getAllClientes = exports.registerUser = void 0;
 const client_1 = require("@prisma/client");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
@@ -1892,6 +1892,11 @@ const getAllEquipos = async (req, res) => {
                 serial: true,
                 marca: true,
                 modelo: true,
+                tipo: true,
+                estado: true,
+                anioPc: true,
+                createdAt: true,
+                updatedAt: true,
                 procesador: true,
                 ram: true,
                 disco: true,
@@ -1972,12 +1977,105 @@ const getAllEquipos = async (req, res) => {
     }
 };
 exports.getAllEquipos = getAllEquipos;
+// GET /auth/equipos/:id -- ficha completa de un equipo (para "ver/editar" en la app).
+// Trae detalle tecnico, adicionales, quien lo creo y cuando, y los eventos
+// del agente de inventario. Se pide solo al abrir el detalle de un equipo,
+// no en el listado, para no cargar auditoria de los 400+ equipos de una vez.
+const getEquipoDetalleMovil = async (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id <= 0) {
+            return res.status(400).json({ error: 'ID inválido' });
+        }
+        const equipo = await prisma_js_1.prisma.equipo.findUnique({
+            where: { id_equipo: id },
+            include: {
+                solicitante: { include: { empresa: true } },
+                equipo: { orderBy: { id: 'desc' }, take: 1 },
+                adicionales: true,
+            },
+        });
+        if (!equipo) {
+            return res.status(404).json({ error: 'Equipo no encontrado' });
+        }
+        const [createLog, eventosAgente] = await Promise.all([
+            prisma_js_1.prisma.auditLog.findFirst({
+                where: { entity: 'Equipo', entityId: String(id), action: 'CREATE' },
+                orderBy: { createdAt: 'asc' },
+            }),
+            prisma_js_1.prisma.equipoAgenteEvento.findMany({
+                where: { equipoId: id },
+                orderBy: { createdAt: 'desc' },
+                take: 50,
+            }),
+        ]);
+        let creadoPor = null;
+        if (createLog?.actorId) {
+            const tecnico = await prisma_js_1.prisma.tecnico.findUnique({
+                where: { id_tecnico: createLog.actorId },
+                select: { id_tecnico: true, nombre: true, email: true },
+            });
+            if (tecnico)
+                creadoPor = tecnico;
+        }
+        const detalle = equipo.equipo[0] ?? null;
+        return res.status(200).json({
+            id_equipo: equipo.id_equipo,
+            serial: equipo.serial,
+            marca: equipo.marca,
+            modelo: equipo.modelo,
+            tipo: equipo.tipo,
+            estado: equipo.estado,
+            anioPc: equipo.anioPc,
+            procesador: equipo.procesador,
+            ram: equipo.ram,
+            disco: equipo.disco,
+            propiedad: equipo.propiedad,
+            propietarioExterno: equipo.propietarioExterno,
+            idSolicitante: equipo.idSolicitante,
+            nombreSolicitante: equipo.solicitante?.nombre ?? 'S/A',
+            empresaId: equipo.solicitante?.empresaId ?? null,
+            createdAt: equipo.createdAt,
+            updatedAt: equipo.updatedAt,
+            macWifi: detalle?.macWifi ?? '',
+            redEthernet: detalle?.redEthernet ?? '',
+            so: detalle?.so ?? '',
+            tipoDd: detalle?.tipoDd ?? '',
+            estadoAlm: detalle?.estadoAlm ?? '',
+            office: detalle?.office ?? '',
+            teamViewer: detalle?.teamViewer ?? '',
+            claveTv: detalle?.claveTv ?? '',
+            revisado: detalle?.revisado ?? '',
+            adminRidsUsuario: detalle?.adminRidsUsuario ?? '',
+            adminRidsPassword: detalle?.adminRidsPassword ?? '',
+            usuarioEmpresa: detalle?.usuarioEmpresa ?? '',
+            passwordEmpresa: detalle?.passwordEmpresa ?? '',
+            usuarioPersonal: detalle?.usuarioPersonal ?? '',
+            passwordPersonal: detalle?.passwordPersonal ?? '',
+            adicionales: equipo.adicionales ?? [],
+            creadoPor,
+            creadoEn: createLog?.createdAt ?? equipo.createdAt,
+            creacionAuditada: Boolean(createLog),
+            eventosAgente: eventosAgente.map((ev) => ({
+                id: ev.id,
+                tipo: ev.tipo,
+                mensaje: ev.mensaje,
+                createdAt: ev.createdAt,
+            })),
+        });
+    }
+    catch (e) {
+        console.error('Error al obtener detalle de equipo:', e);
+        return res.status(500).json({ error: 'Error interno del servidor' });
+    }
+};
+exports.getEquipoDetalleMovil = getEquipoDetalleMovil;
 const actualizarEquipo = async (req, res) => {
     try {
         const id = Number(req.params.id);
         if (Number.isNaN(id))
             return res.status(400).json({ error: "ID inválido" });
-        const { serial, marca, modelo, disco, procesador, ram, propiedad, macWifi, redEthernet, so, tipoDd, estadoAlm, office, teamViewer, claveTv, revisado, adminRidsUsuario, adminRidsPassword, usuarioEmpresa, passwordEmpresa, usuarioPersonal, passwordPersonal, adicionales, } = req.body ?? {};
+        const { serial, marca, modelo, disco, procesador, ram, propiedad, propietarioExterno, tipo, estado, anioPc, macWifi, redEthernet, so, tipoDd, estadoAlm, office, teamViewer, claveTv, revisado, adminRidsUsuario, adminRidsPassword, usuarioEmpresa, passwordEmpresa, usuarioPersonal, passwordPersonal, adicionales, } = req.body ?? {};
         const keys = Object.keys(req.body || {});
         const allowed = new Set([
             "serial",
@@ -1987,6 +2085,10 @@ const actualizarEquipo = async (req, res) => {
             "procesador",
             "ram",
             "propiedad",
+            "propietarioExterno",
+            "tipo",
+            "estado",
+            "anioPc",
             "macWifi",
             "redEthernet",
             "so",
@@ -2058,8 +2160,40 @@ const actualizarEquipo = async (req, res) => {
             dataEquipo.procesador = vProc;
         if (typeof vRam !== "undefined")
             dataEquipo.ram = vRam;
-        if (typeof vPropiedad !== "undefined")
-            dataEquipo.propiedad = vPropiedad;
+        if (typeof vPropiedad !== "undefined") {
+            const propiedadNormalizada = normalizarPropiedadEquipoMovil(vPropiedad);
+            dataEquipo.propiedad = propiedadNormalizada;
+            dataEquipo.propietarioExterno = normalizarPropietarioExternoMovil(propiedadNormalizada, propietarioExterno);
+        }
+        else if (typeof propietarioExterno !== "undefined") {
+            return res.status(400).json({ error: "Para actualizar propietarioExterno también debes enviar propiedad" });
+        }
+        if (typeof tipo !== "undefined") {
+            if (!Object.values(client_1.TipoEquipo).includes(String(tipo))) {
+                return res.status(400).json({ error: "tipo inválido" });
+            }
+            dataEquipo.tipo = tipo;
+        }
+        if (typeof estado !== "undefined") {
+            if (!Object.values(client_1.EstadoEquipo).includes(String(estado))) {
+                return res.status(400).json({ error: "estado inválido" });
+            }
+            dataEquipo.estado = estado;
+        }
+        if (typeof anioPc !== "undefined") {
+            if (anioPc === null || anioPc === "") {
+                dataEquipo.anioPc = null;
+                dataEquipo.anioPcOrigen = "NO_DETERMINADO";
+            }
+            else {
+                const anioNum = Number(anioPc);
+                if (!Number.isFinite(anioNum)) {
+                    return res.status(400).json({ error: "anioPc inválido" });
+                }
+                dataEquipo.anioPc = anioNum;
+                dataEquipo.anioPcOrigen = "MANUAL";
+            }
+        }
         const detalleData = {
             macWifi: normNullable(macWifi),
             redEthernet: normNullable(redEthernet),
@@ -2069,7 +2203,7 @@ const actualizarEquipo = async (req, res) => {
             office: normNullable(office),
             teamViewer: normNullable(teamViewer),
             claveTv: normNullable(claveTv),
-            revisado: normNullable(revisado),
+            revisado: typeof revisado === "undefined" ? undefined : normalizarFechaRevisado(revisado),
             adminRidsUsuario: normNullable(adminRidsUsuario),
             adminRidsPassword: normNullable(adminRidsPassword),
             usuarioEmpresa: normNullable(usuarioEmpresa),

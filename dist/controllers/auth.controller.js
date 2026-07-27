@@ -1901,6 +1901,7 @@ const getAllEquipos = async (req, res) => {
                 ram: true,
                 disco: true,
                 propiedad: true,
+                lastSeenAt: true,
                 // 🔥 CLAVE
                 idSolicitante: true,
                 solicitante: {
@@ -1943,10 +1944,21 @@ const getAllEquipos = async (req, res) => {
                 },
             },
         });
+        // Equipos con al menos una mantencion registrada, igual criterio que la
+        // intranet (presencia de registros en EquipoMantencion, sin filtrar por
+        // estado). Se consulta una sola vez, acotado a los equipos ya listados.
+        const idsConMantencion = new Set((await prisma_js_1.prisma.equipoMantencion.groupBy({
+            by: ['equipoId'],
+            where: { equipoId: { in: equipos.map((eq) => eq.id_equipo) } },
+        }))
+            .map((m) => m.equipoId)
+            .filter((id) => id != null));
         const equiposMap = equipos.map(eq => {
             const detalle = eq.equipo[0];
             return {
                 ...eq,
+                tieneAgente: Boolean(eq.lastSeenAt),
+                tieneMantencion: idsConMantencion.has(eq.id_equipo),
                 macWifi: detalle?.macWifi ?? '',
                 redEthernet: detalle?.redEthernet ?? '',
                 so: detalle?.so ?? '',

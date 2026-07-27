@@ -2017,7 +2017,7 @@ const getEquipoDetalleMovil = async (req, res) => {
         if (!equipo) {
             return res.status(404).json({ error: 'Equipo no encontrado' });
         }
-        const [createLog, softwares] = await Promise.all([
+        const [createLog, softwares, ultimaMant] = await Promise.all([
             prisma_js_1.prisma.auditLog.findFirst({
                 where: { entity: 'Equipo', entityId: String(id), action: 'CREATE' },
                 orderBy: { createdAt: 'asc' },
@@ -2025,6 +2025,11 @@ const getEquipoDetalleMovil = async (req, res) => {
             prisma_js_1.prisma.equipoSoftware.findMany({
                 where: { equipoId: id },
                 orderBy: { nombre: 'asc' },
+            }),
+            prisma_js_1.prisma.equipoMantencion.findFirst({
+                where: { equipoId: id },
+                orderBy: { fechaInicio: 'desc' },
+                select: { fechaInicio: true, fechaFin: true },
             }),
         ]);
         let creadoPor = null;
@@ -2074,6 +2079,7 @@ const getEquipoDetalleMovil = async (req, res) => {
             creadoPor,
             creadoEn: createLog?.createdAt ?? equipo.createdAt,
             creacionAuditada: Boolean(createLog),
+            ultimaMantencion: ultimaMant?.fechaFin ?? ultimaMant?.fechaInicio ?? null,
             diskFreeGb: equipo.diskFreeGb ?? null,
             diskTotalGb: equipo.diskTotalGb ?? null,
             antivirusNombre: detalle?.antivirusNombre ?? null,

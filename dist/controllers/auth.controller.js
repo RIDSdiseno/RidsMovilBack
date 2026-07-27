@@ -2236,6 +2236,37 @@ const createManyDetalle = async (req, res) => {
     }
 };
 exports.createManyDetalle = createManyDetalle;
+const PROPIEDADES_EQUIPO_VALIDAS = ["Empresa", "Personal", "Externo"];
+function normalizarPropiedadEquipoMovil(value) {
+    const propiedad = String(value ?? "Empresa").trim();
+    if (PROPIEDADES_EQUIPO_VALIDAS.includes(propiedad)) {
+        return propiedad;
+    }
+    return "Empresa";
+}
+function normalizarPropietarioExternoMovil(propiedad, value) {
+    if (propiedad !== "Externo")
+        return null;
+    const texto = String(value ?? "").trim();
+    return texto || null;
+}
+// Acepta fecha YYYY-MM-DD o DD-MM-YYYY; cualquier otro valor (ej. texto libre
+// como "Si") se descarta a null en vez de guardarse como si fuera una fecha.
+function normalizarFechaRevisado(value) {
+    if (!value)
+        return null;
+    const texto = String(value).trim();
+    if (!texto)
+        return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(texto))
+        return texto;
+    const clDash = /^(\d{2})-(\d{2})-(\d{4})$/.exec(texto);
+    if (clDash) {
+        const [, dia, mes, anio] = clDash;
+        return `${anio}-${mes}-${dia}`;
+    }
+    return null;
+}
 const createEquipo = async (req, res) => {
     const body = (req.body ?? {});
     // Validaciones mínimas (ajústalas a tus reglas de negocio)
@@ -2248,6 +2279,17 @@ const createEquipo = async (req, res) => {
     const serial = body.serial.trim();
     const marca = body.marca.trim();
     const modelo = body.modelo.trim();
+    const propiedad = normalizarPropiedadEquipoMovil(body.propiedad);
+    const propietarioExterno = normalizarPropietarioExternoMovil(propiedad, body.propietarioExterno);
+    const tipo = body.tipo && Object.values(client_1.TipoEquipo).includes(body.tipo)
+        ? body.tipo
+        : client_1.TipoEquipo.GENERICO;
+    const estado = body.estado && Object.values(client_1.EstadoEquipo).includes(body.estado)
+        ? body.estado
+        : client_1.EstadoEquipo.ACTIVO;
+    const anioPc = body.anioPc !== undefined && body.anioPc !== null && body.anioPc !== ''
+        ? Number(body.anioPc)
+        : null;
     try {
         const equipo = await prisma_js_1.prisma.$transaction(async (tx) => {
             const created = await tx.equipo.create({
@@ -2259,7 +2301,11 @@ const createEquipo = async (req, res) => {
                     procesador: body.procesador?.trim() ?? '',
                     ram: body.ram?.trim() ?? '',
                     disco: body.disco?.trim() ?? '',
-                    propiedad: body.propiedad?.trim() ?? '',
+                    propiedad,
+                    propietarioExterno,
+                    tipo,
+                    estado,
+                    ...(anioPc !== null && Number.isFinite(anioPc) && { anioPc, anioPcOrigen: 'MANUAL' }),
                 },
             });
             const detalle = {
@@ -2271,7 +2317,7 @@ const createEquipo = async (req, res) => {
                 office: body.office?.trim() || null,
                 teamViewer: body.teamViewer?.trim() || null,
                 claveTv: body.claveTv?.trim() || null,
-                revisado: body.revisado?.trim() || null,
+                revisado: normalizarFechaRevisado(body.revisado),
                 adminRidsUsuario: body.adminRidsUsuario?.trim() || null,
                 adminRidsPassword: body.adminRidsPassword?.trim() || null,
                 usuarioEmpresa: body.usuarioEmpresa?.trim() || null,

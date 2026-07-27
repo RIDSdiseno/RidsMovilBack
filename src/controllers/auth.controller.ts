@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { EstadoAgenda, EstadoVisita, OrigenGestioo, OrigenVisita, Prisma, TipoEntidadGestioo } from "@prisma/client";
+import { EstadoAgenda, EstadoEquipo, EstadoVisita, OrigenGestioo, OrigenVisita, Prisma, TipoEntidadGestioo, TipoEquipo } from "@prisma/client";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import type { Secret } from "jsonwebtoken";
@@ -2614,6 +2614,44 @@ export const createManyDetalle = async (req: Request, res: Response) => {
 };
 
 
+const PROPIEDADES_EQUIPO_VALIDAS = ["Empresa", "Personal", "Externo"] as const;
+type PropiedadEquipoValida = (typeof PROPIEDADES_EQUIPO_VALIDAS)[number];
+
+function normalizarPropiedadEquipoMovil(value: unknown): PropiedadEquipoValida {
+  const propiedad = String(value ?? "Empresa").trim();
+  if ((PROPIEDADES_EQUIPO_VALIDAS as readonly string[]).includes(propiedad)) {
+    return propiedad as PropiedadEquipoValida;
+  }
+  return "Empresa";
+}
+
+function normalizarPropietarioExternoMovil(
+  propiedad: PropiedadEquipoValida,
+  value: unknown,
+): string | null {
+  if (propiedad !== "Externo") return null;
+  const texto = String(value ?? "").trim();
+  return texto || null;
+}
+
+// Acepta fecha YYYY-MM-DD o DD-MM-YYYY; cualquier otro valor (ej. texto libre
+// como "Si") se descarta a null en vez de guardarse como si fuera una fecha.
+function normalizarFechaRevisado(value?: string | null): string | null {
+  if (!value) return null;
+  const texto = String(value).trim();
+  if (!texto) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) return texto;
+
+  const clDash = /^(\d{2})-(\d{2})-(\d{4})$/.exec(texto);
+  if (clDash) {
+    const [, dia, mes, anio] = clDash;
+    return `${anio}-${mes}-${dia}`;
+  }
+
+  return null;
+}
+
 type EquipoInput = {
   idSolicitante: number;
   serial: string;
@@ -2623,6 +2661,10 @@ type EquipoInput = {
   ram: string;
   disco: string;
   propiedad: string;
+  propietarioExterno?: string;
+  tipo?: string;
+  estado?: string;
+  anioPc?: number | string | null;
   macWifi?: string;
   redEthernet?: string;
   so?: string;
@@ -2660,6 +2702,17 @@ export const createEquipo = async (req: Request, res: Response) => {
   const serial = body.serial.trim();
   const marca = body.marca.trim();
   const modelo = body.modelo.trim();
+  const propiedad = normalizarPropiedadEquipoMovil(body.propiedad);
+  const propietarioExterno = normalizarPropietarioExternoMovil(propiedad, body.propietarioExterno);
+  const tipo = body.tipo && (Object.values(TipoEquipo) as string[]).includes(body.tipo)
+    ? (body.tipo as TipoEquipo)
+    : TipoEquipo.GENERICO;
+  const estado = body.estado && (Object.values(EstadoEquipo) as string[]).includes(body.estado)
+    ? (body.estado as EstadoEquipo)
+    : EstadoEquipo.ACTIVO;
+  const anioPc = body.anioPc !== undefined && body.anioPc !== null && body.anioPc !== ''
+    ? Number(body.anioPc)
+    : null;
 
   try {
     const equipo = await prisma.$transaction(async (tx) => {
@@ -2672,7 +2725,11 @@ export const createEquipo = async (req: Request, res: Response) => {
           procesador: body.procesador?.trim() ?? '',
           ram: body.ram?.trim() ?? '',
           disco: body.disco?.trim() ?? '',
-          propiedad: body.propiedad?.trim() ?? '',
+          propiedad,
+          propietarioExterno,
+          tipo,
+          estado,
+          ...(anioPc !== null && Number.isFinite(anioPc) && { anioPc, anioPcOrigen: 'MANUAL' }),
         },
       });
 
@@ -2685,7 +2742,7 @@ export const createEquipo = async (req: Request, res: Response) => {
         office: body.office?.trim() || null,
         teamViewer: body.teamViewer?.trim() || null,
         claveTv: body.claveTv?.trim() || null,
-        revisado: body.revisado?.trim() || null,
+        revisado: normalizarFechaRevisado(body.revisado),
         adminRidsUsuario: body.adminRidsUsuario?.trim() || null,
         adminRidsPassword: body.adminRidsPassword?.trim() || null,
         usuarioEmpresa: body.usuarioEmpresa?.trim() || null,

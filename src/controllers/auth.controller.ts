@@ -13,8 +13,12 @@ import { prisma } from "../lib/prisma.js";
 ========================= */
 
 // JWT para Access Token (corto)
-const JWT_SECRET: Secret = process.env.JWT_SECRET ?? "dev_secret"; // ⚠️ cambia en prod
-const ACCESS_EXPIRES_SEC = Number(process.env.JWT_ACCESS_EXPIRES_SECONDS ?? 180 * 60); // 15 min
+const JWT_SECRET: Secret = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error("JWT_SECRET no está definido en variables de entorno");
+  return secret;
+})();
+const ACCESS_EXPIRES_SEC = Number(process.env.JWT_ACCESS_EXPIRES_SECONDS ?? 180 * 60);
 
 // Refresh Token (cookie) duración
 const REFRESH_DAYS = Number(process.env.REFRESH_DAYS ?? 7);                   // sin "recordarme"
@@ -620,7 +624,7 @@ export const login = async (req: Request, res: Response) => {
     setRefreshCookie(res, rt, days);
 
     const { passwordHash, ...safeUser } = user;
-    return res.json({ token: at, user: { ...safeUser }, remember: rememberFlag });
+    return res.json({ token: at, refreshToken: rt, user: { ...safeUser }, remember: rememberFlag });
   } catch (err) {
     console.error("login error:", err);
     return res.status(500).json({ error: "Error interno" });
@@ -659,7 +663,19 @@ export const loginMicrosoft = async (req: Request, res: Response) => {
       nombreUsuario: user.nombre,
     });
 
-    return res.json({ token: at, user });
+    // Emitir refresh token también en el login Microsoft (la app móvil lo
+    // guarda y lo usa para renovar la sesión sin re-loguear).
+    const days = REFRESH_DAYS;
+    const rt = generateRT();
+    const rtDigest = hashRT(rt);
+    const userAgent: string | null = req.get("user-agent") ?? null;
+    const ip: string | null = (req.ip ?? req.socket?.remoteAddress ?? null) as string | null;
+    await prisma.refreshToken.create({
+      data: { userId: user.id_tecnico, rtHash: rtDigest, expiresAt: addDays(days), userAgent, ip },
+    });
+    setRefreshCookie(res, rt, days);
+
+    return res.json({ token: at, refreshToken: rt, user });
   } catch (err) {
     console.error("microsoft login error:", err);
     return res.status(401).json({ error: "No se pudo iniciar sesion con Microsoft" });
@@ -687,7 +703,7 @@ export const getAllUsers = async (_req: Request, res: Response) => {
 // POST /auth/logout
 export const logout = async (req: Request, res: Response) => {
   try {
-    const rt = (req as any).cookies?.rt as string | undefined;
+    const rt = ((req as any).cookies?.rt ?? req.body?.refreshToken) as string | undefined;
     if (rt) {
       const digest = hashRT(rt);
       const row = await prisma.refreshToken.findFirst({ where: { rtHash: digest } });
@@ -710,7 +726,8 @@ export const logout = async (req: Request, res: Response) => {
 // Valida por COOKIE httpOnly `rt`, rota el RT y devuelve nuevo Access Token
 export const refresh = async (req: Request, res: Response) => {
   try {
-    const rt = (req as any).cookies?.rt as string | undefined;
+    // Acepta el refresh token por cookie (navegador) o por body (app móvil).
+    const rt = ((req as any).cookies?.rt ?? req.body?.refreshToken) as string | undefined;
     if (!rt) return res.status(401).json({ error: "Sin refresh token" });
 
     const digest = hashRT(rt);
@@ -783,7 +800,7 @@ export const refresh = async (req: Request, res: Response) => {
       nombreUsuario: row.user.nombre,
     });
 
-    return res.json({ token: at, remember: rememberParam });
+    return res.json({ token: at, refreshToken: newRt, remember: rememberParam });
   } catch (e) {
     console.error("refresh error:", e);
     clearRefreshCookie(res);
@@ -992,7 +1009,7 @@ export const obtenerMisVisitasAsignadasHoy = async (req: Request, res: Response)
   } catch (error: any) {
     console.error("Error al obtener visitas asignadas:", error);
     return res.status(500).json({
-      error: `Error interno al obtener visitas asignadas: ${error.message || error}`,
+      error: `Error interno al obtener visitas asignadas`,
     });
   }
 };
@@ -1039,7 +1056,7 @@ export const obtenerVisitaDeAgenda = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error("Error al obtener visita de agenda:", error);
     return res.status(500).json({
-      error: `Error interno al obtener visita de agenda: ${error.message || error}`,
+      error: `Error interno al obtener visita de agenda`,
     });
   }
 };
@@ -1164,7 +1181,7 @@ export const iniciarRutaAgendaVisita = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error("Error al iniciar ruta:", error);
     return res.status(500).json({
-      error: `Error interno al iniciar ruta: ${error.message || error}`,
+      error: `Error interno al iniciar ruta`,
     });
   }
 };
@@ -1258,7 +1275,7 @@ export const iniciarVisitaAgendaVisita = async (req: Request, res: Response) => 
   } catch (error: any) {
     console.error("Error al iniciar visita:", error);
     return res.status(500).json({
-      error: `Error interno al iniciar visita: ${error.message || error}`,
+      error: `Error interno al iniciar visita`,
     });
   }
 };
@@ -1407,7 +1424,7 @@ export const finalizarAgendaVisita = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error("Error al finalizar visita de agenda:", error);
     return res.status(500).json({
-      error: `Error interno al finalizar visita de agenda: ${error.message || error}`,
+      error: `Error interno al finalizar visita de agenda`,
     });
   }
 };
@@ -1417,22 +1434,33 @@ export const finalizarAgendaVisita = async (req: Request, res: Response) => {
 // celular para prender/apagar el tracking, pero se valida tambien aca como
 // candado de seguridad: si el reloj del dispositivo esta mal, o llega una
 // ubicacion fuera de horario por cualquier motivo, no se guarda.
-const UBICACION_VENTANA_INICIO_MINUTOS = 8 * 60; // 08:00
-const UBICACION_VENTANA_FIN_MINUTOS = 18 * 60 + 30; // 18:30
+// Ventana de jornada laboral (hora de Chile):
+//   Lunes a viernes: 08:00 - 18:30
+//   Sábado:          08:30 - 14:00
+//   Domingo:         sin jornada
+const VENTANA_LUN_VIE_INICIO = 8 * 60;       // 08:00
+const VENTANA_LUN_VIE_FIN = 18 * 60 + 30;    // 18:30
+const VENTANA_SABADO_INICIO = 8 * 60 + 30;   // 08:30
+const VENTANA_SABADO_FIN = 14 * 60;          // 14:00
 
 function estaDentroDeVentanaLaboral(fecha: Date = new Date()): boolean {
   const partes = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Santiago",
+    weekday: "short",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   }).formatToParts(fecha);
 
-  const hora = Number(partes.find((p) => p.type === "hour")?.value ?? "0");
+  const weekday = partes.find((p) => p.type === "weekday")?.value ?? "";
+  const horaRaw = Number(partes.find((p) => p.type === "hour")?.value ?? "0");
+  const hora = horaRaw === 24 ? 0 : horaRaw; // algunos entornos devuelven "24" a medianoche
   const minuto = Number(partes.find((p) => p.type === "minute")?.value ?? "0");
   const minutos = hora * 60 + minuto;
 
-  return minutos >= UBICACION_VENTANA_INICIO_MINUTOS && minutos <= UBICACION_VENTANA_FIN_MINUTOS;
+  if (weekday === "Sun") return false;
+  if (weekday === "Sat") return minutos >= VENTANA_SABADO_INICIO && minutos <= VENTANA_SABADO_FIN;
+  return minutos >= VENTANA_LUN_VIE_INICIO && minutos <= VENTANA_LUN_VIE_FIN;
 }
 
 export const registrarUbicacionTecnico = async (req: Request, res: Response) => {
@@ -1447,10 +1475,21 @@ export const registrarUbicacionTecnico = async (req: Request, res: Response) => 
       precision,
       velocidad,
       estadoTracking,
+      capturedAt,
     } = req.body ?? {};
 
     const lat = Number(latitud);
     const lon = Number(longitud);
+    // Momento real de captura del punto (para backlog offline). Solo se acepta
+    // si es una fecha válida y no está en el futuro; si no viene, se usa la hora
+    // de recepción del servidor (default de createdAt).
+    const parsedCapturedAt = (() => {
+      if (!capturedAt) return null;
+      const fecha = new Date(capturedAt);
+      if (Number.isNaN(fecha.getTime())) return null;
+      if (fecha.getTime() > Date.now() + 5 * 60 * 1000) return null;
+      return fecha;
+    })();
     const parsedAgendaId = agendaId === undefined || agendaId === null || agendaId === ""
       ? null
       : Number(agendaId);
@@ -1483,7 +1522,7 @@ export const registrarUbicacionTecnico = async (req: Request, res: Response) => 
       // regla de negocio (fuera de horario), no un problema de sesión, y
       // reintentar más tarde no tiene sentido -- 422 se descarta como
       // "permanent" en la cola local en vez de reintentarse para siempre.
-      return res.status(422).json({ error: "Fuera de la ventana horaria de jornada laboral (08:00-18:30)" });
+      return res.status(422).json({ error: "Fuera de la ventana horaria de jornada laboral (Lun-Vie 08:00-18:30, Sáb 08:30-14:00)" });
     }
 
     const tecnico = await prisma.tecnico.findUnique({
@@ -1522,6 +1561,7 @@ export const registrarUbicacionTecnico = async (req: Request, res: Response) => 
         estadoTracking: typeof estadoTracking === "string" && estadoTracking.trim()
           ? estadoTracking.trim().slice(0, 40)
           : "EN_RUTA",
+        ...(parsedCapturedAt ? { createdAt: parsedCapturedAt } : {}),
       },
       select: {
         id: true,
@@ -1540,7 +1580,7 @@ export const registrarUbicacionTecnico = async (req: Request, res: Response) => 
   } catch (error: any) {
     console.error("Error al registrar ubicación:", error);
     return res.status(500).json({
-      error: `Error interno al registrar ubicación: ${error.message || error}`,
+      error: `Error interno al registrar ubicación`,
     });
   }
 };
@@ -1723,7 +1763,7 @@ export const crearVisita = async (req: Request, res: Response) => {
 
   } catch (error: any) {
     console.error('Error al crear la visita:', error);
-    return res.status(500).json({ error: `Error interno al crear la visita: ${error.message || error}` });
+    return res.status(500).json({ error: `Error interno al crear la visita` });
   }
 };
 
@@ -1758,7 +1798,7 @@ export const cancelarVisita = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error("Error al cancelar visita:", error);
     return res.status(500).json({
-      error: `Error interno al cancelar la visita: ${error.message || error}`,
+      error: `Error interno al cancelar la visita`,
     });
   }
 };
@@ -1785,6 +1825,11 @@ export const completarVisita = async (req: Request, res: Response) => {
     });
 
     if (!v) return res.status(404).json({ error: "Visita no encontrada" });
+
+    // Cada técnico solo puede completar sus propias visitas.
+    if (v.tecnicoId !== req.user?.id) {
+      return res.status(403).json({ error: "No puedes completar una visita de otro técnico" });
+    }
 
     const {
       confImpresoras, confTelefonos, confPiePagina, otros, otrosDetalle,
@@ -1958,7 +2003,7 @@ export const completarVisita = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error("Error al completar visita:", error);
     return res.status(500).json({
-      error: `Error interno al completar la visita: ${error.message || error}`,
+      error: `Error interno al completar la visita`,
     });
   }
 };
@@ -2194,20 +2239,82 @@ export const getAllEquipos = async (req: Request, res: Response) => {
     // Oculta equipos de empresas desactivadas (Empresa.isActive), igual que
     // la intranet. Se consulta en vivo cada vez: al desactivar una empresa
     // nueva, sus equipos dejan de aparecer aqui sin tocar codigo.
+    // Filtros y búsqueda opcionales (server-side). Si NO llega ningún parámetro
+    // de paginación (page/limit), se devuelven todos los equipos que cumplan los
+    // filtros (compatibilidad con los usos que esperan el listado completo).
+    const q = req.query as Record<string, string | undefined>;
+    const search = (q.search ?? '').trim();
+    const empresaIdFiltro = q.empresaId && !Number.isNaN(Number(q.empresaId)) ? Number(q.empresaId) : null;
+    const estadoFiltro = q.estado && (Object.values(EstadoEquipo) as string[]).includes(q.estado)
+      ? (q.estado as EstadoEquipo)
+      : null;
+    const parseFecha = (v?: string) => {
+      if (!v) return null;
+      const d = new Date(v);
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+    const finDia = (d: Date) => new Date(d.getTime() + 24 * 60 * 60 * 1000 - 1);
+    const ingresoDesde = parseFecha(q.ingresoDesde);
+    const ingresoHasta = parseFecha(q.ingresoHasta);
+    const edicionDesde = parseFecha(q.edicionDesde);
+    const edicionHasta = parseFecha(q.edicionHasta);
+
+    const paginar = q.page !== undefined || q.limit !== undefined;
+    const page = Math.max(1, Number(q.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(q.limit) || 30));
+    const skip = (page - 1) * limit;
+
     const empresasInactivas = await prisma.empresa.findMany({
       where: { isActive: false },
       select: { id_empresa: true },
     });
     const idsEmpresasInactivas = empresasInactivas.map((e) => e.id_empresa);
 
-    const equipos = await prisma.equipo.findMany({
-      where: {
+    const condiciones: Prisma.EquipoWhereInput[] = [
+      {
         OR: [
           { empresaId: { not: null, notIn: idsEmpresasInactivas } },
           { empresaId: null, solicitante: { is: { empresa: { is: { isActive: true } } } } },
           { empresaId: null, solicitante: null },
         ],
       },
+    ];
+    if (search) {
+      condiciones.push({
+        OR: [
+          { serial: { contains: search, mode: 'insensitive' } },
+          { marca: { contains: search, mode: 'insensitive' } },
+          { modelo: { contains: search, mode: 'insensitive' } },
+          { solicitante: { is: { nombre: { contains: search, mode: 'insensitive' } } } },
+        ],
+      });
+    }
+    if (empresaIdFiltro !== null) {
+      condiciones.push({ solicitante: { is: { empresaId: empresaIdFiltro } } });
+    }
+    if (estadoFiltro) {
+      condiciones.push({ estado: estadoFiltro });
+    }
+    if (ingresoDesde || ingresoHasta) {
+      condiciones.push({ createdAt: {
+        ...(ingresoDesde ? { gte: ingresoDesde } : {}),
+        ...(ingresoHasta ? { lte: finDia(ingresoHasta) } : {}),
+      } });
+    }
+    if (edicionDesde || edicionHasta) {
+      condiciones.push({ updatedAt: {
+        ...(edicionDesde ? { gte: edicionDesde } : {}),
+        ...(edicionHasta ? { lte: finDia(edicionHasta) } : {}),
+      } });
+    }
+    const where: Prisma.EquipoWhereInput = { AND: condiciones };
+
+    const total = paginar ? await prisma.equipo.count({ where }) : 0;
+
+    const equipos = await prisma.equipo.findMany({
+      where,
+      orderBy: { id_equipo: 'desc' },
+      ...(paginar ? { skip, take: limit } : {}),
       select: {
         id_equipo: true,
         serial: true,
@@ -2234,6 +2341,9 @@ export const getAllEquipos = async (req: Request, res: Response) => {
           },
         },
 
+        // No se seleccionan credenciales (claveTv, admin/empresa/personal
+        // usuario+password) en el LISTADO: son sensibles y solo se entregan en
+        // el detalle (getEquipoDetalleMovil), bajo demanda y con authGuard.
         equipo: {
           select: {
             macWifi: true,
@@ -2243,14 +2353,7 @@ export const getAllEquipos = async (req: Request, res: Response) => {
             estadoAlm: true,
             office: true,
             teamViewer: true,
-            claveTv: true,
             revisado: true,
-            adminRidsUsuario: true,
-            adminRidsPassword: true,
-            usuarioEmpresa: true,
-            passwordEmpresa: true,
-            usuarioPersonal: true,
-            passwordPersonal: true,
           },
           orderBy: { id: 'desc' },
           take: 1,
@@ -2296,14 +2399,7 @@ export const getAllEquipos = async (req: Request, res: Response) => {
         estadoAlm: detalle?.estadoAlm ?? '',
         office: detalle?.office ?? '',
         teamViewer: detalle?.teamViewer ?? '',
-        claveTv: detalle?.claveTv ?? '',
         revisado: detalle?.revisado ?? '',
-        adminRidsUsuario: detalle?.adminRidsUsuario ?? '',
-        adminRidsPassword: detalle?.adminRidsPassword ?? '',
-        usuarioEmpresa: detalle?.usuarioEmpresa ?? '',
-        passwordEmpresa: detalle?.passwordEmpresa ?? '',
-        usuarioPersonal: detalle?.usuarioPersonal ?? '',
-        passwordPersonal: detalle?.passwordPersonal ?? '',
         adicionales: eq.adicionales ?? [],
 
         // 🔥 EXTRAS PARA EL FRONT
@@ -2314,6 +2410,15 @@ export const getAllEquipos = async (req: Request, res: Response) => {
 
     equiposMap.forEach(eq => delete (eq as any).equipo);
 
+    if (paginar) {
+      return res.json({
+        equipos: equiposMap,
+        total,
+        page,
+        limit,
+        hasMore: skip + equiposMap.length < total,
+      });
+    }
     return res.json({ equipos: equiposMap });
   } catch (e) {
     console.error('Error al obtener equipos', e);
@@ -2895,6 +3000,16 @@ export const createEquipo = async (req: Request, res: Response) => {
     ? Number(body.anioPc)
     : null;
 
+  // Con relationMode="prisma" no hay FK en la BD; validamos que el solicitante
+  // exista para no crear equipos huérfanos.
+  const solicitanteExiste = await prisma.solicitante.findUnique({
+    where: { id_solicitante: body.idSolicitante },
+    select: { id_solicitante: true },
+  });
+  if (!solicitanteExiste) {
+    return res.status(400).json({ error: 'El solicitante no existe' });
+  }
+
   try {
     const equipo = await prisma.$transaction(async (tx) => {
       const created = await tx.equipo.create({
@@ -3002,6 +3117,17 @@ export const createSolicitante = async (req: Request, res: Response) => {
     // Solo incluir clienteId si se proporciona y es válido
     if (clienteId !== undefined && clienteId !== null && clienteId !== '') {
       data.clienteId = Number(clienteId);
+    }
+
+    // Con relationMode="prisma" no hay FK a nivel de BD, así que validamos en la
+    // app que la empresa exista (evita solicitantes huérfanos; el catch P2003 ya
+    // no dispara con relationMode prisma).
+    const empresaExiste = await prisma.empresa.findUnique({
+      where: { id_empresa: data.empresaId },
+      select: { id_empresa: true },
+    });
+    if (!empresaExiste) {
+      return res.status(400).json({ error: "La empresa no existe" });
     }
 
     // Crear el solicitante

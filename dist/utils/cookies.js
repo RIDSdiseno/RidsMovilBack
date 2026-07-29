@@ -2,7 +2,11 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.setRefreshCookie = setRefreshCookie;
 exports.clearRefreshCookie = clearRefreshCookie;
-const SECURE = String(process.env.COOKIE_SECURE ?? "false") === "true";
+// Por defecto, cookies seguras (HTTPS) en producción; en dev (http) quedan
+// no-seguras. Se puede forzar con COOKIE_SECURE.
+const SECURE = process.env.COOKIE_SECURE != null
+    ? String(process.env.COOKIE_SECURE) === "true"
+    : process.env.NODE_ENV === "production";
 const SAME_SITE = process.env.COOKIE_SAMESITE ?? "lax";
 const DOMAIN = process.env.COOKIE_DOMAIN || undefined;
 function setRefreshCookie(res, rt, days) {

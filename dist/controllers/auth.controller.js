@@ -14,8 +14,13 @@ const prisma_js_1 = require("../lib/prisma.js");
    CONFIG / CONSTANTES
 ========================= */
 // JWT para Access Token (corto)
-const JWT_SECRET = process.env.JWT_SECRET ?? "dev_secret"; // ⚠️ cambia en prod
-const ACCESS_EXPIRES_SEC = Number(process.env.JWT_ACCESS_EXPIRES_SECONDS ?? 180 * 60); // 15 min
+const JWT_SECRET = (() => {
+    const secret = process.env.JWT_SECRET;
+    if (!secret)
+        throw new Error("JWT_SECRET no está definido en variables de entorno");
+    return secret;
+})();
+const ACCESS_EXPIRES_SEC = Number(process.env.JWT_ACCESS_EXPIRES_SECONDS ?? 180 * 60);
 // Refresh Token (cookie) duración
 const REFRESH_DAYS = Number(process.env.REFRESH_DAYS ?? 7); // sin "recordarme"
 const REFRESH_REMEMBER_DAYS = Number(process.env.REFRESH_REMEMBER_DAYS ?? 60); // con "recordarme"
@@ -513,7 +518,7 @@ const login = async (req, res) => {
         // Setear cookie httpOnly
         setRefreshCookie(res, rt, days);
         const { passwordHash, ...safeUser } = user;
-        return res.json({ token: at, user: { ...safeUser }, remember: rememberFlag });
+        return res.json({ token: at, refreshToken: rt, user: { ...safeUser }, remember: rememberFlag });
     }
     catch (err) {
         console.error("login error:", err);
@@ -548,7 +553,18 @@ const loginMicrosoft = async (req, res) => {
             email: user.email,
             nombreUsuario: user.nombre,
         });
-        return res.json({ token: at, user });
+        // Emitir refresh token también en el login Microsoft (la app móvil lo
+        // guarda y lo usa para renovar la sesión sin re-loguear).
+        const days = REFRESH_DAYS;
+        const rt = generateRT();
+        const rtDigest = hashRT(rt);
+        const userAgent = req.get("user-agent") ?? null;
+        const ip = (req.ip ?? req.socket?.remoteAddress ?? null);
+        await prisma_js_1.prisma.refreshToken.create({
+            data: { userId: user.id_tecnico, rtHash: rtDigest, expiresAt: addDays(days), userAgent, ip },
+        });
+        setRefreshCookie(res, rt, days);
+        return res.json({ token: at, refreshToken: rt, user });
     }
     catch (err) {
         console.error("microsoft login error:", err);
@@ -577,7 +593,7 @@ exports.getAllUsers = getAllUsers;
 // POST /auth/logout
 const logout = async (req, res) => {
     try {
-        const rt = req.cookies?.rt;
+        const rt = (req.cookies?.rt ?? req.body?.refreshToken);
         if (rt) {
             const digest = hashRT(rt);
             const row = await prisma_js_1.prisma.refreshToken.findFirst({ where: { rtHash: digest } });
@@ -601,7 +617,8 @@ exports.logout = logout;
 // Valida por COOKIE httpOnly `rt`, rota el RT y devuelve nuevo Access Token
 const refresh = async (req, res) => {
     try {
-        const rt = req.cookies?.rt;
+        // Acepta el refresh token por cookie (navegador) o por body (app móvil).
+        const rt = (req.cookies?.rt ?? req.body?.refreshToken);
         if (!rt)
             return res.status(401).json({ error: "Sin refresh token" });
         const digest = hashRT(rt);
@@ -663,7 +680,7 @@ const refresh = async (req, res) => {
             email: row.user.email,
             nombreUsuario: row.user.nombre,
         });
-        return res.json({ token: at, remember: rememberParam });
+        return res.json({ token: at, refreshToken: newRt, remember: rememberParam });
     }
     catch (e) {
         console.error("refresh error:", e);
@@ -829,7 +846,7 @@ const obtenerMisVisitasAsignadasHoy = async (req, res) => {
     catch (error) {
         console.error("Error al obtener visitas asignadas:", error);
         return res.status(500).json({
-            error: `Error interno al obtener visitas asignadas: ${error.message || error}`,
+            error: `Error interno al obtener visitas asignadas`,
         });
     }
 };
@@ -874,7 +891,7 @@ const obtenerVisitaDeAgenda = async (req, res) => {
     catch (error) {
         console.error("Error al obtener visita de agenda:", error);
         return res.status(500).json({
-            error: `Error interno al obtener visita de agenda: ${error.message || error}`,
+            error: `Error interno al obtener visita de agenda`,
         });
     }
 };
@@ -986,7 +1003,7 @@ const iniciarRutaAgendaVisita = async (req, res) => {
     catch (error) {
         console.error("Error al iniciar ruta:", error);
         return res.status(500).json({
-            error: `Error interno al iniciar ruta: ${error.message || error}`,
+            error: `Error interno al iniciar ruta`,
         });
     }
 };
@@ -1072,7 +1089,7 @@ const iniciarVisitaAgendaVisita = async (req, res) => {
     catch (error) {
         console.error("Error al iniciar visita:", error);
         return res.status(500).json({
-            error: `Error interno al iniciar visita: ${error.message || error}`,
+            error: `Error interno al iniciar visita`,
         });
     }
 };
@@ -1204,7 +1221,7 @@ const finalizarAgendaVisita = async (req, res) => {
     catch (error) {
         console.error("Error al finalizar visita de agenda:", error);
         return res.status(500).json({
-            error: `Error interno al finalizar visita de agenda: ${error.message || error}`,
+            error: `Error interno al finalizar visita de agenda`,
         });
     }
 };
@@ -1214,28 +1231,54 @@ exports.finalizarAgendaVisita = finalizarAgendaVisita;
 // celular para prender/apagar el tracking, pero se valida tambien aca como
 // candado de seguridad: si el reloj del dispositivo esta mal, o llega una
 // ubicacion fuera de horario por cualquier motivo, no se guarda.
-const UBICACION_VENTANA_INICIO_MINUTOS = 8 * 60; // 08:00
-const UBICACION_VENTANA_FIN_MINUTOS = 18 * 60 + 30; // 18:30
+// Ventana de jornada laboral (hora de Chile):
+//   Lunes a viernes: 08:00 - 18:30
+//   Sábado:          08:30 - 14:00
+//   Domingo:         sin jornada
+const VENTANA_LUN_VIE_INICIO = 8 * 60; // 08:00
+const VENTANA_LUN_VIE_FIN = 18 * 60 + 30; // 18:30
+const VENTANA_SABADO_INICIO = 8 * 60 + 30; // 08:30
+const VENTANA_SABADO_FIN = 14 * 60; // 14:00
 function estaDentroDeVentanaLaboral(fecha = new Date()) {
     const partes = new Intl.DateTimeFormat("en-US", {
         timeZone: "America/Santiago",
+        weekday: "short",
         hour: "2-digit",
         minute: "2-digit",
         hour12: false,
     }).formatToParts(fecha);
-    const hora = Number(partes.find((p) => p.type === "hour")?.value ?? "0");
+    const weekday = partes.find((p) => p.type === "weekday")?.value ?? "";
+    const horaRaw = Number(partes.find((p) => p.type === "hour")?.value ?? "0");
+    const hora = horaRaw === 24 ? 0 : horaRaw; // algunos entornos devuelven "24" a medianoche
     const minuto = Number(partes.find((p) => p.type === "minute")?.value ?? "0");
     const minutos = hora * 60 + minuto;
-    return minutos >= UBICACION_VENTANA_INICIO_MINUTOS && minutos <= UBICACION_VENTANA_FIN_MINUTOS;
+    if (weekday === "Sun")
+        return false;
+    if (weekday === "Sat")
+        return minutos >= VENTANA_SABADO_INICIO && minutos <= VENTANA_SABADO_FIN;
+    return minutos >= VENTANA_LUN_VIE_INICIO && minutos <= VENTANA_LUN_VIE_FIN;
 }
 const registrarUbicacionTecnico = async (req, res) => {
     try {
         const tecnicoId = req.user?.id;
         if (!tecnicoId)
             return res.status(401).json({ error: "No autenticado" });
-        const { agendaId, latitud, longitud, precision, velocidad, estadoTracking, } = req.body ?? {};
+        const { agendaId, latitud, longitud, precision, velocidad, estadoTracking, capturedAt, } = req.body ?? {};
         const lat = Number(latitud);
         const lon = Number(longitud);
+        // Momento real de captura del punto (para backlog offline). Solo se acepta
+        // si es una fecha válida y no está en el futuro; si no viene, se usa la hora
+        // de recepción del servidor (default de createdAt).
+        const parsedCapturedAt = (() => {
+            if (!capturedAt)
+                return null;
+            const fecha = new Date(capturedAt);
+            if (Number.isNaN(fecha.getTime()))
+                return null;
+            if (fecha.getTime() > Date.now() + 5 * 60 * 1000)
+                return null;
+            return fecha;
+        })();
         const parsedAgendaId = agendaId === undefined || agendaId === null || agendaId === ""
             ? null
             : Number(agendaId);
@@ -1262,7 +1305,7 @@ const registrarUbicacionTecnico = async (req, res) => {
             // regla de negocio (fuera de horario), no un problema de sesión, y
             // reintentar más tarde no tiene sentido -- 422 se descarta como
             // "permanent" en la cola local en vez de reintentarse para siempre.
-            return res.status(422).json({ error: "Fuera de la ventana horaria de jornada laboral (08:00-18:30)" });
+            return res.status(422).json({ error: "Fuera de la ventana horaria de jornada laboral (Lun-Vie 08:00-18:30, Sáb 08:30-14:00)" });
         }
         const tecnico = await prisma_js_1.prisma.tecnico.findUnique({
             where: { id_tecnico: tecnicoId },
@@ -1296,6 +1339,7 @@ const registrarUbicacionTecnico = async (req, res) => {
                 estadoTracking: typeof estadoTracking === "string" && estadoTracking.trim()
                     ? estadoTracking.trim().slice(0, 40)
                     : "EN_RUTA",
+                ...(parsedCapturedAt ? { createdAt: parsedCapturedAt } : {}),
             },
             select: {
                 id: true,
@@ -1314,7 +1358,7 @@ const registrarUbicacionTecnico = async (req, res) => {
     catch (error) {
         console.error("Error al registrar ubicación:", error);
         return res.status(500).json({
-            error: `Error interno al registrar ubicación: ${error.message || error}`,
+            error: `Error interno al registrar ubicación`,
         });
     }
 };
@@ -1464,7 +1508,7 @@ const crearVisita = async (req, res) => {
     }
     catch (error) {
         console.error('Error al crear la visita:', error);
-        return res.status(500).json({ error: `Error interno al crear la visita: ${error.message || error}` });
+        return res.status(500).json({ error: `Error interno al crear la visita` });
     }
 };
 exports.crearVisita = crearVisita;
@@ -1496,7 +1540,7 @@ const cancelarVisita = async (req, res) => {
     catch (error) {
         console.error("Error al cancelar visita:", error);
         return res.status(500).json({
-            error: `Error interno al cancelar la visita: ${error.message || error}`,
+            error: `Error interno al cancelar la visita`,
         });
     }
 };
@@ -1522,6 +1566,10 @@ const completarVisita = async (req, res) => {
         });
         if (!v)
             return res.status(404).json({ error: "Visita no encontrada" });
+        // Cada técnico solo puede completar sus propias visitas.
+        if (v.tecnicoId !== req.user?.id) {
+            return res.status(403).json({ error: "No puedes completar una visita de otro técnico" });
+        }
         const { confImpresoras, confTelefonos, confPiePagina, otros, otrosDetalle, ccleaner, actualizaciones, antivirus, estadoDisco, licenciaWindows, licenciaOffice, rendimientoEquipo, mantenimientoReloj, ecografo, realizado, solicitantes, direccion_visita } = req.body ?? {};
         // Normalizar booleanos
         const toB = (x) => Boolean(x);
@@ -1674,7 +1722,7 @@ const completarVisita = async (req, res) => {
     catch (error) {
         console.error("Error al completar visita:", error);
         return res.status(500).json({
-            error: `Error interno al completar la visita: ${error.message || error}`,
+            error: `Error interno al completar la visita`,
         });
     }
 };
@@ -1879,19 +1927,78 @@ const getAllEquipos = async (req, res) => {
         // Oculta equipos de empresas desactivadas (Empresa.isActive), igual que
         // la intranet. Se consulta en vivo cada vez: al desactivar una empresa
         // nueva, sus equipos dejan de aparecer aqui sin tocar codigo.
+        // Filtros y búsqueda opcionales (server-side). Si NO llega ningún parámetro
+        // de paginación (page/limit), se devuelven todos los equipos que cumplan los
+        // filtros (compatibilidad con los usos que esperan el listado completo).
+        const q = req.query;
+        const search = (q.search ?? '').trim();
+        const empresaIdFiltro = q.empresaId && !Number.isNaN(Number(q.empresaId)) ? Number(q.empresaId) : null;
+        const estadoFiltro = q.estado && Object.values(client_1.EstadoEquipo).includes(q.estado)
+            ? q.estado
+            : null;
+        const parseFecha = (v) => {
+            if (!v)
+                return null;
+            const d = new Date(v);
+            return Number.isNaN(d.getTime()) ? null : d;
+        };
+        const finDia = (d) => new Date(d.getTime() + 24 * 60 * 60 * 1000 - 1);
+        const ingresoDesde = parseFecha(q.ingresoDesde);
+        const ingresoHasta = parseFecha(q.ingresoHasta);
+        const edicionDesde = parseFecha(q.edicionDesde);
+        const edicionHasta = parseFecha(q.edicionHasta);
+        const paginar = q.page !== undefined || q.limit !== undefined;
+        const page = Math.max(1, Number(q.page) || 1);
+        const limit = Math.min(100, Math.max(1, Number(q.limit) || 30));
+        const skip = (page - 1) * limit;
         const empresasInactivas = await prisma_js_1.prisma.empresa.findMany({
             where: { isActive: false },
             select: { id_empresa: true },
         });
         const idsEmpresasInactivas = empresasInactivas.map((e) => e.id_empresa);
-        const equipos = await prisma_js_1.prisma.equipo.findMany({
-            where: {
+        const condiciones = [
+            {
                 OR: [
                     { empresaId: { not: null, notIn: idsEmpresasInactivas } },
                     { empresaId: null, solicitante: { is: { empresa: { is: { isActive: true } } } } },
                     { empresaId: null, solicitante: null },
                 ],
             },
+        ];
+        if (search) {
+            condiciones.push({
+                OR: [
+                    { serial: { contains: search, mode: 'insensitive' } },
+                    { marca: { contains: search, mode: 'insensitive' } },
+                    { modelo: { contains: search, mode: 'insensitive' } },
+                    { solicitante: { is: { nombre: { contains: search, mode: 'insensitive' } } } },
+                ],
+            });
+        }
+        if (empresaIdFiltro !== null) {
+            condiciones.push({ solicitante: { is: { empresaId: empresaIdFiltro } } });
+        }
+        if (estadoFiltro) {
+            condiciones.push({ estado: estadoFiltro });
+        }
+        if (ingresoDesde || ingresoHasta) {
+            condiciones.push({ createdAt: {
+                    ...(ingresoDesde ? { gte: ingresoDesde } : {}),
+                    ...(ingresoHasta ? { lte: finDia(ingresoHasta) } : {}),
+                } });
+        }
+        if (edicionDesde || edicionHasta) {
+            condiciones.push({ updatedAt: {
+                    ...(edicionDesde ? { gte: edicionDesde } : {}),
+                    ...(edicionHasta ? { lte: finDia(edicionHasta) } : {}),
+                } });
+        }
+        const where = { AND: condiciones };
+        const total = paginar ? await prisma_js_1.prisma.equipo.count({ where }) : 0;
+        const equipos = await prisma_js_1.prisma.equipo.findMany({
+            where,
+            orderBy: { id_equipo: 'desc' },
+            ...(paginar ? { skip, take: limit } : {}),
             select: {
                 id_equipo: true,
                 serial: true,
@@ -1916,6 +2023,9 @@ const getAllEquipos = async (req, res) => {
                         empresaId: true,
                     },
                 },
+                // No se seleccionan credenciales (claveTv, admin/empresa/personal
+                // usuario+password) en el LISTADO: son sensibles y solo se entregan en
+                // el detalle (getEquipoDetalleMovil), bajo demanda y con authGuard.
                 equipo: {
                     select: {
                         macWifi: true,
@@ -1925,14 +2035,7 @@ const getAllEquipos = async (req, res) => {
                         estadoAlm: true,
                         office: true,
                         teamViewer: true,
-                        claveTv: true,
                         revisado: true,
-                        adminRidsUsuario: true,
-                        adminRidsPassword: true,
-                        usuarioEmpresa: true,
-                        passwordEmpresa: true,
-                        usuarioPersonal: true,
-                        passwordPersonal: true,
                     },
                     orderBy: { id: 'desc' },
                     take: 1,
@@ -1971,14 +2074,7 @@ const getAllEquipos = async (req, res) => {
                 estadoAlm: detalle?.estadoAlm ?? '',
                 office: detalle?.office ?? '',
                 teamViewer: detalle?.teamViewer ?? '',
-                claveTv: detalle?.claveTv ?? '',
                 revisado: detalle?.revisado ?? '',
-                adminRidsUsuario: detalle?.adminRidsUsuario ?? '',
-                adminRidsPassword: detalle?.adminRidsPassword ?? '',
-                usuarioEmpresa: detalle?.usuarioEmpresa ?? '',
-                passwordEmpresa: detalle?.passwordEmpresa ?? '',
-                usuarioPersonal: detalle?.usuarioPersonal ?? '',
-                passwordPersonal: detalle?.passwordPersonal ?? '',
                 adicionales: eq.adicionales ?? [],
                 // 🔥 EXTRAS PARA EL FRONT
                 empresaId: eq.solicitante?.empresaId ?? null,
@@ -1986,6 +2082,15 @@ const getAllEquipos = async (req, res) => {
             };
         });
         equiposMap.forEach(eq => delete eq.equipo);
+        if (paginar) {
+            return res.json({
+                equipos: equiposMap,
+                total,
+                page,
+                limit,
+                hasMore: skip + equiposMap.length < total,
+            });
+        }
         return res.json({ equipos: equiposMap });
     }
     catch (e) {
@@ -2455,6 +2560,15 @@ const createEquipo = async (req, res) => {
     const anioPc = body.anioPc !== undefined && body.anioPc !== null && body.anioPc !== ''
         ? Number(body.anioPc)
         : null;
+    // Con relationMode="prisma" no hay FK en la BD; validamos que el solicitante
+    // exista para no crear equipos huérfanos.
+    const solicitanteExiste = await prisma_js_1.prisma.solicitante.findUnique({
+        where: { id_solicitante: body.idSolicitante },
+        select: { id_solicitante: true },
+    });
+    if (!solicitanteExiste) {
+        return res.status(400).json({ error: 'El solicitante no existe' });
+    }
     try {
         const equipo = await prisma_js_1.prisma.$transaction(async (tx) => {
             const created = await tx.equipo.create({
@@ -2554,6 +2668,16 @@ const createSolicitante = async (req, res) => {
         // Solo incluir clienteId si se proporciona y es válido
         if (clienteId !== undefined && clienteId !== null && clienteId !== '') {
             data.clienteId = Number(clienteId);
+        }
+        // Con relationMode="prisma" no hay FK a nivel de BD, así que validamos en la
+        // app que la empresa exista (evita solicitantes huérfanos; el catch P2003 ya
+        // no dispara con relationMode prisma).
+        const empresaExiste = await prisma_js_1.prisma.empresa.findUnique({
+            where: { id_empresa: data.empresaId },
+            select: { id_empresa: true },
+        });
+        if (!empresaExiste) {
+            return res.status(400).json({ error: "La empresa no existe" });
         }
         // Crear el solicitante
         const solicitante = await prisma_js_1.prisma.solicitante.create({

@@ -1,6 +1,10 @@
 import type { Response } from "express";
 
-const SECURE = String(process.env.COOKIE_SECURE ?? "false") === "true";
+// Por defecto, cookies seguras (HTTPS) en producción; en dev (http) quedan
+// no-seguras. Se puede forzar con COOKIE_SECURE.
+const SECURE = process.env.COOKIE_SECURE != null
+  ? String(process.env.COOKIE_SECURE) === "true"
+  : process.env.NODE_ENV === "production";
 const SAME_SITE = (process.env.COOKIE_SAMESITE as "lax" | "strict" | "none") ?? "lax";
 const DOMAIN = process.env.COOKIE_DOMAIN || undefined;
 

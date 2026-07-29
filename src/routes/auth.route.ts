@@ -31,29 +31,29 @@ const r = Router();
 
 r.get("/health", (_req, res) => res.json({ ok: true, service: "API Movil", ts: Date.now() }));
 
-//Auth
-r.post("/register", registerUser)
+//Auth: solo login/microsoft/logout/refresh son públicos (pre-sesión).
+r.post("/register", authGuard, registerUser)
 r.post("/login", login)
 r.post("/microsoft", loginMicrosoft)
 r.post("/logout", logout)
 r.post("/refresh", refresh);
-r.get("/usuarios", getAllUsers);
-r.get("/clientes", getAllClientes)
+r.get("/usuarios", authGuard, getAllUsers);
+r.get("/clientes", authGuard, getAllClientes)
 r.get("/clientes/econnet", authGuard, getClientesEconnet)
 r.post("/clientes/econnet", authGuard, createClienteEconnet)
-r.delete("/deletecliente/:id", deleteCliente)
+r.delete("/deletecliente/:id", authGuard, deleteCliente)
 r.get("/historial/:id", authGuard, obtenerHistorialPorTecnico)
-//para cargar "masivamente" las empresas
-r.post("/carga", createManyempresa)
-r.post("/createcliente", createCliente)
-r.post("/crearsolicitante", createManySolicitante)
-r.post("/crearequipos", createManyEquipos)
-r.get("/solicitantes", getSolicitantes)
-r.put("/updateSolicitante", updateSolicitante)
-r.post("/detalles", createManyDetalle)
+//para cargar "masivamente" las empresas (protegido: solo con sesión válida)
+r.post("/carga", authGuard, createManyempresa)
+r.post("/createcliente", authGuard, createCliente)
+r.post("/crearsolicitante", authGuard, createManySolicitante)
+r.post("/crearequipos", authGuard, createManyEquipos)
+r.get("/solicitantes", authGuard, getSolicitantes)
+r.put("/updateSolicitante", authGuard, updateSolicitante)
+r.post("/detalles", authGuard, createManyDetalle)
 
 
-r.get("/equipos", getAllEquipos)
+r.get("/equipos", authGuard, getAllEquipos)
 r.get("/equipos/:id", authGuard, getEquipoDetalleMovil)
 r.put("/equipos/:id/solicitante",authGuard,cambiarSolicitanteEquipo)
 

@@ -444,24 +444,24 @@ model EquipoAdicional {
 }
 
 model DetalleEquipo {
-  id                Int      @id @default(autoincrement()) @map("id_detalle_equipo")
-  idEquipo          Int      @unique
-  macWifi           String?
-  so                String?
-  tipoDd            String?
-  estadoAlm         String?
-  office            String?
-  teamViewer        String?
-  claveTv           String?
-  revisado          String?
-  adminRidsPassword String?
-  adminRidsUsuario  String?
-  passwordEmpresa   String?
-  passwordPersonal  String?
-  usuarioEmpresa    String?
-  usuarioPersonal   String?
-  redEthernet       String?
-  antivirusActivo   Boolean?
+  id                  Int      @id @default(autoincrement()) @map("id_detalle_equipo")
+  idEquipo            Int      @unique
+  macWifi             String?
+  so                  String?
+  tipoDd              String?
+  estadoAlm           String?
+  office              String?
+  teamViewer          String?
+  claveTv             String?
+  revisado            String?
+  adminRidsPassword   String?
+  adminRidsUsuario    String?
+  passwordEmpresa     String?
+  passwordPersonal    String?
+  usuarioEmpresa      String?
+  usuarioPersonal     String?
+  redEthernet         String?
+  antivirusActivo     Boolean?
   antivirusNombre     String?
   bitlockerEstado     String?
   firewallActivo      Boolean?
@@ -699,10 +699,12 @@ model CotizacionGestioo {
   imagen                String?
   tecnicoId             Int?
   ordenGenerada         Boolean                 @default(false)
+  oportunidadVentaId    Int?
   items                 CotizacionItemGestioo[]
   entidad               EntidadGestioo?         @relation(fields: [entidadId], references: [id])
 
   @@index([entidadId])
+  @@index([oportunidadVentaId])
 }
 
 model CotizacionItemGestioo {
@@ -1373,6 +1375,11 @@ model BitacoraTecnico {
   createdAt     DateTime              @default(now())
   updatedAt     DateTime
 
+  recordatorioAt           DateTime?
+  recordatorioCompletado   Boolean   @default(false)
+  recordatorioCompletadoAt DateTime?
+  recordatorioNotificadoAt DateTime?
+
   @@index([cotizacionId])
   @@index([empresaId])
   @@index([equipoId])
@@ -1385,6 +1392,10 @@ model BitacoraTecnico {
   @@index([tipoActividad])
   @@index([trabajoId])
   @@index([visitaId])
+  @@index([recordatorioAt])
+  @@index([recordatorioCompletado])
+  @@index([recordatorioCompletado, recordatorioNotificadoAt, recordatorioAt])
+  @@index([recordatorioNotificadoAt])
 }
 
 model ManualTutorial {
@@ -1544,6 +1555,170 @@ model EquipoMantencion {
   @@index([solicitanteId])
   @@index([tecnicoId])
   @@index([tipo])
+}
+
+model CotizacionEnviada {
+  id            Int       @id @default(autoincrement())
+  cotizacionId  Int?
+  to            String?
+  subject       String?
+  sentBy        String?
+  jobId         String?
+  meta          Json?
+  clienteNombre String?
+  creadoPor     String?
+  fechaCreacion DateTime?
+  sentAt        DateTime  @default(now())
+
+  @@index([cotizacionId])
+  @@index([jobId])
+  @@index([sentAt])
+}
+
+model HistorialEtapaOportunidadVenta {
+  id            Int                    @id @default(autoincrement())
+  oportunidadId Int
+  etapaAnterior EtapaOportunidadVenta?
+  etapaNueva    EtapaOportunidadVenta
+  actorId       Int?
+  createdAt     DateTime               @default(now())
+
+  @@index([createdAt])
+  @@index([oportunidadId])
+}
+
+model OportunidadVenta {
+  id                        Int                        @id @default(autoincrement())
+  codigo                    String                     @unique
+  titulo                    String
+  entidadId                 Int?
+  proyecto                  String?
+  contactoNombre            String?
+  contactoEmail             String?
+  contactoTelefono          String?
+  responsableId             Int
+  etapa                     EtapaOportunidadVenta      @default(NUEVA)
+  prioridad                 PrioridadOportunidadVenta  @default(MEDIA)
+  montoEstimado             Decimal?                   @db.Decimal(14, 2)
+  moneda                    MonedaGestioo              @default(CLP)
+  probabilidadCierre        Int?
+  proximaAccion             String?
+  fechaProximaAccion        DateTime?
+  fechaUltimoContacto       DateTime?
+  observaciones             String?
+  motivoPerdida             String?
+  fechaCierre               DateTime?
+  montoFinal                Decimal?                   @db.Decimal(14, 2)
+  orden                     Int                        @default(0)
+  activo                    Boolean                    @default(true)
+  desactivadoAt             DateTime?
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime
+  comentariosInternos       String?
+  condicionesEspeciales     String?
+  estadoDesarrolloPropuesta EstadoDesarrolloPropuesta?
+  fechaComprometidaEnvio    DateTime?                  @db.Date
+  informacionPendiente      String?
+  riesgoTecnico             RiesgoTecnicoOportunidad?
+  tipoServicio              TipoServicioOportunidad?
+  tipoServicioOtro          String?
+  montoPropuesto            Decimal?                   @db.Decimal(14, 2)
+  fechaEnvioPropuesta       DateTime?                  @db.Date
+  fechaVencimientoPropuesta DateTime?                  @db.Date
+  comentariosCliente        String?
+  objeciones                String?
+  versionPropuesta          String?
+  contrapropuestas          String?
+  ajustesSolicitados        String?
+  motivoPostergacion        String?
+  fechaReactivacion         DateTime?                  @db.Date
+  fechaProbableCierre       DateTime?                  @db.Date
+
+  @@index([activo])
+  @@index([entidadId])
+  @@index([etapa])
+  @@index([etapa, orden])
+  @@index([prioridad])
+  @@index([responsableId])
+}
+
+model RcvVencimiento {
+  id               Int      @id @default(autoincrement())
+  empresaKey       String
+  tipoDoc          String
+  folio            String
+  fechaVencimiento DateTime
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime
+
+  @@unique([empresaKey, tipoDoc, folio])
+  @@index([empresaKey])
+  @@index([fechaVencimiento])
+  @@index([folio])
+  @@index([tipoDoc])
+}
+
+model Recordatorio {
+  id              Int                @id @default(autoincrement())
+  titulo          String
+  mensaje         String?
+  fechaProgramada DateTime
+  estado          EstadoRecordatorio @default(PENDIENTE)
+  origen          OrigenRecordatorio @default(MANUAL)
+  destinatarioId  Int
+  creadoPorId     Int?
+  bitacoraId      Int?
+  ticketId        Int?
+  cotizacionId    Int?
+  visitaId        Int?
+  equipoId        Int?
+  mantencionId    Int?
+  oportunidadId   Int?
+  leidoAt         DateTime?
+  notificadoAt    DateTime?
+  completadoAt    DateTime?
+  canceladoAt     DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime
+
+  @@index([bitacoraId])
+  @@index([cotizacionId])
+  @@index([creadoPorId])
+  @@index([destinatarioId, estado, fechaProgramada])
+  @@index([destinatarioId])
+  @@index([equipoId])
+  @@index([estado])
+  @@index([fechaProgramada])
+  @@index([leidoAt])
+  @@index([mantencionId])
+  @@index([notificadoAt])
+  @@index([oportunidadId])
+  @@index([origen])
+  @@index([ticketId])
+  @@index([visitaId])
+}
+
+model SeguimientoOportunidadVenta {
+  id                 Int       @id @default(autoincrement())
+  oportunidadId      Int
+  autorId            Int
+  comentario         String
+  fechaContacto      DateTime?
+  proximaAccion      String?
+  fechaProximaAccion DateTime?
+  createdAt          DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([oportunidadId])
+}
+
+model empresa_alias_outlook {
+  id        Int      @id @default(autoincrement())
+  alias     String   @unique
+  empresaId Int
+  createdAt DateTime @default(now())
+
+  @@index([empresaId], map: "empresa_alias_outlook_empresaid_idx")
 }
 
 enum MonedaGestioo {
@@ -1788,4 +1963,57 @@ enum EstadoAgenteEquipo {
   SIN_CONEXION
   ADVERTENCIA
   CRITICO
+}
+
+enum EstadoDesarrolloPropuesta {
+  PENDIENTE
+  EN_PREPARACION
+  ESPERANDO_ANTECEDENTES
+  REVISION_INTERNA
+  LISTA_PARA_COTIZAR
+}
+
+enum EstadoRecordatorio {
+  PENDIENTE
+  COMPLETADO
+  CANCELADO
+}
+
+enum EtapaOportunidadVenta {
+  NUEVA
+  COTIZACION_PREPARACION
+  COTIZACION_ENVIADA
+  NEGOCIACION
+  GANADA
+  PERDIDA
+  POSTERGADA
+}
+
+enum OrigenRecordatorio {
+  MANUAL
+  BITACORA
+  TICKET
+  COTIZACION
+  VISITA
+  EQUIPO
+}
+
+enum PrioridadOportunidadVenta {
+  BAJA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+enum RiesgoTecnicoOportunidad {
+  BAJO
+  MEDIO
+  ALTO
+}
+
+enum TipoServicioOportunidad {
+  SOPORTE_TI
+  DESARROLLO_WEB
+  VENTA_PRODUCTOS
+  OTRO
 }

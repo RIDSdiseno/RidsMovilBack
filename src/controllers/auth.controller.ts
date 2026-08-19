@@ -7,6 +7,7 @@ import crypto from "crypto";
 
 import argon2 from "argon2";
 import { prisma } from "../lib/prisma.js";
+import { emparejarAdicionales } from "../utils/adicionales.js";
 
 /* =========================
    CONFIG / CONSTANTES
@@ -2713,10 +2714,14 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
       ? adicionales
         .filter((item) => typeof item?.tipo !== "undefined" && String(item.tipo).trim())
         .map((item) => ({
+          // `id` es opcional: las versiones actuales de la app no lo envían y
+          // el emparejamiento cae al serial o al tipo. Si en el futuro lo
+          // manda, se usa como clave exacta.
+          id: Number.isInteger(Number(item.id)) && Number(item.id) > 0 ? Number(item.id) : null,
           tipo: String(item.tipo).trim(),
-          descripcion: normNullable(item.descripcion),
+          descripcion: normNullable(item.descripcion) ?? null,
           cantidad: Math.max(1, Number(item.cantidad) || 1),
-          serialAdicional: normNullable(item.serialAdicional),
+          serialAdicional: normNullable(item.serialAdicional) ?? null,
         }))
       : undefined;
 
@@ -2763,10 +2768,46 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
       }
 
       if (typeof adicionalesData !== "undefined") {
-        await tx.equipoAdicional.deleteMany({ where: { equipoId: id } });
-        if (adicionalesData.length > 0) {
+        // Se reconcilia contra lo que ya existe en vez de borrar y recrear.
+        // EquipoAdicional lleva `estado` y `origen`, que administra la
+        // intranet: recrear las filas los devolvía a ASIGNADO/MANUAL y cambiaba
+        // los id, perdiendo en silencio el trabajo hecho allá cada vez que un
+        // técnico guardaba un equipo desde la app.
+        const existentes = await tx.equipoAdicional.findMany({
+          where: { equipoId: id },
+          select: { id: true, tipo: true, descripcion: true, serialAdicional: true },
+          orderBy: { id: "asc" },
+        });
+
+        const emparejados = emparejarAdicionales(adicionalesData, existentes);
+
+        for (const { entrada, existenteId } of emparejados.actualizar) {
+          await tx.equipoAdicional.update({
+            where: { id: existenteId },
+            data: {
+              tipo: entrada.tipo,
+              descripcion: entrada.descripcion,
+              cantidad: entrada.cantidad,
+              serialAdicional: entrada.serialAdicional,
+            },
+          });
+        }
+
+        if (emparejados.crear.length > 0) {
           await tx.equipoAdicional.createMany({
-            data: adicionalesData.map((item) => ({ ...item, equipoId: id })),
+            data: emparejados.crear.map((entrada) => ({
+              tipo: entrada.tipo,
+              descripcion: entrada.descripcion,
+              cantidad: entrada.cantidad,
+              serialAdicional: entrada.serialAdicional,
+              equipoId: id,
+            })),
+          });
+        }
+
+        if (emparejados.eliminar.length > 0) {
+          await tx.equipoAdicional.deleteMany({
+            where: { id: { in: emparejados.eliminar } },
           });
         }
       }
@@ -2782,6 +2823,14 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
   } catch (e: any) {
     if ((e as Prisma.PrismaClientKnownRequestError)?.code === "P2002") {
       const fields = (e as Prisma.PrismaClientKnownRequestError).meta?.target;
+      // El serial de un adicional es único a nivel global, no por equipo: sin
+      // distinguirlo, el técnico veía "ya existe un equipo" cuando el conflicto
+      // era de un accesorio.
+      if (String(fields).includes("serialAdicional")) {
+        return res.status(409).json({
+          error: "Ya existe un adicional registrado con ese serial en otro equipo",
+        });
+      }
       return res.status(409).json({ error: `Ya existe un equipo con ese valor único (${fields})` });
     }
     if (e?.code === "P2025") return res.status(404).json({ error: "Equipo no encontrado" });
@@ -3087,6 +3136,11 @@ export const createEquipo = async (req: Request, res: Response) => {
     // duplicados (por ejemplo, serial único)
     if ((error as Prisma.PrismaClientKnownRequestError)?.code === 'P2002') {
       const fields = (error as Prisma.PrismaClientKnownRequestError).meta?.target;
+      if (String(fields).includes('serialAdicional')) {
+        return res.status(409).json({
+          error: 'Ya existe un adicional registrado con ese serial en otro equipo',
+        });
+      }
       return res.status(409).json({ error: `Ya existe un equipo con ese valor único (${fields})` });
     }
     console.error('Error al crear equipo:', error);

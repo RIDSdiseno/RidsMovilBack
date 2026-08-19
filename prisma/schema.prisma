@@ -37,10 +37,10 @@ model Sucursal {
   id_sucursal           Int                    @id @default(autoincrement())
   nombre                String
   direccion             String?
-  latitud               Float?
-  longitud              Float?
   telefono              String?
   empresaId             Int
+  latitud               Float?
+  longitud              Float?
   empresa               Empresa                @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
   historiales           Historial[]
   visitas               Visita[]
@@ -68,12 +68,12 @@ model DetalleEmpresa {
   id          Int     @id @default(autoincrement())
   rut         String  @unique
   direccion   String?
-  latitud     Float?
-  longitud    Float?
   telefono    String?
   email       String?
   empresa_id  Int     @unique
   direcciones Json?
+  latitud     Float?
+  longitud    Float?
   empresa     Empresa @relation(fields: [empresa_id], references: [id_empresa], onDelete: Cascade)
 
   @@map("detalle_empresas")
@@ -430,17 +430,22 @@ model Equipo {
 }
 
 model EquipoAdicional {
-  id              Int      @id @default(autoincrement())
-  serialAdicional String?
+  id              Int                   @id @default(autoincrement())
+  serialAdicional String?               @unique
   equipoId        Int
   tipo            String
   descripcion     String?
-  cantidad        Int      @default(1)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  equipo          Equipo   @relation(fields: [equipoId], references: [id_equipo], onDelete: Cascade)
+  cantidad        Int                   @default(1)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  estado          EstadoEquipoAdicional @default(ASIGNADO)
+  origen          OrigenEquipoAdicional @default(MANUAL)
+  equipo          Equipo                @relation(fields: [equipoId], references: [id_equipo], onDelete: Cascade)
 
   @@index([equipoId])
+  @@index([estado])
+  @@index([origen])
+  @@index([tipo])
 }
 
 model DetalleEquipo {
@@ -1350,6 +1355,7 @@ model AnalisisInventarioIA {
   generadoPorId   Int?
   createdAt       DateTime @default(now())
   updatedAt       DateTime
+  resumenEstados  Json?
 
   @@unique([empresaId, mes, ano])
   @@index([empresaId])
@@ -1357,26 +1363,25 @@ model AnalisisInventarioIA {
 }
 
 model BitacoraTecnico {
-  id            Int                   @id @default(autoincrement())
-  fecha         DateTime              @default(now())
-  titulo        String?
-  descripcion   String
-  tipoActividad TipoBitacoraTecnico   @default(OTRO)
-  estado        EstadoBitacoraTecnico @default(REGISTRADA)
-  tecnicoId     Int
-  empresaId     Int?
-  solicitanteId Int?
-  ticketId      Int?
-  trabajoId     Int?
-  visitaId      Int?
-  mantencionId  Int?
-  equipoId      Int?
-  cotizacionId  Int?
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime
-
+  id                       Int                   @id @default(autoincrement())
+  fecha                    DateTime              @default(now())
+  titulo                   String?
+  descripcion              String
+  tipoActividad            TipoBitacoraTecnico   @default(OTRO)
+  estado                   EstadoBitacoraTecnico @default(REGISTRADA)
+  tecnicoId                Int
+  empresaId                Int?
+  solicitanteId            Int?
+  ticketId                 Int?
+  trabajoId                Int?
+  visitaId                 Int?
+  mantencionId             Int?
+  equipoId                 Int?
+  cotizacionId             Int?
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime
   recordatorioAt           DateTime?
-  recordatorioCompletado   Boolean   @default(false)
+  recordatorioCompletado   Boolean               @default(false)
   recordatorioCompletadoAt DateTime?
   recordatorioNotificadoAt DateTime?
 
@@ -1721,6 +1726,47 @@ model empresa_alias_outlook {
   @@index([empresaId], map: "empresa_alias_outlook_empresaid_idx")
 }
 
+model Adicional {
+  id              Int                   @id @default(autoincrement())
+  nombre          String?
+  tipo            String
+  marca           String?
+  modelo          String?
+  serialAdicional String?               @unique
+  macAddress      String?
+  ipAddress       String?
+  hostname        String?
+  ubicacion       String?
+  descripcion     String?
+  cantidad        Int                   @default(1)
+  estado          EstadoEquipoAdicional @default(ASIGNADO)
+  origen          OrigenEquipoAdicional @default(MANUAL)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime
+
+  @@index([estado])
+  @@index([ipAddress])
+  @@index([macAddress])
+  @@index([marca])
+  @@index([modelo])
+  @@index([origen])
+  @@index([tipo])
+}
+
+model AdicionalEquipo {
+  id          Int                   @id @default(autoincrement())
+  adicionalId Int
+  equipoId    Int
+  origen      OrigenEquipoAdicional @default(MANUAL)
+  observacion String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime
+
+  @@unique([adicionalId, equipoId])
+  @@index([adicionalId])
+  @@index([equipoId])
+}
+
 enum MonedaGestioo {
   CLP
   USD
@@ -1931,6 +1977,7 @@ enum DestinoEquipoTaller {
   RIDS
   CLIENTE
   BAJA
+  VENTA_EMPRESA
 }
 
 enum EstadoBitacoraTecnico {
@@ -2016,4 +2063,16 @@ enum TipoServicioOportunidad {
   DESARROLLO_WEB
   VENTA_PRODUCTOS
   OTRO
+}
+
+enum EstadoEquipoAdicional {
+  ASIGNADO
+  EN_STOCK
+  EN_REPARACION
+  DADO_DE_BAJA
+}
+
+enum OrigenEquipoAdicional {
+  MANUAL
+  AGENTE
 }

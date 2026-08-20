@@ -1,3 +1,4 @@
+// src/routes/auth.routes.ts
 import { Router } from "express";
 import {
     login, loginMicrosoft, registerUser, createManyempresa, crearVisita,
@@ -9,20 +10,13 @@ import {
     deleteCliente,
     obtenerHistorialPorTecnico,
     createManySolicitante,
-    createManyEquipos,
     getSolicitantes,
-    getAllEquipos,
-    getEquipoDetalleMovil,
     getClientesEconnet,
     updateSolicitante,
-    actualizarEquipo,
-    createManyDetalle,
-    createEquipo,
     createSolicitante,
     crearSucursal,
     obtenerSucursalesPorEmpresa,
     obtenerEmpresasConSucursales,
-    cambiarSolicitanteEquipo,
     createClienteEconnet
 } from "../controllers/auth.controller";
 import { authGuard } from "../middlewares/auth.middleware";
@@ -47,15 +41,8 @@ r.get("/historial/:id", authGuard, obtenerHistorialPorTecnico)
 r.post("/carga", authGuard, createManyempresa)
 r.post("/createcliente", authGuard, createCliente)
 r.post("/crearsolicitante", authGuard, createManySolicitante)
-r.post("/crearequipos", authGuard, createManyEquipos)
 r.get("/solicitantes", authGuard, getSolicitantes)
 r.put("/updateSolicitante", authGuard, updateSolicitante)
-r.post("/detalles", authGuard, createManyDetalle)
-
-
-r.get("/equipos", authGuard, getAllEquipos)
-r.get("/equipos/:id", authGuard, getEquipoDetalleMovil)
-r.put("/equipos/:id/solicitante",authGuard,cambiarSolicitanteEquipo)
 
 //Funcionalidad de visitas
 r.get("/agenda/mis-visitas/hoy", authGuard, obtenerMisVisitasAsignadasHoy)
@@ -67,8 +54,6 @@ r.post("/ubicaciones", authGuard, registrarUbicacionTecnico)
 r.post("/crear_visita", authGuard, crearVisita)
 r.put("/finalizar_visita/:id", authGuard, completarVisita)
 r.put("/cancelar_visita/:id", authGuard, cancelarVisita)
-r.put('/equipos/:id', authGuard, actualizarEquipo)
-r.post("/crearequipo", authGuard, createEquipo)
 r.post('/createSolicitante', authGuard, createSolicitante)
 
 // Rutas Sucursales

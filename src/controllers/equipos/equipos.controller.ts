@@ -1,6 +1,7 @@
 // src/controllers/equipos/equipos.controller.ts
 import type { Request, Response } from "express";
 import {
+    AuditAction,
     EstadoEquipo,
     Prisma,
     TipoEquipo,
@@ -837,6 +838,7 @@ export const getEquipoDetalleMovil = async (req: Request, res: Response) => {
 export const actualizarEquipo = async (req: Request, res: Response) => {
     try {
         const id = Number(req.params.id);
+
         if (Number.isNaN(id)) return res.status(400).json({ error: "ID inválido" });
 
         const {
@@ -919,11 +921,40 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
         };
 
         // Verifica que el equipo exista (importante si solo viene tipoDd)
-        const existe = await prisma.equipo.findUnique({
-            where: { id_equipo: id },
-            select: { id_equipo: true }
-        });
-        if (!existe) return res.status(404).json({ error: "Equipo no encontrado" });
+        const equipoAntes =
+            await prisma.equipo.findUnique({
+                where: {
+                    id_equipo: id,
+                },
+
+                include: {
+                    solicitante: {
+                        select: {
+                            id_solicitante: true,
+                            empresaId: true,
+                        },
+                    },
+
+                    equipo: {
+                        orderBy: {
+                            id: "desc",
+                        },
+                        take: 1,
+                    },
+
+                    adicionales: {
+                        orderBy: {
+                            id: "asc",
+                        },
+                    },
+                },
+            });
+
+        if (!equipoAntes) {
+            return res.status(404).json({
+                error: "Equipo no encontrado",
+            });
+        }
 
         const dataEquipo: Prisma.EquipoUpdateInput = {};
         const vSerial = norm(serial);
@@ -1028,6 +1059,26 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
                 }))
             : undefined;
 
+        const hayActualizacionEquipo =
+            Object.keys(dataEquipo).length > 0;
+
+        const hayActualizacionDetalle =
+            Object.keys(dataDetalle).length > 0;
+
+        const hayActualizacionAdicionales =
+            typeof adicionalesData !==
+            "undefined";
+
+        const hayActualizacion =
+            hayActualizacionEquipo ||
+            hayActualizacionDetalle ||
+            hayActualizacionAdicionales;
+
+        if (hayActualizacion) {
+            dataEquipo.updatedAt =
+                new Date();
+        }
+
         const result = await prisma.$transaction(async (tx) => {
             // 1) Actualizar Equipo si corresponde
             const updatedEquipo = (Object.keys(dataEquipo).length > 0)
@@ -1119,6 +1170,309 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
 
             return { updatedEquipo, detalle };
         });
+
+        const equipoDespues =
+            await prisma.equipo.findUnique({
+                where: {
+                    id_equipo: id,
+                },
+
+                include: {
+                    solicitante: {
+                        select: {
+                            id_solicitante: true,
+                            empresaId: true,
+                        },
+                    },
+
+                    equipo: {
+                        orderBy: {
+                            id: "desc",
+                        },
+                        take: 1,
+                    },
+
+                    adicionales: {
+                        orderBy: {
+                            id: "asc",
+                        },
+                    },
+                },
+            });
+
+        const changes: Record<
+            string,
+            {
+                before: unknown;
+                after: unknown;
+            }
+        > = {};
+
+        const addChange = (
+            field: string,
+            beforeValue: unknown,
+            afterValue: unknown,
+        ) => {
+            const before =
+                beforeValue ?? null;
+
+            const after =
+                afterValue ?? null;
+
+            if (
+                JSON.stringify(before) !==
+                JSON.stringify(after)
+            ) {
+                changes[field] = {
+                    before,
+                    after,
+                };
+            }
+        };
+
+        if (equipoDespues) {
+            addChange(
+                "serial",
+                equipoAntes.serial,
+                equipoDespues.serial,
+            );
+
+            addChange(
+                "marca",
+                equipoAntes.marca,
+                equipoDespues.marca,
+            );
+
+            addChange(
+                "modelo",
+                equipoAntes.modelo,
+                equipoDespues.modelo,
+            );
+
+            addChange(
+                "tipo",
+                equipoAntes.tipo,
+                equipoDespues.tipo,
+            );
+
+            addChange(
+                "estado",
+                equipoAntes.estado,
+                equipoDespues.estado,
+            );
+
+            addChange(
+                "anioPc",
+                equipoAntes.anioPc,
+                equipoDespues.anioPc,
+            );
+
+            addChange(
+                "procesador",
+                equipoAntes.procesador,
+                equipoDespues.procesador,
+            );
+
+            addChange(
+                "ram",
+                equipoAntes.ram,
+                equipoDespues.ram,
+            );
+
+            addChange(
+                "disco",
+                equipoAntes.disco,
+                equipoDespues.disco,
+            );
+
+            addChange(
+                "propiedad",
+                equipoAntes.propiedad,
+                equipoDespues.propiedad,
+            );
+
+            addChange(
+                "propietarioExterno",
+                equipoAntes.propietarioExterno,
+                equipoDespues.propietarioExterno,
+            );
+
+            addChange(
+                "observaciones",
+                equipoAntes.observaciones,
+                equipoDespues.observaciones,
+            );
+
+            const detalleAntes =
+                equipoAntes.equipo[0] ?? null;
+
+            const detalleDespues =
+                equipoDespues.equipo[0] ?? null;
+
+            addChange(
+                "macWifi",
+                detalleAntes?.macWifi,
+                detalleDespues?.macWifi,
+            );
+
+            addChange(
+                "redEthernet",
+                detalleAntes?.redEthernet,
+                detalleDespues?.redEthernet,
+            );
+
+            addChange(
+                "so",
+                detalleAntes?.so,
+                detalleDespues?.so,
+            );
+
+            addChange(
+                "tipoDd",
+                detalleAntes?.tipoDd,
+                detalleDespues?.tipoDd,
+            );
+
+            addChange(
+                "estadoAlm",
+                detalleAntes?.estadoAlm,
+                detalleDespues?.estadoAlm,
+            );
+
+            addChange(
+                "office",
+                detalleAntes?.office,
+                detalleDespues?.office,
+            );
+
+            addChange(
+                "teamViewer",
+                detalleAntes?.teamViewer,
+                detalleDespues?.teamViewer,
+            );
+
+            addChange(
+                "claveTv",
+                detalleAntes?.claveTv,
+                detalleDespues?.claveTv,
+            );
+
+            addChange(
+                "revisado",
+                detalleAntes?.revisado,
+                detalleDespues?.revisado,
+            );
+
+            addChange(
+                "adminRidsUsuario",
+                detalleAntes?.adminRidsUsuario,
+                detalleDespues?.adminRidsUsuario,
+            );
+
+            addChange(
+                "adminRidsPassword",
+                detalleAntes?.adminRidsPassword,
+                detalleDespues?.adminRidsPassword,
+            );
+
+            addChange(
+                "usuarioEmpresa",
+                detalleAntes?.usuarioEmpresa,
+                detalleDespues?.usuarioEmpresa,
+            );
+
+            addChange(
+                "passwordEmpresa",
+                detalleAntes?.passwordEmpresa,
+                detalleDespues?.passwordEmpresa,
+            );
+
+            addChange(
+                "usuarioPersonal",
+                detalleAntes?.usuarioPersonal,
+                detalleDespues?.usuarioPersonal,
+            );
+
+            addChange(
+                "passwordPersonal",
+                detalleAntes?.passwordPersonal,
+                detalleDespues?.passwordPersonal,
+            );
+
+            addChange(
+                "adicionales",
+
+                equipoAntes.adicionales.map(
+                    (adicional) => ({
+                        id:
+                            adicional.id,
+
+                        tipo:
+                            adicional.tipo,
+
+                        descripcion:
+                            adicional.descripcion,
+
+                        cantidad:
+                            adicional.cantidad,
+
+                        serialAdicional:
+                            adicional.serialAdicional,
+                    }),
+                ),
+
+                equipoDespues.adicionales.map(
+                    (adicional) => ({
+                        id:
+                            adicional.id,
+
+                        tipo:
+                            adicional.tipo,
+
+                        descripcion:
+                            adicional.descripcion,
+
+                        cantidad:
+                            adicional.cantidad,
+
+                        serialAdicional:
+                            adicional.serialAdicional,
+                    }),
+                ),
+            );
+
+            if (
+                Object.keys(changes).length > 0
+            ) {
+                await prisma.auditLog.create({
+                    data: {
+                        entity:
+                            "Equipo",
+
+                        entityId:
+                            String(id),
+
+                        action:
+                            AuditAction.UPDATE,
+
+                        actorId:
+                            req.user?.id ??
+                            null,
+
+                        empresaId:
+                            equipoDespues.empresaId ??
+                            equipoDespues.solicitante?.empresaId ??
+                            null,
+
+                        description:
+                            "Equipo actualizado desde aplicación móvil",
+
+                        changes:
+                            changes as Prisma.InputJsonValue,
+                    },
+                });
+            }
+        }
 
         return res.status(200).json({
             message: "Equipo actualizado",
@@ -1218,9 +1572,21 @@ export const cambiarAsignacionEquipo = async (
                     id_equipo:
                         equipoId,
                 },
+
                 select: {
-                    id_equipo:
-                        true,
+                    id_equipo: true,
+
+                    empresaId: true,
+
+                    idSolicitante: true,
+
+                    solicitante: {
+                        select: {
+                            id_solicitante: true,
+                            nombre: true,
+                            empresaId: true,
+                        },
+                    },
                 },
             });
 
@@ -1363,11 +1729,20 @@ export const cambiarAsignacionEquipo = async (
                 data: {
                     empresaId: empresaFinal,
                     idSolicitante: solicitanteIdFinal,
+
+                    /*
+                     * Forzamos fecha de última edición.
+                     */
+                    updatedAt: new Date(),
                 },
 
                 select: {
                     id_equipo: true,
+
+                    updatedAt: true,
+
                     empresaId: true,
+
                     idSolicitante: true,
 
                     solicitante: {
@@ -1379,6 +1754,162 @@ export const cambiarAsignacionEquipo = async (
                     },
                 },
             });
+
+        const changes: Record<
+            string,
+            {
+                before: unknown;
+                after: unknown;
+            }
+        > = {};
+
+        const empresaAnterior =
+            equipo.empresaId ??
+            equipo.solicitante?.empresaId ??
+            null;
+
+        const empresaNueva =
+            actualizado.empresaId ??
+            actualizado.solicitante?.empresaId ??
+            null;
+
+        /*
+ * Obtenemos los nombres de las empresas
+ * directamente mediante sus IDs.
+ *
+ * Esto evita depender de relaciones Prisma
+ * que en este backend no están tipadas igual
+ * que en la intranet.
+ */
+        const empresaIds = Array.from(
+            new Set(
+                [
+                    empresaAnterior,
+                    empresaNueva,
+                ].filter(
+                    (value): value is number =>
+                        typeof value === "number" &&
+                        Number.isInteger(value) &&
+                        value > 0,
+                ),
+            ),
+        );
+
+        const empresas =
+            empresaIds.length > 0
+                ? await prisma.empresa.findMany({
+                    where: {
+                        id_empresa: {
+                            in: empresaIds,
+                        },
+                    },
+
+                    select: {
+                        id_empresa: true,
+                        nombre: true,
+                    },
+                })
+                : [];
+
+        const empresasMap =
+            new Map(
+                empresas.map(
+                    (empresa) => [
+                        empresa.id_empresa,
+                        empresa.nombre,
+                    ],
+                ),
+            );
+
+        const empresaAnteriorNombre =
+            empresaAnterior !== null
+                ? empresasMap.get(
+                    empresaAnterior,
+                ) ?? null
+                : null;
+
+        const empresaNuevaNombre =
+            empresaNueva !== null
+                ? empresasMap.get(
+                    empresaNueva,
+                ) ?? null
+                : null;
+
+        /*
+         * Los nombres de solicitantes sí los tenemos
+         * directamente desde los select anteriores.
+         */
+        const solicitanteAnteriorNombre =
+            equipo.solicitante?.nombre ??
+            null;
+
+        const solicitanteNuevoNombre =
+            actualizado.solicitante?.nombre ??
+            null;
+
+        if (
+            empresaAnterior !==
+            empresaNueva
+        ) {
+            changes["Empresa"] = {
+                before:
+                    empresaAnteriorNombre ??
+                    empresaAnterior ??
+                    "Sin empresa",
+
+                after:
+                    empresaNuevaNombre ??
+                    empresaNueva ??
+                    "Sin empresa",
+            };
+        }
+
+        if (
+            equipo.idSolicitante !==
+            actualizado.idSolicitante
+        ) {
+            changes["Solicitante"] = {
+                before:
+                    solicitanteAnteriorNombre ??
+                    equipo.idSolicitante ??
+                    "Sin solicitante",
+
+                after:
+                    solicitanteNuevoNombre ??
+                    actualizado.idSolicitante ??
+                    "Sin solicitante",
+            };
+        }
+
+        if (
+            Object.keys(changes).length > 0
+        ) {
+            await prisma.auditLog.create({
+                data: {
+                    entity:
+                        "Equipo",
+
+                    entityId:
+                        String(equipoId),
+
+                    action:
+                        AuditAction.UPDATE,
+
+                    actorId:
+                        req.user?.id ??
+                        null,
+
+                    empresaId:
+                        empresaNueva,
+
+                    description:
+                        "Asignación del equipo actualizada desde aplicación móvil",
+
+                    changes:
+                        changes as Prisma.InputJsonValue,
+                },
+            });
+        }
 
         return res.status(200).json({
             message:

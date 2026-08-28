@@ -1343,19 +1343,22 @@ model area_configs {
 }
 
 model AnalisisInventarioIA {
-  id              Int      @id @default(autoincrement())
-  empresaId       Int
-  mes             Int
-  ano             Int
-  totalEquipos    Int      @default(0)
-  resumen         String?
-  hallazgos       Json?
-  riesgos         Json?
-  recomendaciones Json?
-  generadoPorId   Int?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime
-  resumenEstados  Json?
+  id                        Int      @id @default(autoincrement())
+  empresaId                 Int
+  mes                       Int
+  ano                       Int
+  totalEquipos              Int      @default(0)
+  resumen                   String?
+  hallazgos                 Json?
+  riesgos                   Json?
+  recomendaciones           Json?
+  generadoPorId             Int?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime
+  resumenEstados            Json?
+  resumenEstadosAdicionales Json?
+  resumenTiposAdicionales   Json?
+  totalAdicionales          Int      @default(0)
 
   @@unique([empresaId, mes, ano])
   @@index([empresaId])

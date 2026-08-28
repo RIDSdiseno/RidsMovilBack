@@ -19,7 +19,6 @@
   "license": "ISC",
   "dependencies": {
     "@prisma/client": "^6.16.2",
-    "@railway/cli": "^4.10.0",
     "argon2": "^0.44.0",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",

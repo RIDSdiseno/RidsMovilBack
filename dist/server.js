@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+// src/server.ts
 const app_1 = require("./app");
 const env_1 = require("./config/env");
 const prisma_1 = require("./lib/prisma");

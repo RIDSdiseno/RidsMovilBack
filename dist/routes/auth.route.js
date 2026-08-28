@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+// src/routes/auth.routes.ts
 const express_1 = require("express");
 const auth_controller_1 = require("../controllers/auth.controller");
 const auth_middleware_1 = require("../middlewares/auth.middleware");
@@ -21,13 +22,8 @@ r.get("/historial/:id", auth_middleware_1.authGuard, auth_controller_1.obtenerHi
 r.post("/carga", auth_middleware_1.authGuard, auth_controller_1.createManyempresa);
 r.post("/createcliente", auth_middleware_1.authGuard, auth_controller_1.createCliente);
 r.post("/crearsolicitante", auth_middleware_1.authGuard, auth_controller_1.createManySolicitante);
-r.post("/crearequipos", auth_middleware_1.authGuard, auth_controller_1.createManyEquipos);
 r.get("/solicitantes", auth_middleware_1.authGuard, auth_controller_1.getSolicitantes);
 r.put("/updateSolicitante", auth_middleware_1.authGuard, auth_controller_1.updateSolicitante);
-r.post("/detalles", auth_middleware_1.authGuard, auth_controller_1.createManyDetalle);
-r.get("/equipos", auth_middleware_1.authGuard, auth_controller_1.getAllEquipos);
-r.get("/equipos/:id", auth_middleware_1.authGuard, auth_controller_1.getEquipoDetalleMovil);
-r.put("/equipos/:id/solicitante", auth_middleware_1.authGuard, auth_controller_1.cambiarSolicitanteEquipo);
 //Funcionalidad de visitas
 r.get("/agenda/mis-visitas/hoy", auth_middleware_1.authGuard, auth_controller_1.obtenerMisVisitasAsignadasHoy);
 r.get("/agenda/:id/visita", auth_middleware_1.authGuard, auth_controller_1.obtenerVisitaDeAgenda);
@@ -38,8 +34,6 @@ r.post("/ubicaciones", auth_middleware_1.authGuard, auth_controller_1.registrarU
 r.post("/crear_visita", auth_middleware_1.authGuard, auth_controller_1.crearVisita);
 r.put("/finalizar_visita/:id", auth_middleware_1.authGuard, auth_controller_1.completarVisita);
 r.put("/cancelar_visita/:id", auth_middleware_1.authGuard, auth_controller_1.cancelarVisita);
-r.put('/equipos/:id', auth_middleware_1.authGuard, auth_controller_1.actualizarEquipo);
-r.post("/crearequipo", auth_middleware_1.authGuard, auth_controller_1.createEquipo);
 r.post('/createSolicitante', auth_middleware_1.authGuard, auth_controller_1.createSolicitante);
 // Rutas Sucursales
 r.post('/sucursales', auth_middleware_1.authGuard, auth_controller_1.crearSucursal);

@@ -4,6 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const auth_controller_1 = require("../controllers/auth.controller");
 const auth_middleware_1 = require("../middlewares/auth.middleware");
+const empresas_favoritas_controller_1 = require("../controllers/empresas-favoritas.controller");
 const r = (0, express_1.Router)();
 r.get("/health", (_req, res) => res.json({ ok: true, service: "API Movil", ts: Date.now() }));
 //Auth: solo login/microsoft/logout/refresh son públicos (pre-sesión).
@@ -16,6 +17,9 @@ r.get("/usuarios", auth_middleware_1.authGuard, auth_controller_1.getAllUsers);
 r.get("/clientes", auth_middleware_1.authGuard, auth_controller_1.getAllClientes);
 r.get("/clientes/econnet", auth_middleware_1.authGuard, auth_controller_1.getClientesEconnet);
 r.post("/clientes/econnet", auth_middleware_1.authGuard, auth_controller_1.createClienteEconnet);
+r.get("/empresas-favoritas", auth_middleware_1.authGuard, empresas_favoritas_controller_1.obtenerEmpresasFavoritas);
+r.put("/empresas-favoritas/:origen/:empresaId", auth_middleware_1.authGuard, empresas_favoritas_controller_1.agregarEmpresaFavorita);
+r.delete("/empresas-favoritas/:origen/:empresaId", auth_middleware_1.authGuard, empresas_favoritas_controller_1.eliminarEmpresaFavorita);
 r.delete("/deletecliente/:id", auth_middleware_1.authGuard, auth_controller_1.deleteCliente);
 r.get("/historial/:id", auth_middleware_1.authGuard, auth_controller_1.obtenerHistorialPorTecnico);
 //para cargar "masivamente" las empresas (protegido: solo con sesión válida)

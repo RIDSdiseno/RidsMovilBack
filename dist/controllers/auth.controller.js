@@ -293,12 +293,21 @@ const registerUser = async (req, res) => {
 };
 exports.registerUser = registerUser;
 //GET /Auth/getAllClientes
-const getAllClientes = async (req, res) => {
+const getAllClientes = async (_req, res) => {
     try {
         const clientes = await prisma_js_1.prisma.empresa.findMany({
-            where: { isActive: true },
-            orderBy: { nombre: "asc" },
-            include: {
+            where: {
+                isActive: true,
+            },
+            orderBy: {
+                nombre: "asc",
+            },
+            select: {
+                id_empresa: true,
+                nombre: true,
+                razonSocial: true,
+                tieneSucursales: true,
+                dominios: true,
                 detalleEmpresa: {
                     select: {
                         rut: true,
@@ -308,9 +317,11 @@ const getAllClientes = async (req, res) => {
         });
         return res.json(clientes);
     }
-    catch (e) {
-        console.error("Error al obtener categorias: ", JSON.stringify(e));
-        return res.status(500).json({ error: "Error interno" });
+    catch (error) {
+        console.error("Error al obtener empresas:", error);
+        return res.status(500).json({
+            error: "Error interno",
+        });
     }
 };
 exports.getAllClientes = getAllClientes;

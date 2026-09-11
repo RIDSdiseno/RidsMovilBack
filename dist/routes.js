@@ -8,6 +8,7 @@ const express_1 = require("express");
 const auth_route_js_1 = __importDefault(require("./routes/auth.route.js"));
 const equipos_routes_js_1 = __importDefault(require("./routes/equipos/equipos.routes.js"));
 const entregas_route_js_1 = __importDefault(require("./routes/entregas.route.js"));
+const solicitantes_sync_routes_js_1 = __importDefault(require("./routes/solicitantes-sync/solicitantes-sync.routes.js"));
 const router = (0, express_1.Router)();
 router.get("/health", (_req, res) => res.json({
     ok: true,
@@ -20,4 +21,5 @@ router.get("/health", (_req, res) => res.json({
 router.use("/auth", auth_route_js_1.default);
 router.use("/auth", equipos_routes_js_1.default);
 router.use("/entregas", entregas_route_js_1.default);
+router.use("/solicitantes-sync", solicitantes_sync_routes_js_1.default);
 exports.default = router;

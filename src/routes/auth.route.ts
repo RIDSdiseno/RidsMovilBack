@@ -20,6 +20,11 @@ import {
     createClienteEconnet
 } from "../controllers/auth.controller";
 import { authGuard } from "../middlewares/auth.middleware";
+import {
+    agregarEmpresaFavorita,
+    eliminarEmpresaFavorita,
+    obtenerEmpresasFavoritas,
+} from "../controllers/empresas-favoritas.controller";
 
 const r = Router();
 
@@ -35,6 +40,9 @@ r.get("/usuarios", authGuard, getAllUsers);
 r.get("/clientes", authGuard, getAllClientes)
 r.get("/clientes/econnet", authGuard, getClientesEconnet)
 r.post("/clientes/econnet", authGuard, createClienteEconnet)
+r.get("/empresas-favoritas", authGuard, obtenerEmpresasFavoritas)
+r.put("/empresas-favoritas/:origen/:empresaId", authGuard, agregarEmpresaFavorita)
+r.delete("/empresas-favoritas/:origen/:empresaId", authGuard, eliminarEmpresaFavorita)
 r.delete("/deletecliente/:id", authGuard, deleteCliente)
 r.get("/historial/:id", authGuard, obtenerHistorialPorTecnico)
 //para cargar "masivamente" las empresas (protegido: solo con sesión válida)

@@ -17,6 +17,8 @@ model Empresa {
   dominios            String[]              @default([])
   deactivatedAt       DateTime?
   isActive            Boolean               @default(true)
+  recibeCobranza      Boolean               @default(false)
+  recibeFacturas      Boolean               @default(false)
   solicitantes        Solicitante[]
   visitas             Visita[]              @relation("Empresa_Visita")
   tickets             FreshdeskTicket[]
@@ -31,6 +33,8 @@ model Empresa {
 
   @@index([isActive])
   @@index([deactivatedAt])
+  @@index([recibeCobranza])
+  @@index([recibeFacturas])
 }
 
 model Sucursal {
@@ -74,24 +78,29 @@ model DetalleEmpresa {
   direcciones Json?
   latitud     Float?
   longitud    Float?
+  diasCredito Int?
   empresa     Empresa @relation(fields: [empresa_id], references: [id_empresa], onDelete: Cascade)
 
   @@map("detalle_empresas")
 }
 
 model ContactoEmpresa {
-  id         Int     @id @default(autoincrement())
-  empresaId  Int
-  nombre     String
-  cargo      String
-  email      String?
-  telefono   String?
-  principal  Boolean @default(false)
-  sucursalId Int?
-  empresa    Empresa @relation(fields: [empresaId], references: [id_empresa])
+  id             Int     @id @default(autoincrement())
+  empresaId      Int
+  nombre         String
+  cargo          String
+  email          String?
+  telefono       String?
+  principal      Boolean @default(false)
+  sucursalId     Int?
+  recibeCobranza Boolean @default(false)
+  recibeFacturas Boolean @default(false)
+  empresa        Empresa @relation(fields: [empresaId], references: [id_empresa])
 
   @@index([empresaId])
   @@index([sucursalId])
+  @@index([recibeCobranza])
+  @@index([recibeFacturas])
 }
 
 model FichaEmpresa {
@@ -556,6 +565,18 @@ model Tecnico {
   @@index([empresaId])
 }
 
+model EmpresaFavoritaTecnico {
+  id        Int      @id @default(autoincrement())
+  tecnicoId Int
+  empresaId Int
+  origen    String   @default("RIDS") @db.VarChar(16)
+  createdAt DateTime @default(now())
+
+  @@unique([tecnicoId, origen, empresaId])
+  @@index([tecnicoId])
+  @@index([origen, empresaId])
+}
+
 model Visita {
   id_visita          Int           @id @default(autoincrement())
   empresaId          Int
@@ -928,6 +949,7 @@ model FacturaDTE {
   sincronizadoAt      DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime
+  fechaVencimiento    DateTime?
 
   @@unique([empresaRut, tipoDTE, folio])
   @@index([empresaRut, fechaEmision])
@@ -1768,6 +1790,186 @@ model AdicionalEquipo {
   @@unique([adicionalId, equipoId])
   @@index([adicionalId])
   @@index([equipoId])
+}
+
+model RcvCobranzaConfig {
+  id                Int       @id @default(autoincrement())
+  empresaKey        String    @unique
+  activo            Boolean   @default(false)
+  consultaSiiActiva Boolean   @default(true)
+  envioAutomatico   Boolean   @default(false)
+  diasPorVencer     Int[]     @default([-7, -3])
+  diasVencidos      Int[]     @default([0, 3, 7, 15, 30])
+  horaConsultaSii   String    @default("07:30")
+  horaCobranza      String    @default("08:00")
+  adjuntarPdf       Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime
+  ultimaConsultaAt  DateTime?
+  ultimoEnvioAt     DateTime?
+  ultimoRecoveryAt  DateTime?
+
+  @@index([activo])
+  @@index([envioAutomatico])
+}
+
+model RcvFacturaEnvio {
+  id              Int       @id @default(autoincrement())
+  empresaKey      String
+  tipoRcv         String    @default("ventas")
+  tipoDoc         String
+  folio           String
+  rutContraparte  String
+  razonSocial     String?
+  emailDestino    String
+  nombreDestino   String?
+  asunto          String?
+  estado          String    @default("PENDIENTE")
+  automatico      Boolean   @default(true)
+  montoTotal      Int       @default(0)
+  fechaEmision    DateTime?
+  intentos        Int       @default(0)
+  ultimoIntentoAt DateTime?
+  procesandoAt    DateTime?
+  enviadoAt       DateTime?
+  error           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime
+
+  @@unique([empresaKey, tipoRcv, tipoDoc, folio, rutContraparte, emailDestino])
+  @@index([createdAt])
+  @@index([empresaKey])
+  @@index([enviadoAt])
+  @@index([estado])
+  @@index([folio])
+  @@index([rutContraparte])
+  @@index([tipoDoc])
+}
+
+model RcvFacturaEnvioConfig {
+  id                Int       @id @default(autoincrement())
+  empresaKey        String    @unique
+  activo            Boolean   @default(false)
+  consultaSiiActiva Boolean   @default(true)
+  envioAutomatico   Boolean   @default(false)
+  horaConsulta      String    @default("07:30")
+  diasAntiguedadMax Int       @default(30)
+  adjuntarPdf       Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime
+  horaEnvio         String    @default("08:00")
+  ultimaConsultaAt  DateTime?
+  ultimoEnvioAt     DateTime?
+  ultimoRecoveryAt  DateTime?
+
+  @@index([activo])
+  @@index([envioAutomatico])
+}
+
+model RcvRecordatorioEnvio {
+  id               Int       @id @default(autoincrement())
+  empresaKey       String
+  tipoRcv          String    @default("ventas")
+  tipoDoc          String
+  folio            String
+  rutContraparte   String
+  razonSocial      String?
+  tipoRecordatorio String
+  emailDestino     String
+  nombreDestino    String?
+  asunto           String?
+  estado           String    @default("PENDIENTE")
+  automatico       Boolean   @default(true)
+  fechaVencimiento DateTime?
+  diasDiferencia   Int?
+  montoTotal       Int       @default(0)
+  enviadoAt        DateTime?
+  error            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime
+  cicloVencimiento String
+  intentos         Int       @default(0)
+  procesandoAt     DateTime?
+  ultimoIntentoAt  DateTime?
+
+  @@unique([empresaKey, tipoRcv, tipoDoc, folio, rutContraparte, cicloVencimiento, tipoRecordatorio, emailDestino])
+  @@index([createdAt])
+  @@index([empresaKey])
+  @@index([enviadoAt])
+  @@index([estado])
+  @@index([folio])
+  @@index([rutContraparte])
+}
+
+model ReceptorCobranza {
+  id             Int      @id @default(autoincrement())
+  rut            String   @unique
+  razonSocial    String?
+  activo         Boolean  @default(true)
+  recibeCobranza Boolean  @default(true)
+  diasCredito    Int?
+  empresaId      Int?
+  origen         String   @default("RCV")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime
+
+  @@index([activo])
+  @@index([empresaId])
+  @@index([origen])
+  @@index([recibeCobranza])
+}
+
+model ReceptorCobranzaContacto {
+  id             Int      @id @default(autoincrement())
+  receptorId     Int
+  nombre         String?
+  email          String
+  activo         Boolean  @default(true)
+  recibeCobranza Boolean  @default(true)
+  principal      Boolean  @default(false)
+  origen         String   @default("MANUAL")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime
+
+  @@unique([receptorId, email])
+  @@index([activo])
+  @@index([receptorId])
+  @@index([recibeCobranza])
+}
+
+model ReceptorFacturacion {
+  id             Int      @id @default(autoincrement())
+  rut            String   @unique
+  razonSocial    String?
+  activo         Boolean  @default(true)
+  recibeFacturas Boolean  @default(false)
+  empresaId      Int?
+  origen         String   @default("RCV")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime
+
+  @@index([activo])
+  @@index([empresaId])
+  @@index([origen])
+  @@index([recibeFacturas])
+}
+
+model ReceptorFacturacionContacto {
+  id             Int      @id @default(autoincrement())
+  receptorId     Int
+  nombre         String?
+  email          String
+  activo         Boolean  @default(true)
+  recibeFacturas Boolean  @default(true)
+  principal      Boolean  @default(false)
+  origen         String   @default("MANUAL")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime
+
+  @@unique([receptorId, email])
+  @@index([activo])
+  @@index([receptorId])
+  @@index([recibeFacturas])
 }
 
 enum MonedaGestioo {

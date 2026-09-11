@@ -5,6 +5,7 @@ import { Router } from "express";
 import authRoutes from "./routes/auth.route.js";
 import equiposRoutes from "./routes/equipos/equipos.routes.js";
 import entregasRoutes from "./routes/entregas.route.js";
+import solicitantesSyncRoutes from "./routes/solicitantes-sync/solicitantes-sync.routes.js";
 
 const router = Router();
 
@@ -27,5 +28,7 @@ router.use("/auth", authRoutes);
 router.use("/auth", equiposRoutes);
 
 router.use("/entregas", entregasRoutes);
+
+router.use("/solicitantes-sync", solicitantesSyncRoutes);
 
 export default router;

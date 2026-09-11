@@ -371,23 +371,46 @@ export const registerUser = async (req: Request, res: Response) => {
 };
 
 //GET /Auth/getAllClientes
-export const getAllClientes = async (req: Request, res: Response) => {
+export const getAllClientes = async (
+  _req: Request,
+  res: Response,
+) => {
   try {
-    const clientes = await prisma.empresa.findMany({
-      where: { isActive: true },
-      orderBy: { nombre: "asc" },
-      include: {
-        detalleEmpresa: {
-          select: {
-            rut: true,
+    const clientes =
+      await prisma.empresa.findMany({
+        where: {
+          isActive: true,
+        },
+
+        orderBy: {
+          nombre: "asc",
+        },
+
+        select: {
+          id_empresa: true,
+          nombre: true,
+          razonSocial: true,
+          tieneSucursales: true,
+          dominios: true,
+
+          detalleEmpresa: {
+            select: {
+              rut: true,
+            },
           },
         },
-      },
-    });
+      });
+
     return res.json(clientes);
-  } catch (e) {
-    console.error("Error al obtener categorias: ", JSON.stringify(e));
-    return res.status(500).json({ error: "Error interno" });
+  } catch (error) {
+    console.error(
+      "Error al obtener empresas:",
+      error,
+    );
+
+    return res.status(500).json({
+      error: "Error interno",
+    });
   }
 };
 
@@ -867,7 +890,7 @@ function mapAgendaAsignada(
   const direccion = coords.direccion ?? empresa?.detalleEmpresa?.direccion ?? null;
   const inconsistenciaEstado =
     visita.visita?.status === EstadoVisita.COMPLETADA &&
-    visita.estado !== EstadoAgenda.COMPLETADA
+      visita.estado !== EstadoAgenda.COMPLETADA
       ? "VISITA_COMPLETADA_AGENDA_NO_COMPLETADA"
       : null;
 

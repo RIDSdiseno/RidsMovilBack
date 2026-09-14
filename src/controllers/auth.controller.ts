@@ -1800,25 +1800,44 @@ export const cancelarVisita = async (req: Request, res: Response) => {
 
     const visita = await prisma.visita.findUnique({
       where: { id_visita: visitaId },
-      select: { id_visita: true, status: true },
+      select: { id_visita: true, status: true, tecnicoId: true, agendaId: true },
     });
 
     if (!visita) return res.status(404).json({ error: "Visita no encontrada" });
+
+    // Cada técnico solo cancela sus propias visitas, igual que al completarlas.
+    if (visita.tecnicoId !== req.user?.id) {
+      return res.status(403).json({ error: "No puedes cancelar una visita de otro técnico" });
+    }
 
     if (visita.status === EstadoVisita.COMPLETADA) {
       return res.status(409).json({ error: "No se puede cancelar una visita completada" });
     }
 
-    const eliminada = await prisma.visita.delete({
+    if (visita.status === EstadoVisita.CANCELADA) {
+      return res.status(200).json({ visita });
+    }
+
+    // Se marca como cancelada en vez de borrarla: el registro es evidencia de
+    // trabajo en terreno y su eliminación no dejaba ninguna traza. Se libera
+    // además el vínculo con la agenda, que es único, para que esa agenda pueda
+    // volver a generar un formulario si el técnico retoma la visita.
+    const cancelada = await prisma.visita.update({
       where: { id_visita: visitaId },
+      data: {
+        status: EstadoVisita.CANCELADA,
+        fin: new Date(),
+        agendaId: null,
+      },
       select: {
         id_visita: true,
         status: true,
         inicio: true,
+        fin: true,
       },
     });
 
-    return res.status(200).json({ visita: eliminada });
+    return res.status(200).json({ visita: cancelada, agendaId: visita.agendaId });
   } catch (error: any) {
     console.error("Error al cancelar visita:", error);
     return res.status(500).json({

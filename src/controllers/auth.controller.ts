@@ -1814,30 +1814,21 @@ export const cancelarVisita = async (req: Request, res: Response) => {
       return res.status(409).json({ error: "No se puede cancelar una visita completada" });
     }
 
-    if (visita.status === EstadoVisita.CANCELADA) {
-      return res.status(200).json({ visita });
-    }
-
-    // Se marca como cancelada en vez de borrarla: el registro es evidencia de
-    // trabajo en terreno y su eliminación no dejaba ninguna traza. Se libera
-    // además el vínculo con la agenda, que es único, para que esa agenda pueda
-    // volver a generar un formulario si el técnico retoma la visita.
-    const cancelada = await prisma.visita.update({
+    // La visita se elimina en lugar de marcarse como cancelada: los reportes
+    // mensuales cuentan sobre esta tabla y las filas canceladas ensuciaban esos
+    // totales. Al borrarla queda libre el vínculo con la agenda, que es único,
+    // de modo que esa agenda puede volver a generar un formulario si la visita
+    // se retoma.
+    const eliminada = await prisma.visita.delete({
       where: { id_visita: visitaId },
-      data: {
-        status: EstadoVisita.CANCELADA,
-        fin: new Date(),
-        agendaId: null,
-      },
       select: {
         id_visita: true,
         status: true,
         inicio: true,
-        fin: true,
       },
     });
 
-    return res.status(200).json({ visita: cancelada, agendaId: visita.agendaId });
+    return res.status(200).json({ visita: eliminada, agendaId: visita.agendaId });
   } catch (error: any) {
     console.error("Error al cancelar visita:", error);
     return res.status(500).json({

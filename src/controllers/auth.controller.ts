@@ -1814,6 +1814,17 @@ export const cancelarVisita = async (req: Request, res: Response) => {
       return res.status(409).json({ error: "No se puede cancelar una visita completada" });
     }
 
+    // Una visita ligada a una agenda responde a una cita comprometida con el
+    // cliente: eliminarla dejaría la agenda iniciada y sin formulario. Se
+    // completa desde el formulario o se cancela la agenda, que es el registro
+    // que corresponde cerrar. Se valida acá y no solo en la aplicación para que
+    // ningún cliente pueda saltearlo.
+    if (visita.agendaId !== null) {
+      return res.status(409).json({
+        error: "Esta visita pertenece a una agenda: complétala o cancela la agenda correspondiente",
+      });
+    }
+
     // La visita se elimina en lugar de marcarse como cancelada: los reportes
     // mensuales cuentan sobre esta tabla y las filas canceladas ensuciaban esos
     // totales. Al borrarla queda libre el vínculo con la agenda, que es único,

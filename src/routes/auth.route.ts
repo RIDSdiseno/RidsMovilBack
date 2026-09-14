@@ -19,6 +19,7 @@ import {
     obtenerEmpresasConSucursales,
     createClienteEconnet
 } from "../controllers/auth.controller";
+import { listarVisitasPendientes } from "../controllers/visitas-pendientes.controller";
 import { authGuard } from "../middlewares/auth.middleware";
 import {
     agregarEmpresaFavorita,
@@ -62,6 +63,7 @@ r.post("/ubicaciones", authGuard, registrarUbicacionTecnico)
 r.post("/crear_visita", authGuard, crearVisita)
 r.put("/finalizar_visita/:id", authGuard, completarVisita)
 r.put("/cancelar_visita/:id", authGuard, cancelarVisita)
+r.get("/visitas/pendientes", authGuard, listarVisitasPendientes)
 r.post('/createSolicitante', authGuard, createSolicitante)
 
 // Rutas Sucursales

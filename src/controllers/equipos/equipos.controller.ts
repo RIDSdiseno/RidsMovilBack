@@ -609,12 +609,30 @@ export const getAllEquipos = async (req: Request, res: Response) => {
 // agente/mantencion del listado, y no vale la pena cargar ese detalle aqui.
 // Se pide solo al abrir el detalle de un equipo, no en el listado, para no
 // cargar auditoria de los 400+ equipos de una vez.
+// Roles a los que no se les entregan las credenciales guardadas de los equipos
+// (contraseña de TeamViewer, administrador local y accesos de empresa). Se usa
+// para la cuenta de revisión de la tienda de aplicaciones, que necesita recorrer
+// la aplicación completa pero no debe ver accesos de clientes reales.
+const ROLES_SIN_CREDENCIALES = new Set(['DEMO']);
+
 export const getEquipoDetalleMovil = async (req: Request, res: Response) => {
     try {
         const id = Number(req.params.id);
         if (!Number.isInteger(id) || id <= 0) {
             return res.status(400).json({ error: 'ID inválido' });
         }
+
+        // El rol se consulta a la base y no se lee del token: el token no lo
+        // incluye, así que leerlo de ahí dejaría esta comprobación sin efecto.
+        const actor = req.user?.id
+            ? await prisma.tecnico.findUnique({
+                where: { id_tecnico: req.user.id },
+                select: { rol: true },
+            })
+            : null;
+        const ocultarCredenciales = ROLES_SIN_CREDENCIALES.has(
+            String(actor?.rol ?? '').toUpperCase(),
+        );
 
         const equipo = await prisma.equipo.findUnique({
             where: { id_equipo: id },
@@ -793,14 +811,14 @@ export const getEquipoDetalleMovil = async (req: Request, res: Response) => {
             estadoAlm: detalle?.estadoAlm ?? '',
             office: detalle?.office ?? '',
             teamViewer: detalle?.teamViewer ?? '',
-            claveTv: detalle?.claveTv ?? '',
+            claveTv: ocultarCredenciales ? '' : detalle?.claveTv ?? '',
             revisado: detalle?.revisado ?? '',
-            adminRidsUsuario: detalle?.adminRidsUsuario ?? '',
-            adminRidsPassword: detalle?.adminRidsPassword ?? '',
-            usuarioEmpresa: detalle?.usuarioEmpresa ?? '',
-            passwordEmpresa: detalle?.passwordEmpresa ?? '',
-            usuarioPersonal: detalle?.usuarioPersonal ?? '',
-            passwordPersonal: detalle?.passwordPersonal ?? '',
+            adminRidsUsuario: ocultarCredenciales ? '' : detalle?.adminRidsUsuario ?? '',
+            adminRidsPassword: ocultarCredenciales ? '' : detalle?.adminRidsPassword ?? '',
+            usuarioEmpresa: ocultarCredenciales ? '' : detalle?.usuarioEmpresa ?? '',
+            passwordEmpresa: ocultarCredenciales ? '' : detalle?.passwordEmpresa ?? '',
+            usuarioPersonal: ocultarCredenciales ? '' : detalle?.usuarioPersonal ?? '',
+            passwordPersonal: ocultarCredenciales ? '' : detalle?.passwordPersonal ?? '',
             adicionales: equipo.adicionales ?? [],
             creadoPor,
             creadoEn: createLog?.createdAt ?? equipo.createdAt,

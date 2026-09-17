@@ -11,7 +11,7 @@ type SendDeliveryPdfInput = {
   brand?: "rids" | "econnet";
   ccEmail: string;
   companyName: string;
-  operation?: "entrega" | "retiro";
+  operation?: "entrega" | "retiro" | "ingreso_taller";
   pdfBase64?: string;
   pdfBuffer?: Buffer;
   pdfFileName: string;
@@ -161,6 +161,20 @@ function getBrandConfig(brand?: SendDeliveryPdfInput["brand"]) {
   };
 }
 
+function getOperationLabel(
+  operation?: SendDeliveryPdfInput["operation"],
+) {
+  if (operation === "retiro") {
+    return "retiro";
+  }
+
+  if (operation === "ingreso_taller") {
+    return "ingreso a Taller";
+  }
+
+  return "entrega";
+}
+
 function getLogoBase64(brand?: SendDeliveryPdfInput["brand"]) {
   const brandConfig = getBrandConfig(brand);
   const cached = logoCache.get(brandConfig.logoFile);
@@ -184,12 +198,40 @@ function buildDeliveryEmailHtml({
   recipientName,
 }: Pick<SendDeliveryPdfInput, "brand" | "companyName" | "operation" | "recipientName">) {
   const brandConfig = getBrandConfig(brand);
-  const operationText = operation === "retiro" ? "retiro" : "entrega";
-  const operationTitle = operation === "retiro" ? "Retiro registrado correctamente" : "Entrega registrada correctamente";
-  const operationCopy = operation === "retiro"
-    ? "retiro realizado"
-    : "entrega realizada";
-  const tagText = operation === "retiro" ? "Comprobante de retiro" : "Comprobante de entrega";
+  const operationText =
+    operation === "retiro"
+      ? "retiro"
+      : operation === "ingreso_taller"
+        ? "ingreso a Taller"
+        : "entrega";
+
+  const operationTitle =
+    operation === "retiro"
+      ? "Retiro registrado correctamente"
+      : operation === "ingreso_taller"
+        ? "Ingreso a Taller registrado correctamente"
+        : "Entrega registrada correctamente";
+
+  const operationCopy =
+    operation === "retiro"
+      ? "retiro realizado"
+      : operation === "ingreso_taller"
+        ? "ingreso a Taller registrado"
+        : "entrega realizada";
+
+  const tagText =
+    operation === "retiro"
+      ? "Comprobante de retiro"
+      : operation === "ingreso_taller"
+        ? "Comprobante de ingreso a Taller"
+        : "Comprobante de entrega";
+        
+  const signatureText =
+    operation === "retiro"
+      ? "retiro"
+      : operation === "ingreso_taller"
+        ? "recepción del equipo"
+        : "recepción";
   const safeCompanyName = escapeHtml(companyName);
   const safeRecipientName = escapeHtml(recipientName || "");
   const logoBase64 = getLogoBase64(brand);
@@ -235,7 +277,7 @@ function buildDeliveryEmailHtml({
                 </tr>
                 <tr>
                   <td style="padding:0 28px 28px;">
-                    <p style="margin:0;color:#475467;font-size:14px;line-height:1.7;">El documento adjunto contiene el detalle de la evidencia, firma de ${operationText === "retiro" ? "retiro" : "recepción"} y fecha del registro.</p>
+                    <p style="margin:0;color:#475467;font-size:14px;line-height:1.7;">El documento adjunto contiene el detalle del registro, firma de ${signatureText} y fecha del ingreso.</p>
                     <p style="margin:22px 0 0;color:#101828;font-size:14px;line-height:1.7;"><strong>Saludos Cordiales,</strong><br/>${brandConfig.name}</p>
                   </td>
                 </tr>
@@ -275,18 +317,18 @@ async function sendDeliveryPdfViaSmtp(input: SendDeliveryPdfInput) {
     from: `"Soporte RIDS" <${smtp.user}>`,
     to: input.recipientEmail,
     cc: input.ccEmail,
-    subject: `Comprobante de ${input.operation || "entrega"} - ${input.companyName}`,
+    subject: `Comprobante de ${getOperationLabel(input.operation)} - ${input.companyName}`,
     html: buildDeliveryEmailHtml(input),
     attachments: [
       ...(getLogoBase64(input.brand)
         ? [
-            {
-              cid: LOGO_CONTENT_ID,
-              content: Buffer.from(getLogoBase64(input.brand), "base64"),
-              contentType: "image/png",
-              filename: getBrandConfig(input.brand).logoFile,
-            },
-          ]
+          {
+            cid: LOGO_CONTENT_ID,
+            content: Buffer.from(getLogoBase64(input.brand), "base64"),
+            contentType: "image/png",
+            filename: getBrandConfig(input.brand).logoFile,
+          },
+        ]
         : []),
       {
         filename: input.pdfFileName,
@@ -318,7 +360,7 @@ async function sendDeliveryPdfViaGraph({
     resolvePdfBase64({ pdfBase64: providedPdfBase64, pdfBuffer, pdfUrl }),
   ]);
 
-  const subject = `Comprobante de ${operation} - ${companyName}`;
+  const subject = `Comprobante de ${getOperationLabel(operation)} - ${companyName}`;
   const body = {
     message: {
       subject,
@@ -345,15 +387,15 @@ async function sendDeliveryPdfViaGraph({
       attachments: [
         ...(getLogoBase64(brand)
           ? [
-              {
-                "@odata.type": "#microsoft.graph.fileAttachment",
-                contentBytes: getLogoBase64(brand),
-                contentId: LOGO_CONTENT_ID,
-                contentType: "image/png",
-                isInline: true,
-                name: getBrandConfig(brand).logoFile,
-              },
-            ]
+            {
+              "@odata.type": "#microsoft.graph.fileAttachment",
+              contentBytes: getLogoBase64(brand),
+              contentId: LOGO_CONTENT_ID,
+              contentType: "image/png",
+              isInline: true,
+              name: getBrandConfig(brand).logoFile,
+            },
+          ]
           : []),
         {
           "@odata.type": "#microsoft.graph.fileAttachment",

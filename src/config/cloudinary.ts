@@ -69,3 +69,9 @@ export function createUploadSignature({
     cloudName,
   };
 }
+
+export function buildTallerEntradaFolder(
+  equipoId: number,
+) {
+  return `${baseFolder}/taller/entrada/equipo-${equipoId}`;
+}

@@ -338,11 +338,20 @@ model DetalleTrabajoGestioo {
   cotizacionId      Int?
   destinoEquipo     DestinoEquipoTaller @default(SIN_DEFINIR)
   destinoEquipoNota String?
-  tecnico           Tecnico?            @relation(fields: [tecnicoId], references: [id_tecnico])
-  entidad           EntidadGestioo?     @relation(fields: [entidadId], references: [id])
-  producto          ProductoGestioo?    @relation(fields: [productoId], references: [id])
-  servicio          ServicioGestioo?    @relation(fields: [servicioId], references: [id])
-  equipo            Equipo?             @relation("EquipoToTrabajoGestioo", fields: [equipoId], references: [id_equipo])
+
+  // Confirmación de recepción
+  nombreFirmanteEntrada        String?
+  solicitanteFirmanteEntradaId Int?
+  emailFirmanteEntrada         String?
+  firmaEntradaUrl              String?
+  firmaEntradaPublicId         String?
+  firmaEntradaAt               DateTime?
+
+  tecnico  Tecnico?         @relation(fields: [tecnicoId], references: [id_tecnico])
+  entidad  EntidadGestioo?  @relation(fields: [entidadId], references: [id])
+  producto ProductoGestioo? @relation(fields: [productoId], references: [id])
+  servicio ServicioGestioo? @relation(fields: [servicioId], references: [id])
+  equipo   Equipo?          @relation("EquipoToTrabajoGestioo", fields: [equipoId], references: [id_equipo])
 
   @@index([productoId])
   @@index([servicioId])

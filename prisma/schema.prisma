@@ -10,31 +10,71 @@ datasource db {
 }
 
 model Empresa {
-  id_empresa          Int                   @id @default(autoincrement())
-  nombre              String                @unique
-  tieneSucursales     Boolean               @default(false)
-  razonSocial         String?
-  dominios            String[]              @default([])
-  deactivatedAt       DateTime?
-  isActive            Boolean               @default(true)
-  recibeCobranza      Boolean               @default(false)
-  recibeFacturas      Boolean               @default(false)
-  solicitantes        Solicitante[]
-  visitas             Visita[]              @relation("Empresa_Visita")
-  tickets             FreshdeskTicket[]
-  companyMaps         FreshdeskCompanyMap[]
-  detalleEmpresa      DetalleEmpresa?
-  sucursales          Sucursal[]
-  contactoEmpresas    ContactoEmpresa[]
-  fichaEmpresa        FichaEmpresa?
-  fichaTecnicaEmpresa FichaTecnicaEmpresa?
-  historials          Historial[]
-  agendasVisita       AgendaVisita[]        @relation("Empresa_AgendaVisita")
+  id_empresa               Int                       @id @default(autoincrement())
+  nombre                   String                    @unique
+  tieneSucursales          Boolean                   @default(false)
+  razonSocial              String?
+  dominios                 String[]                  @default([])
+  deactivatedAt            DateTime?
+  isActive                 Boolean                   @default(true)
+  recibeCobranza           Boolean                   @default(false)
+  recibeFacturas           Boolean                   @default(false)
+  logoActualizadoAt        DateTime?
+  logoPublicId             String?
+  logoUrl                  String?
+  solicitantes             Solicitante[]
+  visitas                  Visita[]                  @relation("Empresa_Visita")
+  tickets                  FreshdeskTicket[]
+  companyMaps              FreshdeskCompanyMap[]
+  detalleEmpresa           DetalleEmpresa?
+  sucursales               Sucursal[]
+  contactoEmpresas         ContactoEmpresa[]
+  fichaEmpresa             FichaEmpresa?
+  fichaTecnicaEmpresa      FichaTecnicaEmpresa?
+  historials               Historial[]
+  ticketsRids              Ticket[]
+  empresaISP               EmpresaISP[]
+  servidors                Servidor[]
+  tecnicos                 Tecnico[]
+  equipos                  Equipo[]
+  mantencionesRemotas      MantencionRemota[]        @relation("EmpresaMantencionesRemotas")
+  teamViewerDeviceMaps     TeamViewerDeviceMap[]
+  agendasVisita            AgendaVisita[]            @relation("Empresa_AgendaVisita")
+  entidadGestioos          EntidadGestioo[]
+  analisisInventarioIAs    AnalisisInventarioIA[]
+  manualTutoriales         ManualTutorial[]
+  bitacoras                BitacoraTecnico[]
+  equipoMantencions        EquipoMantencion[]
+  aliasesOutlook           EmpresaAliasOutlook[]
+  receptoresFacturacion    ReceptorFacturacion[]
+  receptoresCobranza       ReceptorCobranza[]
+  suscripcionesContratos   SuscripcionContrato[]
+  consentimientosDatos     ConsentimientoDatos[]
+  leypdElementos           LeypdElemento[]
+  leypdFicha               LeypdFicha?
+  leypdSharepoint          LeypdSharepoint?
+  leypdDocumentosGenerados LeypdDocumentoGenerado[]
+  leypdSitioRevisiones     LeypdSitioRevision[]
+  leypdActualizaciones     LeypdActualizacion[]
+  campaniasProteccionDatos CampaniaProteccionDatos[]
+  telefoniaParlantes       TelefoniaParlante[]
+  telefoniaUsuarios        TelefoniaUsuario[]
 
   @@index([isActive])
   @@index([deactivatedAt])
   @@index([recibeCobranza])
   @@index([recibeFacturas])
+}
+
+model EmpresaAliasOutlook {
+  id        Int      @id @default(autoincrement())
+  alias     String   @unique
+  empresaId Int
+  createdAt DateTime @default(now())
+  empresa   Empresa  @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
+
+  @@index([empresaId], map: "empresa_alias_outlook_empresaid_idx")
+  @@map("empresa_alias_outlook")
 }
 
 model Sucursal {
@@ -49,8 +89,10 @@ model Sucursal {
   historiales           Historial[]
   visitas               Visita[]
   responsableSucursals  ResponsableSucursal[]
-  redSucursal           RedSucursal?
+  redSucursales         RedSucursal[]
   accesoRouterSucursals AccesoRouterSucursal[]
+  empresaISPs           EmpresaISP[]
+  contactoEmpresas      ContactoEmpresa[]
   agendasVisita         AgendaVisita[]
 
   @@index([empresaId])
@@ -70,7 +112,7 @@ model ResponsableSucursal {
 
 model DetalleEmpresa {
   id          Int     @id @default(autoincrement())
-  rut         String  @unique
+  rut         String? @unique
   direccion   String?
   telefono    String?
   email       String?
@@ -85,17 +127,18 @@ model DetalleEmpresa {
 }
 
 model ContactoEmpresa {
-  id             Int     @id @default(autoincrement())
+  id             Int       @id @default(autoincrement())
   empresaId      Int
   nombre         String
   cargo          String
   email          String?
   telefono       String?
-  principal      Boolean @default(false)
+  principal      Boolean   @default(false)
   sucursalId     Int?
-  recibeCobranza Boolean @default(false)
-  recibeFacturas Boolean @default(false)
-  empresa        Empresa @relation(fields: [empresaId], references: [id_empresa])
+  recibeCobranza Boolean   @default(false)
+  recibeFacturas Boolean   @default(false)
+  empresa        Empresa   @relation(fields: [empresaId], references: [id_empresa])
+  sucursal       Sucursal? @relation(fields: [sucursalId], references: [id_sucursal], onDelete: SetNull)
 
   @@index([empresaId])
   @@index([sucursalId])
@@ -109,6 +152,8 @@ model FichaEmpresa {
   creadaEn               DateTime                 @default(now())
   actualizadaEn          DateTime                 @updatedAt
   condicionesComerciales String?
+  servidoresAplica       Boolean                  @default(true)
+  telefoniaAplica        Boolean                  @default(false)
   empresa                Empresa                  @relation(fields: [empresaId], references: [id_empresa])
   checklist              ChecklistGestionEmpresa?
 }
@@ -116,22 +161,17 @@ model FichaEmpresa {
 model FichaTecnicaEmpresa {
   id                      Int       @id @default(autoincrement())
   empresaId               Int       @unique
-  /// *
   /// * ===================== Técnicos / Visitas =====================
   tecnicoPrincipal        String?
   tecnicosRespaldo        String?
   observacionesVisita     String?
-  /// *
   /// * ===================== Software y sistemas =====================
   sistemasOperativos      String?
-  /// *
   /// * ===================== Redes y conectividad =====================
   proveedorInternet       String?
-  /// *
   /// * ===================== Servicios digitales =====================
   dominioWeb              String?
   redesSociales           String?
-  /// *
   /// * ===================== Respaldo y seguridad =====================
   metodoRespaldo          String?
   frecuenciaRespaldo      String?
@@ -149,7 +189,6 @@ model FichaTecnicaEmpresa {
   impresorasPerifericos   String?
   licenciasVigentes       String?
   otrosEquipos            String?
-  /// *
   /// * ===================== Equipos y hardware =====================
   pcsNotebooks            String?
   proximaVisitaProgramada DateTime?
@@ -157,6 +196,68 @@ model FichaTecnicaEmpresa {
   servidores              String?
   velocidadContratada     String?
   empresa                 Empresa   @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
+}
+
+model EmpresaISP {
+  id              Int       @id @default(autoincrement())
+  empresaId       Int
+  operador        String?
+  telefono        String?
+  servicio        String?
+  numeroTicket    String?
+  wifiNombre      String?
+  wifiClaveRef    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  ipRed           String[]  @default([])
+  esPrincipal     Boolean   @default(false)
+  sucursalId      Int?
+  codigoServicio  String?
+  direccion       String?
+  rut             String?
+  telefonoSoporte String?
+  empresa         Empresa   @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
+  sucursal        Sucursal? @relation(fields: [sucursalId], references: [id_sucursal], onDelete: SetNull)
+
+  @@index([empresaId])
+  @@index([sucursalId])
+}
+
+/// Telefonía: parlantes / altavoces IP de la empresa
+model TelefoniaParlante {
+  id              Int      @id @default(autoincrement())
+  empresaId       Int
+  ubicacion       String?
+  marcaModelo     String?
+  anexo           String?
+  macAddress      String?
+  /// Texto plano: solo lo leen roles internos
+  contrasenaAdmin String?
+  observaciones   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  empresa         Empresa  @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
+
+  @@index([empresaId])
+}
+
+/// Telefonía: usuarios de la app (Linkus) / anexos
+model TelefoniaUsuario {
+  id            Int      @id @default(autoincrement())
+  empresaId     Int
+  nombre        String
+  anexo         String?
+  /// Texto plano: solo lo leen roles internos
+  contrasena    String?
+  ipPrivada     String?
+  puertoPrivado Int?
+  ipPublica     String?
+  puertoPublico Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  empresa       Empresa  @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
+
+  @@index([empresaId])
 }
 
 model ChecklistGestionEmpresa {
@@ -181,13 +282,50 @@ model ChecklistGestionEmpresa {
 
 model RedSucursal {
   id            Int      @id @default(autoincrement())
-  sucursalId    Int      @unique
+  sucursalId    Int
   wifiNombre    String?
   claveWifi     String?
   ipRed         String?
   gateway       String?
   observaciones String?
-  sucursal      Sucursal @relation(fields: [sucursalId], references: [id_sucursal])
+  sucursal      Sucursal @relation(fields: [sucursalId], references: [id_sucursal], onDelete: Cascade)
+
+  @@index([sucursalId])
+}
+
+model Servidor {
+  id               Int               @id @default(autoincrement())
+  empresaId        Int
+  nombreUsuario    String
+  contrasena       String
+  ipExterna        String
+  probado          Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  nombre           String
+  updatedAt        DateTime          @updatedAt
+  empresa          Empresa           @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
+  servidorUsuarios ServidorUsuario[]
+
+  @@index([empresaId])
+}
+
+model ServidorUsuario {
+  id            Int          @id @default(autoincrement())
+  servidorId    Int
+  usuario       String
+  contrasena    String
+  estado        String?
+  acceso        String?
+  equipo        String?
+  nombreUsuario String
+  solicitanteId Int?
+  tipo          String?
+  updatedAt     DateTime     @updatedAt
+  servidor      Servidor     @relation(fields: [servidorId], references: [id])
+  solicitante   Solicitante? @relation(fields: [solicitanteId], references: [id_solicitante])
+
+  @@index([servidorId])
+  @@index([solicitanteId])
 }
 
 model AccesoRouterSucursal {
@@ -202,29 +340,122 @@ model AccesoRouterSucursal {
   @@index([sucursalId])
 }
 
+model SuscripcionContrato {
+  id                    Int                            @id @default(autoincrement())
+  empresaId             Int
+  proveedor             String
+  fabricante            String
+  productoPlan          String
+  cantidadLicencias     Int                            @default(1)
+  costoMensual          Decimal?                       @db.Decimal(18, 2)
+  moneda                String                         @default("CLP")
+  fechaInicio           DateTime?
+  fechaTermino          DateTime?
+  fechaRenovacion       DateTime?
+  numeroContrato        String?
+  numeroOferta          String?
+  ejecutivoNombre       String?
+  ejecutivoEmail        String?
+  ejecutivoTelefono     String?
+  soporteTelefono       String?
+  soporteEmail          String?
+  observaciones         String?
+  activo                Boolean                        @default(true)
+  contratoNombre        String?
+  contratoMimeType      String?
+  contratoBytes         Int?
+  contratoStoragePath   String?
+  createdAt             DateTime                       @default(now())
+  updatedAt             DateTime                       @updatedAt
+  avisosActivos         Boolean                        @default(true)
+  correosAviso          String[]                       @default([])
+  empresa               Empresa                        @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
+  ejecutivosComerciales SuscripcionContratoEjecutivo[]
+  contactosSoporte      SuscripcionContratoSoporte[]
+  avisos                SuscripcionContratoAviso[]
+  recordatorios         Recordatorio[]
+
+  @@index([empresaId])
+  @@index([fechaTermino])
+  @@index([fabricante])
+  @@index([proveedor])
+  @@index([fechaRenovacion])
+  @@index([activo])
+}
+
+model SuscripcionContratoEjecutivo {
+  id            Int                 @id @default(autoincrement())
+  suscripcionId Int
+  nombre        String
+  email         String?
+  telefono      String?
+  principal     Boolean             @default(false)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  suscripcion   SuscripcionContrato @relation(fields: [suscripcionId], references: [id], onDelete: Cascade)
+
+  @@index([suscripcionId])
+}
+
+model SuscripcionContratoSoporte {
+  id            Int                 @id @default(autoincrement())
+  suscripcionId Int
+  nombre        String?
+  email         String?
+  telefono      String?
+  principal     Boolean             @default(false)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  suscripcion   SuscripcionContrato @relation(fields: [suscripcionId], references: [id], onDelete: Cascade)
+
+  @@index([suscripcionId])
+}
+
+model SuscripcionContratoAviso {
+  id            Int                 @id @default(autoincrement())
+  suscripcionId Int
+  tipoFecha     String
+  fechaObjetivo DateTime            @db.Date
+  umbral        Int
+  destinatarios String[]            @default([])
+  createdAt     DateTime            @default(now())
+  suscripcion   SuscripcionContrato @relation(fields: [suscripcionId], references: [id], onDelete: Cascade)
+
+  @@unique([suscripcionId, tipoFecha, fechaObjetivo, umbral])
+  @@index([suscripcionId])
+}
+
 model Solicitante {
-  id_solicitante  Int                     @id @default(dbgenerated("nextval((pg_get_serial_sequence('\"Solicitante\"'::text, 'id_solicitante'::text))::regclass)"))
-  nombre          String
-  email           String?
-  telefono        String?
-  empresaId       Int
-  clienteId       Int?                    @unique
-  googleUserId    String?                 @unique
-  isActive        Boolean                 @default(true)
-  microsoftUserId String?                 @unique
-  accountType     AccountType?
-  deletedAt       DateTime?
-  rut             String?                 @unique
-  createdAt       DateTime                @default(now())
-  updatedAt       DateTime                @default(now())
-  deactivatedAt   DateTime?
-  empresa         Empresa                 @relation(fields: [empresaId], references: [id_empresa])
-  equipos         Equipo[]
-  visitas         Visita[]                @relation("Solicitante_Visita")
-  historiales     Historial[]             @relation("Solicitante_Historial")
-  tickets         FreshdeskTicket[]
-  requesterMaps   FreshdeskRequesterMap[]
-  msLicenses      SolicitanteMsLicense[]
+  id_solicitante       Int                     @id @default(dbgenerated("nextval((pg_get_serial_sequence('\"Solicitante\"'::text, 'id_solicitante'::text))::regclass)"))
+  nombre               String
+  email                String?
+  telefono             String?
+  empresaId            Int
+  clienteId            Int?                    @unique
+  googleUserId         String?                 @unique
+  isActive             Boolean                 @default(true)
+  microsoftUserId      String?                 @unique
+  accountType          AccountType?
+  deletedAt            DateTime?
+  rut                  String?                 @unique
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @default(now()) @updatedAt
+  deactivatedAt        DateTime?
+  empresa              Empresa                 @relation(fields: [empresaId], references: [id_empresa])
+  equipos              Equipo[]
+  visitas              Visita[]                @relation("Solicitante_Visita")
+  historiales          Historial[]             @relation("Solicitante_Historial")
+  tickets              FreshdeskTicket[]
+  requesterMaps        FreshdeskRequesterMap[]
+  msLicenses           SolicitanteMsLicense[]
+  ticketsRids          Ticket[]
+  firma                Firma?
+  servidorUsuarios     ServidorUsuario[]
+  mantencionesRemotas  MantencionRemota[]      @relation("SolicitanteMantencionesRemotas")
+  teamViewerDeviceMaps TeamViewerDeviceMap[]
+  bitacoras            BitacoraTecnico[]
+  equipoMantenciones   EquipoMantencion[]
+  consentimientosDatos ConsentimientoDatos[]
 
   @@index([empresaId])
   @@index([isActive])
@@ -253,45 +484,66 @@ model SolicitanteMsLicense {
 }
 
 model EntidadGestioo {
-  id               Int                     @id @default(autoincrement())
-  nombre           String
-  rut              String?                 @unique
-  correo           String?
-  telefono         String?
-  direccion        String?
-  tipo             TipoEntidadGestioo      @default(EMPRESA)
-  origen           OrigenGestioo           @default(RIDS)
-  empresaId        Int?
-  productos        ProductoGestioo[]
-  trabajos         DetalleTrabajoGestioo[]
-  servicioGestioos ServicioGestioo[]
-  cotizaciones     CotizacionGestioo[]
+  id                          Int                                @id @default(autoincrement())
+  nombre                      String
+  rut                         String?                            @unique
+  correo                      String?
+  telefono                    String?
+  direccion                   String?
+  tipo                        TipoEntidadGestioo                 @default(EMPRESA)
+  origen                      OrigenGestioo                      @default(RIDS)
+  empresaId                   Int?
+  empresa                     Empresa?                           @relation(fields: [empresaId], references: [id_empresa])
+  productos                   ProductoGestioo[]
+  trabajos                    DetalleTrabajoGestioo[]
+  servicioGestioos            ServicioGestioo[]
+  cotizaciones                CotizacionGestioo[]
+  cotizacionMasivaEntidades   CotizacionMasivaPlantillaEntidad[]
+  oportunidadesVenta          OportunidadVenta[]
+  oportunidadesMercadoPublico OportunidadMercadoPublico[]        @relation("MercadoPublicoEntidad")
+}
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  tecnicoId Int
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  tecnico   Tecnico  @relation(fields: [tecnicoId], references: [id_tecnico], onDelete: Cascade)
+
+  @@index([token])
+  @@index([tecnicoId])
 }
 
 model ProductoGestioo {
-  id            Int                     @id @default(autoincrement())
-  nombre        String
-  descripcion   String?
-  tipo          String                  @default("producto")
-  categoria     String?
-  serie         String?                 @unique
-  estado        String?                 @default("disponible")
-  precio        Float?
-  stock         Int?                    @default(0)
-  fechaIngreso  DateTime?               @default(now())
-  garantiaMeses Int?
-  activo        Boolean                 @default(true)
-  marcaId       Int?
-  modeloId      Int?
-  entidadId     Int?
-  porcGanancia  Float?
-  precioTotal   Float?
-  imagen        String?
-  publicId      String?
-  marca         MarcaGestioo?           @relation(fields: [marcaId], references: [id])
-  modelo        ModeloGestioo?          @relation(fields: [modeloId], references: [id])
-  entidad       EntidadGestioo?         @relation(fields: [entidadId], references: [id])
-  trabajos      DetalleTrabajoGestioo[]
+  id                                 Int                                 @id @default(autoincrement())
+  nombre                             String
+  descripcion                        String?
+  tipo                               String                              @default("producto")
+  categoria                          String?
+  serie                              String?                             @unique
+  estado                             String?                             @default("disponible")
+  precio                             Float?
+  stock                              Int?                                @default(0)
+  fechaIngreso                       DateTime?                           @default(now())
+  garantiaMeses                      Int?
+  activo                             Boolean                             @default(true)
+  marcaId                            Int?
+  modeloId                           Int?
+  entidadId                          Int?
+  porcGanancia                       Float?
+  precioTotal                        Float?
+  imagen                             String?
+  publicId                           String?
+  marca                              MarcaGestioo?                       @relation(fields: [marcaId], references: [id])
+  modelo                             ModeloGestioo?                      @relation(fields: [modeloId], references: [id])
+  entidad                            EntidadGestioo?                     @relation(fields: [entidadId], references: [id])
+  trabajos                           DetalleTrabajoGestioo[]
+  equipo                             Equipo?
+  cotizacionMasivaPlantillaCantidads CotizacionMasivaPlantillaCantidad[]
+  cotizacionMasivaPlantillaItems     CotizacionMasivaPlantillaItem[]
+  cotizacionItems                    CotizacionItemGestioo[]
 
   @@index([marcaId])
   @@index([modeloId])
@@ -317,47 +569,46 @@ model ServicioGestioo {
 }
 
 model DetalleTrabajoGestioo {
-  id                Int                 @id @default(autoincrement())
-  fecha             DateTime            @default(now())
-  tipoTrabajo       String
-  descripcion       String?
-  estado            String?             @default("pendiente")
-  notas             String?
-  area              AreaGestioo         @default(ENTRADA)
-  prioridad         PrioridadGestioo    @default(NORMAL)
-  entidadId         Int?
-  productoId        Int?
-  servicioId        Int?
-  equipoId          Int?
-  tecnicoId         Int?
-  incluyeCargador   Boolean             @default(false)
-  fechaIngreso      DateTime?
-  ordenGrupoId      Int?
-  numeroOrden       String?
-  origenTrabajo     OrigenTrabajo       @default(INDEPENDIENTE)
-  cotizacionId      Int?
-  destinoEquipo     DestinoEquipoTaller @default(SIN_DEFINIR)
-  destinoEquipoNota String?
-
-  // Confirmación de recepción
-  nombreFirmanteEntrada        String?
-  solicitanteFirmanteEntradaId Int?
-  emailFirmanteEntrada         String?
-  firmaEntradaUrl              String?
-  firmaEntradaPublicId         String?
+  id                           Int                 @id @default(autoincrement())
+  fecha                        DateTime            @default(now())
+  tipoTrabajo                  String
+  descripcion                  String?
+  estado                       String?             @default("pendiente")
+  notas                        String?
+  area                         AreaGestioo         @default(ENTRADA)
+  prioridad                    PrioridadGestioo    @default(NORMAL)
+  entidadId                    Int?
+  productoId                   Int?
+  servicioId                   Int?
+  equipoId                     Int?
+  tecnicoId                    Int?
+  incluyeCargador              Boolean             @default(false)
+  fechaIngreso                 DateTime?
+  ordenGrupoId                 Int?
+  numeroOrden                  String?
+  origenTrabajo                OrigenTrabajo       @default(INDEPENDIENTE)
+  cotizacionId                 Int?
+  destinoEquipo                DestinoEquipoTaller @default(SIN_DEFINIR)
+  destinoEquipoNota            String?
   firmaEntradaAt               DateTime?
+  firmaEntradaPublicId         String?
+  firmaEntradaUrl              String?
+  nombreFirmanteEntrada        String?
+  emailFirmanteEntrada         String?
+  solicitanteFirmanteEntradaId Int?
+  cotizacion                   CotizacionGestioo?  @relation(fields: [cotizacionId], references: [id], onDelete: SetNull)
+  tecnico                      Tecnico?            @relation(fields: [tecnicoId], references: [id_tecnico])
+  entidad                      EntidadGestioo?     @relation(fields: [entidadId], references: [id])
+  producto                     ProductoGestioo?    @relation(fields: [productoId], references: [id])
+  servicio                     ServicioGestioo?    @relation(fields: [servicioId], references: [id])
+  equipo                       Equipo?             @relation("EquipoToTrabajoGestioo", fields: [equipoId], references: [id_equipo])
+  bitacoras                    BitacoraTecnico[]
 
-  tecnico  Tecnico?         @relation(fields: [tecnicoId], references: [id_tecnico])
-  entidad  EntidadGestioo?  @relation(fields: [entidadId], references: [id])
-  producto ProductoGestioo? @relation(fields: [productoId], references: [id])
-  servicio ServicioGestioo? @relation(fields: [servicioId], references: [id])
-  equipo   Equipo?          @relation("EquipoToTrabajoGestioo", fields: [equipoId], references: [id_equipo])
-
+  @@index([cotizacionId])
   @@index([productoId])
   @@index([servicioId])
   @@index([entidadId])
   @@index([tecnicoId])
-  @@index([cotizacionId])
   @@index([numeroOrden])
   @@index([destinoEquipo])
 }
@@ -391,7 +642,7 @@ model Equipo {
   propiedad                   String                  @default("Empresa")
   tipo                        TipoEquipo              @default(GENERICO)
   createdAt                   DateTime                @default(now())
-  updatedAt                   DateTime                @default(now())
+  updatedAt                   DateTime                @default(now()) @updatedAt
   deletedAt                   DateTime?
   empresaId                   Int?
   origenCotizacionId          Int?
@@ -405,6 +656,7 @@ model Equipo {
   diskTotalGb                 Float?
   dominio                     String?
   estadoAgente                EstadoAgenteEquipo      @default(SIN_AGENTE)
+  /// ===================== Agente Windows / Inventario automático =====================
   hostname                    String?
   lastBootAt                  DateTime?
   lastSeenAt                  DateTime?
@@ -413,6 +665,7 @@ model Equipo {
   motivoRevisionSolicitante   String?
   publicIp                    String?
   ramGb                       Float?
+  /// ===================== Revisión solicitante detectado por agente =====================
   requiereRevisionSolicitante Boolean                 @default(false)
   solicitanteDetectadoEmail   String?
   solicitanteDetectadoId      Int?
@@ -420,6 +673,7 @@ model Equipo {
   observaciones               String?
   mantGeneralConfigPath       String?
   mantGeneralExePath          String?
+  /// ===================== Mant.General RIDS =====================
   mantGeneralInstalado        Boolean                 @default(false)
   mantGeneralInstalledAt      DateTime?
   mantGeneralLastSeenAt       DateTime?
@@ -427,24 +681,78 @@ model Equipo {
   mantGeneralVersion          String?
   propietarioExterno          String?
   solicitante                 Solicitante?            @relation(fields: [idSolicitante], references: [id_solicitante])
-  equipo                      DetalleEquipo[]
-  adicionales                 EquipoAdicional[]
+  detalle                     DetalleEquipo?
   detalleTrabajosGestioo      DetalleTrabajoGestioo[] @relation("EquipoToTrabajoGestioo")
+  empresa                     Empresa?                @relation(fields: [empresaId], references: [id_empresa])
+  producto                    ProductoGestioo?        @relation(fields: [productoId], references: [id])
+  origenCotizacion            CotizacionGestioo?      @relation("EquipoOrigenCotizacion", fields: [origenCotizacionId], references: [id])
+  cotizacionItem              CotizacionItemGestioo?  @relation("ItemEquipoGenerado")
+  adicionales                 EquipoAdicional[]
+  adicionalesRelacion         AdicionalEquipo[]
+  bitacoras                   BitacoraTecnico[]
+  softwares                   EquipoSoftware[]
+  agenteEventos               EquipoAgenteEvento[]
+  equipoMantenciones          EquipoMantencion[]
+  recordatorios               Recordatorio[]
 
+  @@index([empresaId])
+  @@index([productoId])
+  @@index([origenCotizacionId])
   @@index([idSolicitante])
   @@index([deletedAt])
-  @@index([empresaId])
-  @@index([origenCotizacionId])
-  @@index([productoId])
-  @@index([estado])
-  @@index([agenteActivo])
-  @@index([estadoAgente])
   @@index([hostname])
   @@index([lastSeenAt])
+  @@index([estadoAgente])
+  @@index([agenteActivo])
   @@index([requiereRevisionSolicitante])
+  @@index([estado])
   @@index([mantGeneralInstalado])
   @@index([mantGeneralLastSeenAt])
   @@index([mantGeneralTecnicoId])
+}
+
+model Adicional {
+  id              Int                   @id @default(autoincrement())
+  nombre          String?
+  tipo            String
+  marca           String?
+  modelo          String?
+  serialAdicional String?               @unique
+  macAddress      String?
+  ipAddress       String?
+  hostname        String?
+  ubicacion       String?
+  descripcion     String?
+  cantidad        Int                   @default(1)
+  estado          EstadoEquipoAdicional @default(ASIGNADO)
+  origen          OrigenEquipoAdicional @default(MANUAL)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  equipos         AdicionalEquipo[]
+
+  @@index([tipo])
+  @@index([marca])
+  @@index([modelo])
+  @@index([macAddress])
+  @@index([ipAddress])
+  @@index([estado])
+  @@index([origen])
+}
+
+model AdicionalEquipo {
+  id          Int                   @id @default(autoincrement())
+  adicionalId Int
+  equipoId    Int
+  origen      OrigenEquipoAdicional @default(MANUAL)
+  observacion String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  adicional   Adicional             @relation(fields: [adicionalId], references: [id], onDelete: Cascade)
+  equipo      Equipo                @relation(fields: [equipoId], references: [id_equipo], onDelete: Cascade)
+
+  @@unique([adicionalId, equipoId])
+  @@index([adicionalId])
+  @@index([equipoId])
 }
 
 model EquipoAdicional {
@@ -461,46 +769,137 @@ model EquipoAdicional {
   equipo          Equipo                @relation(fields: [equipoId], references: [id_equipo], onDelete: Cascade)
 
   @@index([equipoId])
-  @@index([estado])
-  @@index([origen])
   @@index([tipo])
+  @@index([origen])
+  @@index([estado])
 }
 
 model DetalleEquipo {
-  id                  Int      @id @default(autoincrement()) @map("id_detalle_equipo")
-  idEquipo            Int      @unique
-  macWifi             String?
-  so                  String?
-  tipoDd              String?
-  estadoAlm           String?
-  office              String?
-  teamViewer          String?
-  claveTv             String?
-  revisado            String?
-  adminRidsPassword   String?
-  adminRidsUsuario    String?
-  passwordEmpresa     String?
-  passwordPersonal    String?
-  usuarioEmpresa      String?
-  usuarioPersonal     String?
-  redEthernet         String?
-  antivirusActivo     Boolean?
-  antivirusNombre     String?
-  bitlockerEstado     String?
-  firewallActivo      Boolean?
-  observacionAgente   String?
-  windowsUpdate       String?
-  oneDrive            String?
-  oneDriveDetalle     Json?
-  oneDriveEnEjecucion Boolean?
-  oneDriveEstado      String?
-  oneDriveInstalado   Boolean?
-  oneDriveOperativo   Boolean?
-  oneDriveUsuario     String?
-  oneDriveVersion     String?
-  equipo              Equipo?  @relation(fields: [idEquipo], references: [id_equipo])
+  id                          Int      @id @default(autoincrement()) @map("id_detalle_equipo")
+  idEquipo                    Int      @unique
+  macWifi                     String?
+  so                          String?
+  tipoDd                      String?
+  estadoAlm                   String?
+  office                      String?
+  teamViewer                  String?
+  claveTv                     String?
+  revisado                    String?
+  adminRidsPassword           String?
+  adminRidsUsuario            String?
+  passwordEmpresa             String?
+  passwordPersonal            String?
+  usuarioEmpresa              String?
+  usuarioPersonal             String?
+  redEthernet                 String?
+  antivirusActivo             Boolean?
+  /// ===================== Agente Windows / Seguridad =====================
+  antivirusNombre             String?
+  bitlockerEstado             String?
+  firewallActivo              Boolean?
+  observacionAgente           String?
+  windowsUpdate               String?
+  oneDrive                    String?
+  oneDriveDetalle             Json?
+  oneDriveEnEjecucion         Boolean?
+  oneDriveEstado              String?
+  oneDriveInstalado           Boolean?
+  oneDriveOperativo           Boolean?
+  oneDriveUsuario             String?
+  oneDriveVersion             String?
+  bateriaAdvertencia          String?
+  bateriaCantidad             Int?
+  bateriaCapacidadCompletaMWh Int?
+  bateriaCapacidadDisenoMWh   Int?
+  bateriaCargaPorcentaje      Int?
+  bateriaCiclos               Int?
+  bateriaDesgastePorcentaje   Float?
+  bateriaEstado               String?
+  bateriaFabricante           String?
+  bateriaNombre               String?
+  /// ===================== Agente Windows / Batería =====================
+  bateriaPresente             Boolean?
+  bateriaQuimica              String?
+  bateriaSaludPorcentaje      Float?
+  bateriaSerial               String?
+  equipo                      Equipo   @relation(fields: [idEquipo], references: [id_equipo], onDelete: Cascade)
 
   @@index([idEquipo])
+}
+
+model EquipoSoftware {
+  id          Int       @id @default(autoincrement())
+  equipoId    Int
+  nombre      String
+  version     String?
+  publisher   String?
+  installDate DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  equipo      Equipo    @relation(fields: [equipoId], references: [id_equipo], onDelete: Cascade)
+
+  @@unique([equipoId, nombre, version])
+  @@index([equipoId])
+  @@index([nombre])
+}
+
+model EquipoAgenteEvento {
+  id        Int      @id @default(autoincrement())
+  equipoId  Int
+  tipo      String
+  mensaje   String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  equipo    Equipo   @relation(fields: [equipoId], references: [id_equipo], onDelete: Cascade)
+
+  @@index([equipoId])
+  @@index([tipo])
+  @@index([createdAt])
+}
+
+model EquipoMantencion {
+  id               Int          @id @default(autoincrement())
+  equipoId         Int?
+  empresaId        Int?
+  solicitanteId    Int?
+  tecnicoId        Int?
+  tipo             String
+  estado           String
+  origen           String       @default("MANT_GENERAL_RIDS")
+  fechaInicio      DateTime
+  fechaFin         DateTime?
+  duracionSegundos Int?
+  duracionTexto    String?
+  tareasRealizadas Json         @default("[]")
+  tareasConError   Json         @default("[]")
+  resumen          String?
+  reporteTexto     String?
+  serial           String?
+  hostname         String?
+  usuarioActual    String?
+  localIp          String?
+  macAddress       String?
+  marca            String?
+  modelo           String?
+  agenteVersion    String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  equipo           Equipo?      @relation(fields: [equipoId], references: [id_equipo], onDelete: SetNull)
+  empresa          Empresa?     @relation(fields: [empresaId], references: [id_empresa], onDelete: SetNull)
+  solicitante      Solicitante? @relation(fields: [solicitanteId], references: [id_solicitante], onDelete: SetNull)
+  tecnico          Tecnico?     @relation(fields: [tecnicoId], references: [id_tecnico], onDelete: SetNull)
+
+  @@index([equipoId])
+  @@index([empresaId])
+  @@index([solicitanteId])
+  @@index([tecnicoId])
+  @@index([fechaInicio])
+  @@index([estado])
+  @@index([tipo])
+  @@index([origen])
+  @@index([serial])
+  @@index([hostname])
+  @@index([macAddress])
 }
 
 model Historial {
@@ -523,15 +922,15 @@ model Historial {
   ecografo           Boolean     @default(false)
   sucursalId         Int?
   empresaId          Int?
-  empresa            Empresa?    @relation(fields: [empresaId], references: [id_empresa])
   tecnico            Tecnico     @relation(fields: [tecnicoId], references: [id_tecnico])
   solicitanteRef     Solicitante @relation("Solicitante_Historial", fields: [solicitanteId], references: [id_solicitante])
   sucursal           Sucursal?   @relation(fields: [sucursalId], references: [id_sucursal])
+  empresa            Empresa?    @relation(fields: [empresaId], references: [id_empresa])
 
-  @@index([empresaId])
   @@index([tecnicoId, fin(sort: Desc)])
   @@index([solicitanteId])
   @@index([sucursalId])
+  @@index([empresaId])
 }
 
 model RefreshToken {
@@ -552,72 +951,88 @@ model RefreshToken {
 }
 
 model Tecnico {
-  id_tecnico       Int                     @id @default(autoincrement())
-  nombre           String
-  email            String                  @unique
-  passwordHash     String
-  status           Boolean                 @default(true)
-  empresaId        Int?
-  rol              String                  @default("TECNICO")
-  teamviewerUserId String?                 @unique
-  firmaTexto       String?
-  area             String?
-  cargo            String?
-  tokens           RefreshToken[]
-  historiales      Historial[]
-  visitas          Visita[]
-  detalleTrabajos  DetalleTrabajoGestioo[]
-  entregas         Entrega[]
-  ubicaciones      UbicacionTecnico[]
-  agendasAsignadas AgendaTecnico[]
+  id_tecnico                      Int                              @id @default(autoincrement())
+  nombre                          String
+  email                           String                           @unique
+  passwordHash                    String
+  status                          Boolean                          @default(true)
+  empresaId                       Int?
+  rol                             String                           @default("TECNICO")
+  teamviewerUserId                String?                          @unique
+  firmaTexto                      String?
+  area                            String?
+  cargo                           String?
+  empresa                         Empresa?                         @relation(fields: [empresaId], references: [id_empresa])
+  tokens                          RefreshToken[]
+  historiales                     Historial[]
+  visitas                         Visita[]
+  detalleTrabajos                 DetalleTrabajoGestioo[]
+  entregas                        Entrega[]
+  tickets                         Ticket[]
+  firma                           Firma?
+  cotizaciones                    CotizacionGestioo[]
+  auditLogs                       AuditLog[]
+  mantencionesRemotas             MantencionRemota[]               @relation("TecnicoMantencionesRemotas")
+  passwordResetTokens             PasswordResetToken[]
+  agendasAsignadas                AgendaTecnico[]
+  analisisInventarioIAs           AnalisisInventarioIA[]
+  manualTutoriales                ManualTutorial[]
+  bitacoras                       BitacoraTecnico[]
+  equipoMantenciones              EquipoMantencion[]
+  cotizacionMasivaPlantillas      CotizacionMasivaPlantilla[]
+  oportunidadesVenta              OportunidadVenta[]               @relation("ResponsableOportunidadVenta")
+  historialEtapasOportunidad      HistorialEtapaOportunidadVenta[]
+  seguimientosOportunidad         SeguimientoOportunidadVenta[]
+  recordatoriosRecibidos          Recordatorio[]                   @relation("RecordatorioDestinatario")
+  recordatoriosCreados            Recordatorio[]                   @relation("RecordatorioCreador")
+  evidenciasBitacora              BitacoraEvidencia[]              @relation("BitacoraEvidenciaSubidaPor")
+  aprobacionesBitacoraSolicitadas BitacoraAprobacion[]             @relation("BitacoraAprobacionSolicitante")
+  aprobacionesBitacoraAsignadas   BitacoraAprobacion[]             @relation("BitacoraAprobacionAprobador")
+  eventosBitacora                 BitacoraEvento[]                 @relation("BitacoraEventoActor")
+  plantillasCorreo                PlantillaCorreo[]
+  conversionesMercadoPublico      OportunidadMercadoPublico[]      @relation("MercadoPublicoConvertidoPor")
+  campaniasProteccionDatos        CampaniaProteccionDatos[]
+  leypdElementosActualizados      LeypdElemento[]
+  leypdActualizaciones            LeypdActualizacion[]
+  documentosOportunidad           OportunidadDocumento[]           @relation("OportunidadDocumentoSubidoPor")
 
   @@index([empresaId])
 }
 
-model EmpresaFavoritaTecnico {
-  id        Int      @id @default(autoincrement())
-  tecnicoId Int
-  empresaId Int
-  origen    String   @default("RIDS") @db.VarChar(16)
-  createdAt DateTime @default(now())
-
-  @@unique([tecnicoId, origen, empresaId])
-  @@index([tecnicoId])
-  @@index([origen, empresaId])
-}
-
 model Visita {
-  id_visita          Int           @id @default(autoincrement())
+  id_visita          Int               @id @default(autoincrement())
   empresaId          Int
   tecnicoId          Int
   solicitante        String
   inicio             DateTime
   fin                DateTime?
-  confImpresoras     Boolean       @default(false)
-  confTelefonos      Boolean       @default(false)
-  confPiePagina      Boolean       @default(false)
-  otros              Boolean       @default(false)
+  confImpresoras     Boolean           @default(false)
+  confTelefonos      Boolean           @default(false)
+  confPiePagina      Boolean           @default(false)
+  otros              Boolean           @default(false)
   otrosDetalle       String?
-  status             EstadoVisita  @default(PENDIENTE)
+  status             EstadoVisita      @default(PENDIENTE)
   solicitanteId      Int?
-  actualizaciones    Boolean       @default(false)
-  antivirus          Boolean       @default(false)
-  ccleaner           Boolean       @default(false)
-  estadoDisco        Boolean       @default(false)
-  licenciaOffice     Boolean       @default(false)
-  licenciaWindows    Boolean       @default(false)
-  mantenimientoReloj Boolean       @default(false)
-  rendimientoEquipo  Boolean       @default(false)
+  actualizaciones    Boolean           @default(false)
+  antivirus          Boolean           @default(false)
+  ccleaner           Boolean           @default(false)
+  estadoDisco        Boolean           @default(false)
+  licenciaOffice     Boolean           @default(false)
+  licenciaWindows    Boolean           @default(false)
+  mantenimientoReloj Boolean           @default(false)
+  rendimientoEquipo  Boolean           @default(false)
   direccion_visita   String?
-  ecografo           Boolean       @default(false)
+  ecografo           Boolean           @default(false)
   sucursalId         Int?
-  agendaId           Int?          @unique
-  origen             OrigenVisita  @default(MANUAL)
-  empresa            Empresa       @relation("Empresa_Visita", fields: [empresaId], references: [id_empresa])
-  tecnico            Tecnico       @relation(fields: [tecnicoId], references: [id_tecnico])
-  solicitanteRef     Solicitante?  @relation("Solicitante_Visita", fields: [solicitanteId], references: [id_solicitante])
-  sucursal           Sucursal?     @relation(fields: [sucursalId], references: [id_sucursal])
-  agenda             AgendaVisita? @relation(fields: [agendaId], references: [id])
+  agendaId           Int?              @unique
+  origen             OrigenVisita      @default(MANUAL)
+  agenda             AgendaVisita?     @relation(fields: [agendaId], references: [id])
+  empresa            Empresa           @relation("Empresa_Visita", fields: [empresaId], references: [id_empresa])
+  tecnico            Tecnico           @relation(fields: [tecnicoId], references: [id_tecnico])
+  solicitanteRef     Solicitante?      @relation("Solicitante_Visita", fields: [solicitanteId], references: [id_solicitante])
+  sucursal           Sucursal?         @relation(fields: [sucursalId], references: [id_sucursal])
+  bitacoras          BitacoraTecnico[]
+  recordatorios      Recordatorio[]
 
   @@index([empresaId])
   @@index([tecnicoId])
@@ -625,6 +1040,59 @@ model Visita {
   @@index([sucursalId])
 }
 
+model MantencionRemota {
+  id_mantencion   Int               @id @default(autoincrement())
+  empresaId       Int?
+  tecnicoId       Int?
+  solicitanteId   Int?
+  solicitante     String
+  inicio          DateTime
+  fin             DateTime?
+  soporteRemoto   Boolean           @default(true)
+  actualizaciones Boolean           @default(false)
+  antivirus       Boolean           @default(false)
+  ccleaner        Boolean           @default(false)
+  estadoDisco     Boolean           @default(false)
+  licenciaOffice  Boolean           @default(false)
+  licenciaWindows Boolean           @default(false)
+  optimizacion    Boolean           @default(false)
+  respaldo        Boolean           @default(false)
+  otros           Boolean           @default(false)
+  otrosDetalle    String?
+  status          String            @default("PENDIENTE")
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  deviceId        String?
+  deviceNombre    String?
+  duracionMinutos Int?
+  origen          String?           @default("MANUAL")
+  teamviewerId    String?           @unique
+  empresa         Empresa?          @relation("EmpresaMantencionesRemotas", fields: [empresaId], references: [id_empresa])
+  tecnico         Tecnico?          @relation("TecnicoMantencionesRemotas", fields: [tecnicoId], references: [id_tecnico])
+  solicitanteRef  Solicitante?      @relation("SolicitanteMantencionesRemotas", fields: [solicitanteId], references: [id_solicitante])
+  bitacoras       BitacoraTecnico[]
+
+  @@index([empresaId])
+  @@index([tecnicoId])
+  @@index([inicio])
+}
+
+model TeamViewerDeviceMap {
+  id            Int          @id @default(autoincrement())
+  deviceId      String       @unique
+  deviceNombre  String?
+  empresaId     Int?
+  solicitanteId Int?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  empresa       Empresa?     @relation(fields: [empresaId], references: [id_empresa], onDelete: SetNull)
+  solicitante   Solicitante? @relation(fields: [solicitanteId], references: [id_solicitante], onDelete: SetNull)
+
+  @@index([empresaId])
+  @@index([solicitanteId])
+}
+
+/// FRESHDESK HISTORICO
 /// * LEGADO: ya no lo usa el flujo nuevo de tickets
 model FreshdeskCompanyMap {
   companyId BigInt  @id
@@ -636,6 +1104,7 @@ model FreshdeskCompanyMap {
   @@index([domain])
 }
 
+/// FRESHDESK HISTORICO
 /// * LEGADO: ya no lo usa el flujo nuevo de tickets
 model FreshdeskRequesterMap {
   requesterId   BigInt      @id
@@ -647,6 +1116,7 @@ model FreshdeskRequesterMap {
   @@index([solicitanteId])
 }
 
+/// FRESHDESK HISTORICO
 /// * CENTRAL: Ticket de Freshdesk (ahora referenciado a TicketOrg y TicketRequester)
 model FreshdeskTicket {
   id                BigInt           @id
@@ -676,6 +1146,7 @@ model FreshdeskTicket {
   @@index([createdAt])
 }
 
+/// FRESHDESK HISTORICO
 /// * Agrupación lógica de tickets (no toca tu Empresa)
 model TicketOrg {
   id         Int               @id @default(autoincrement())
@@ -688,6 +1159,7 @@ model TicketOrg {
   requesters TicketRequester[]
 }
 
+/// FRESHDESK HISTORICO
 /// * Mapa domain/companyId → TicketOrg
 model FdSourceMap {
   id          Int       @id @default(autoincrement())
@@ -699,7 +1171,7 @@ model FdSourceMap {
   @@index([ticketOrgId])
 }
 
-/// * NUEVO: solicitante “propio” de tickets (se deduplica por email o fdRequesterId)
+/// FRESHDESK HISTORICO * NUEVO: solicitante “propio” de tickets (se deduplica por email o fdRequesterId)
 model TicketRequester {
   id            Int               @id @default(autoincrement())
   name          String
@@ -735,11 +1207,60 @@ model CotizacionGestioo {
   tecnicoId             Int?
   ordenGenerada         Boolean                 @default(false)
   oportunidadVentaId    Int?
+  tecnico               Tecnico?                @relation(fields: [tecnicoId], references: [id_tecnico])
   items                 CotizacionItemGestioo[]
   entidad               EntidadGestioo?         @relation(fields: [entidadId], references: [id])
+  facturas              Factura[]
+  trabajos              DetalleTrabajoGestioo[]
+  equiposGenerados      Equipo[]                @relation("EquipoOrigenCotizacion")
+  bitacoras             BitacoraTecnico[]
+  envios                CotizacionEnviada[]
+  oportunidadVenta      OportunidadVenta?       @relation(fields: [oportunidadVentaId], references: [id], onDelete: SetNull)
+  recordatorios         Recordatorio[]
 
   @@index([entidadId])
   @@index([oportunidadVentaId])
+}
+
+model CotizacionEnviada {
+  id            Int                @id @default(autoincrement())
+  cotizacionId  Int?
+  to            String?
+  subject       String?
+  sentBy        String?
+  jobId         String?
+  meta          Json?
+  clienteNombre String?
+  creadoPor     String?
+  fechaCreacion DateTime?
+  sentAt        DateTime           @default(now())
+  cotizacion    CotizacionGestioo? @relation(fields: [cotizacionId], references: [id], onDelete: SetNull)
+
+  @@index([cotizacionId])
+  @@index([jobId])
+  @@index([sentAt])
+}
+
+model Factura {
+  id_factura    Int               @id @default(autoincrement())
+  numeroFactura String            @unique
+  fechaEmision  DateTime          @default(now())
+  fechaPago     DateTime?
+  total         Float
+  cotizacionId  Int
+  estado        EstadoFactura     @default(PENDIENTE)
+  createdAt     DateTime          @default(now())
+  fechaEnvioSII DateTime?
+  folioSII      String?
+  rawResponse   Json?
+  rutEmisor     String?
+  tipoDTE       Int?
+  trackId       String?
+  estadoSII     EstadoDTE?
+  rutReceptor   String?
+  cotizacion    CotizacionGestioo @relation(fields: [cotizacionId], references: [id])
+
+  @@index([folioSII])
 }
 
 model CotizacionItemGestioo {
@@ -760,8 +1281,12 @@ model CotizacionItemGestioo {
   nombre            String?
   precioOriginalCLP Float?
   equipoId          Int?              @unique
+  productoId        Int?
   cotizacion        CotizacionGestioo @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+  producto          ProductoGestioo?  @relation(fields: [productoId], references: [id], onDelete: SetNull)
+  equipo            Equipo?           @relation("ItemEquipoGenerado", fields: [equipoId], references: [id_equipo], onDelete: SetNull)
 
+  @@index([productoId])
   @@index([equipoId])
 }
 
@@ -794,70 +1319,230 @@ model EvidenciaEntrega {
   @@index([tipo])
 }
 
-model AgendaTecnico {
-  id        Int          @id @default(autoincrement())
-  agendaId  Int
-  tecnicoId Int
-  agenda    AgendaVisita @relation(fields: [agendaId], references: [id], onDelete: Cascade)
-  tecnico   Tecnico      @relation(fields: [tecnicoId], references: [id_tecnico])
-
-  @@unique([agendaId, tecnicoId])
-  @@index([agendaId])
-  @@index([tecnicoId])
-}
-
-model AgendaVisita {
-  id                   Int             @id @default(autoincrement())
-  fecha                DateTime        @db.Date
-  empresaId            Int?
-  tipo                 TipoAgenda      @default(SEMANA)
-  estado               EstadoAgenda    @default(PROGRAMADA)
-  notificacionEnviada  Boolean         @default(false)
-  notas                String?
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime
-  horaFin              String?
-  horaInicio           String?
-  mensaje              String?
-  recordatorioEnviado  Boolean?
-  outlook_event_id     String?
-  empresaExternaNombre String?
-  fechaInicioRuta      DateTime?
-  fechaInicioVisita    DateTime?
-  sucursalId           Int?
-  destinoNombre        String?
-  destinoDireccion     String?
-  destinoLatitud       Float?
-  destinoLongitud      Float?
-  empresa              Empresa?        @relation("Empresa_AgendaVisita", fields: [empresaId], references: [id_empresa])
-  sucursal             Sucursal?       @relation(fields: [sucursalId], references: [id_sucursal])
-  tecnicos             AgendaTecnico[]
-  visita               Visita?
+model Ticket {
+  id              Int               @id @default(autoincrement())
+  empresaId       Int
+  requesterId     Int?
+  assigneeId      Int?
+  subject         String
+  status          TicketStatus      @default(NEW)
+  priority        TicketPriority    @default(NORMAL)
+  channel         TicketChannel     @default(WEB)
+  fromEmail       String?
+  inboxEmail      String?
+  firstResponseAt DateTime?
+  resolvedAt      DateTime?
+  closedAt        DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  lastActivityAt  DateTime          @default(now())
+  publicId        String            @unique
+  aiSummary       String?
+  rolAsignado     String?
+  deletedAt       DateTime?
+  /// *
+  /// * Última reapertura real:
+  /// * CLOSED/RESOLVED -> OPEN.
+  /// * PENDING -> OPEN NO modifica este campo.
+  lastReopenedAt  DateTime?
+  /// *
+  /// * Ciclo SLA actualmente activo.
+  /// * 1 = ciclo original.
+  /// * 2+ = reaperturas.
+  slaCycleNumber  Int               @default(1)
+  empresa         Empresa           @relation(fields: [empresaId], references: [id_empresa])
+  requester       Solicitante?      @relation(fields: [requesterId], references: [id_solicitante])
+  assignee        Tecnico?          @relation(fields: [assigneeId], references: [id_tecnico])
+  messages        TicketMessage[]
+  events          TicketEvent[]
+  bitacoras       BitacoraTecnico[]
+  recordatorios   Recordatorio[]
+  slaCycles       TicketSlaCycle[]
 
   @@index([empresaId])
-  @@index([sucursalId])
-  @@index([estado])
-  @@index([fecha])
-  @@index([notificacionEnviada])
-  @@index([tipo])
+  @@index([status])
+  @@index([assigneeId])
+  @@index([createdAt])
+  @@index([slaCycleNumber])
 }
 
-model UbicacionTecnico {
-  id             Int      @id @default(autoincrement())
-  tecnicoId      Int
-  agendaId       Int?
-  latitud        Float
-  longitud       Float
-  precision      Float?
-  velocidad      Float?
-  estadoTracking String
-  createdAt      DateTime @default(now())
-  tecnico        Tecnico  @relation(fields: [tecnicoId], references: [id_tecnico])
+model TicketSlaCycle {
+  id                          Int       @id @default(autoincrement())
+  ticketId                    Int
+  cycleNumber                 Int
+  /// *
+  /// * Snapshot del técnico responsable
+  /// * durante ese ciclo.
+  assigneeId                  Int?
+  /// *
+  /// * Inicio y fin reales del ciclo.
+  startedAt                   DateTime
+  endedAt                     DateTime?
+  /// *
+  /// * Fechas efectivas.
+  firstResponseAt             DateTime?
+  resolutionAt                DateTime?
+  /// *
+  /// * Snapshot de la configuración SLA que
+  /// * estaba vigente para ese ciclo.
+  firstResponseTargetMinutes  Int
+  resolutionTargetMinutes     Int
+  /// *
+  /// * PENDING | OK | BREACHED
+  firstResponseStatus         String?
+  resolutionStatus            String?
+  /// *
+  /// * Duraciones finales calculadas.
+  firstResponseElapsedMinutes Int?
+  resolutionElapsedMinutes    Int?
+  createdAt                   DateTime  @default(now())
+  ticket                      Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
-  @@index([agendaId])
+  @@unique([ticketId, cycleNumber])
+  @@index([ticketId])
+  @@index([cycleNumber])
+  @@index([assigneeId])
+  @@index([startedAt])
+  @@index([endedAt])
+}
+
+model ProcessedInboundEmail {
+  id              Int      @id @default(autoincrement())
+  sourceMessageId String   @unique
+  graphMessageId  String?
+  conversationId  String?
+  fromEmail       String?
+  subject         String?
+  ticketId        Int?
+  createdAt       DateTime @default(now())
+
+  @@index([ticketId])
+}
+
+model TicketMessage {
+  id               Int                @id @default(autoincrement())
+  ticketId         Int
+  direction        MessageDirection
+  isInternal       Boolean            @default(false)
+  bodyText         String?
+  bodyHtml         String?
+  fromEmail        String?
+  toEmail          String?
+  cc               String?
+  sourceMessageId  String?            @unique
+  sourceInReplyTo  String?
+  sourceReferences String?
+  createdAt        DateTime           @default(now())
+  graphMessageId   String?
+  ticket           Ticket             @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  attachments      TicketAttachment[]
+
+  @@index([ticketId])
   @@index([createdAt])
-  @@index([estadoTracking])
+  @@index([graphMessageId])
+}
+
+model TicketAttachment {
+  id          Int           @id @default(autoincrement())
+  messageId   Int
+  filename    String
+  mimeType    String
+  url         String
+  bytes       Int
+  createdAt   DateTime      @default(now())
+  contentId   String?
+  isInline    Boolean       @default(false)
+  storagePath String?
+  message     TicketMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@index([contentId])
+  @@index([storagePath])
+}
+
+model TicketEvent {
+  id        Int             @id @default(autoincrement())
+  ticketId  Int
+  type      TicketEventType
+  oldValue  String?
+  newValue  String?
+  actorType TicketActorType
+  actorId   Int?
+  createdAt DateTime        @default(now())
+  ticket    Ticket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+}
+
+model TicketEmailTemplate {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique
+  name        String
+  subjectTpl  String
+  bodyHtmlTpl String
+  isEnabled   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TicketEmailSignature {
+  id        Int      @id @default(autoincrement())
+  nombre    String   @default("Equipo de Soporte Técnico")
+  cargo     String   @default("Soporte Técnico")
+  area      String   @default("Asesorías RIDS Ltda.")
+  email     String   @default("soporte@rids.cl")
+  telefono  String?
+  sitioWeb1 String?
+  sitioWeb2 String?
+  imageUrl  String?
+  isEnabled Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SlaConfig {
+  id                   Int      @id @default(autoincrement())
+  priority             String   @unique
+  firstResponseMinutes Int
+  resolutionMinutes    Int
+  updatedAt            DateTime @updatedAt
+}
+
+model TicketSlaAlertLog {
+  id          Int      @id @default(autoincrement())
+  ticketId    Int
+  alertType   String
+  createdAt   DateTime @default(now())
+  cycleNumber Int      @default(1)
+
+  @@unique([ticketId, cycleNumber, alertType])
+  @@index([ticketId])
+  @@index([ticketId, cycleNumber])
+  @@index([alertType])
+}
+
+model Firma {
+  id            Int          @id @default(autoincrement())
+  path          String
+  mimeType      String
+  size          Int
+  createdAt     DateTime     @default(now())
+  solicitanteId Int?         @unique
+  tecnicoId     Int?         @unique
+  updatedAt     DateTime     @updatedAt
+  tecnico       Tecnico?     @relation(fields: [tecnicoId], references: [id_tecnico], onDelete: Cascade)
+  solicitante   Solicitante? @relation(fields: [solicitanteId], references: [id_solicitante], onDelete: Cascade)
+
   @@index([tecnicoId])
+  @@index([solicitanteId])
+}
+
+model ChatLog {
+  id        Int      @id @default(autoincrement())
+  phone     String
+  role      String   @default("user")
+  createdAt DateTime @default(now())
+  text      String?
 }
 
 model AuditLog {
@@ -870,63 +1555,103 @@ model AuditLog {
   createdAt   DateTime    @default(now())
   actorId     Int?
   empresaId   Int?
+  actor       Tecnico?    @relation(fields: [actorId], references: [id_tecnico])
 
+  @@index([entity])
+  @@index([entityId])
   @@index([createdAt])
   @@index([empresaId])
-  @@index([entityId])
-  @@index([entity])
 }
 
-model ChatLog {
-  id        Int      @id @default(autoincrement())
-  phone     String
-  role      String   @default("user")
-  createdAt DateTime @default(now())
-  text      String?
+model area_configs {
+  id          Int      @id @default(autoincrement())
+  nombre      String   @unique
+  mensajeBase String
+  firmaArea   String?
+  updatedAt   DateTime
 }
 
-model EmpresaISP {
-  id           Int      @id @default(autoincrement())
-  empresaId    Int
-  operador     String?
-  telefono     String?
-  servicio     String?
-  numeroTicket String?
-  wifiNombre   String?
-  wifiClaveRef String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime
-  ipRed        String?
-  esPrincipal  Boolean  @default(false)
-  sucursalId   Int?
+model AgendaVisita {
+  id                   Int             @id @default(autoincrement())
+  fecha                DateTime        @db.Date
+  empresaId            Int?
+  tipo                 TipoAgenda      @default(SEMANA)
+  estado               EstadoAgenda    @default(PROGRAMADA)
+  notificacionEnviada  Boolean         @default(false)
+  notas                String?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  horaFin              String?
+  horaInicio           String?
+  mensaje              String?
+  recordatorioEnviado  Boolean?
+  outlookEventId       String?         @map("outlook_event_id")
+  empresaExternaNombre String?
+  fechaInicioRuta      DateTime?
+  fechaInicioVisita    DateTime?
+  sucursalId           Int?
+  destinoNombre        String?
+  destinoDireccion     String?
+  destinoLatitud       Float?
+  destinoLongitud      Float?
+  finalidad            String?
+  empresa              Empresa?        @relation("Empresa_AgendaVisita", fields: [empresaId], references: [id_empresa])
+  sucursal             Sucursal?       @relation(fields: [sucursalId], references: [id_sucursal])
+  tecnicos             AgendaTecnico[]
+  visita               Visita?
 
   @@index([empresaId])
+  @@index([fecha])
+  @@index([tipo])
+  @@index([estado])
+  @@index([notificacionEnviada])
   @@index([sucursalId])
 }
 
-model Factura {
-  id_factura    Int           @id @default(autoincrement())
-  numeroFactura String        @unique
-  fechaEmision  DateTime      @default(now())
-  fechaPago     DateTime?
-  total         Float
-  cotizacionId  Int
-  estado        EstadoFactura @default(PENDIENTE)
-  createdAt     DateTime      @default(now())
-  fechaEnvioSII DateTime?
-  folioSII      String?
-  rawResponse   Json?
-  rutEmisor     String?
-  tipoDTE       Int?
-  trackId       String?
-  estadoSII     EstadoDTE?
-  rutReceptor   String?
+model AgendaTecnico {
+  id        Int          @id @default(autoincrement())
+  agendaId  Int
+  tecnicoId Int
+  agenda    AgendaVisita @relation(fields: [agendaId], references: [id], onDelete: Cascade)
+  tecnico   Tecnico      @relation(fields: [tecnicoId], references: [id_tecnico])
 
-  @@index([folioSII])
+  @@unique([agendaId, tecnicoId])
+  @@index([agendaId])
+  @@index([tecnicoId])
+}
+
+model ReporteIA {
+  id        Int      @id @default(autoincrement())
+  empresaId Int
+  periodo   String
+  contenido Json
+  createdAt DateTime @default(now())
+
+  @@unique([empresaId, periodo])
+}
+
+model ReporteGenerado {
+  id             Int      @id @default(autoincrement())
+  empresaId      Int?
+  empresaNombre  String
+  periodo        String
+  tipo           String
+  nombreArchivo  String
+  urlArchivo     String?
+  sharepointPath String?
+  generadoPorId  Int?
+  generadoPor    String?
+  estado         String   @default("GENERADO")
+  createdAt      DateTime @default(now())
+  storagePath    String?
+
+  @@index([empresaId, createdAt])
+  @@index([periodo])
+  @@index([tipo])
 }
 
 model FacturaDTE {
-  id                  Int       @id @default(autoincrement())
+  id                  Int              @id @default(autoincrement())
   empresaRut          String
   empresaAlias        String?
   folio               Int
@@ -946,19 +1671,20 @@ model FacturaDTE {
   direccionReceptor   String?
   comunaReceptor      String?
   ciudadReceptor      String?
-  montoExento         Int       @default(0)
-  montoNeto           Int       @default(0)
-  montoIVA            Int       @default(0)
-  montoIVARecuperable Int       @default(0)
-  montoTotal          Int       @default(0)
+  montoExento         Int              @default(0)
+  montoNeto           Int              @default(0)
+  montoIVA            Int              @default(0)
+  montoIVARecuperable Int              @default(0)
+  montoTotal          Int              @default(0)
   fuente              String?
-  tieneDetalle        Boolean   @default(false)
+  tieneDetalle        Boolean          @default(false)
   xmlRaw              String?
   rawJson             Json?
   sincronizadoAt      DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
   fechaVencimiento    DateTime?
+  items               FacturaDTEItem[]
 
   @@unique([empresaRut, tipoDTE, folio])
   @@index([empresaRut, fechaEmision])
@@ -966,20 +1692,21 @@ model FacturaDTE {
 }
 
 model FacturaDTEItem {
-  id             Int      @id @default(autoincrement())
+  id             Int        @id @default(autoincrement())
   facturaId      Int
   linea          Int?
   codigo         String?
   nombre         String
   descripcion    String?
-  cantidad       Decimal? @db.Decimal(18, 2)
+  cantidad       Decimal?   @db.Decimal(18, 2)
   unidadMedida   String?
-  precioUnitario Int      @default(0)
-  descuentoMonto Int      @default(0)
-  recargoMonto   Int      @default(0)
-  montoItem      Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime
+  precioUnitario Int        @default(0)
+  descuentoMonto Int        @default(0)
+  recargoMonto   Int        @default(0)
+  montoItem      Int        @default(0)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  factura        FacturaDTE @relation(fields: [facturaId], references: [id], onDelete: Cascade)
 
   @@index([facturaId])
 }
@@ -996,78 +1723,6 @@ model FacturaSyncLog {
   createdAt       DateTime @default(now())
 
   @@index([empresaRut, periodoAno, periodoMes, tipo])
-}
-
-model Firma {
-  id            Int      @id @default(autoincrement())
-  path          String
-  mimeType      String
-  size          Int
-  createdAt     DateTime @default(now())
-  solicitanteId Int?     @unique
-  tecnicoId     Int?     @unique
-  updatedAt     DateTime
-
-  @@index([solicitanteId])
-  @@index([tecnicoId])
-}
-
-model MantencionRemota {
-  id_mantencion   Int       @id @default(autoincrement())
-  empresaId       Int?
-  tecnicoId       Int?
-  solicitanteId   Int?
-  solicitante     String
-  inicio          DateTime
-  fin             DateTime?
-  soporteRemoto   Boolean   @default(true)
-  actualizaciones Boolean   @default(false)
-  antivirus       Boolean   @default(false)
-  ccleaner        Boolean   @default(false)
-  estadoDisco     Boolean   @default(false)
-  licenciaOffice  Boolean   @default(false)
-  licenciaWindows Boolean   @default(false)
-  optimizacion    Boolean   @default(false)
-  respaldo        Boolean   @default(false)
-  otros           Boolean   @default(false)
-  otrosDetalle    String?
-  status          String    @default("PENDIENTE")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime
-  deviceId        String?
-  deviceNombre    String?
-  duracionMinutos Int?
-  origen          String?   @default("MANUAL")
-  teamviewerId    String?   @unique
-
-  @@index([empresaId])
-  @@index([inicio])
-  @@index([tecnicoId])
-}
-
-model PasswordResetToken {
-  id        Int      @id @default(autoincrement())
-  token     String   @unique
-  tecnicoId Int
-  expiresAt DateTime
-  used      Boolean  @default(false)
-  createdAt DateTime @default(now())
-
-  @@index([tecnicoId])
-  @@index([token])
-}
-
-model ProcessedInboundEmail {
-  id              Int      @id @default(autoincrement())
-  sourceMessageId String   @unique
-  graphMessageId  String?
-  conversationId  String?
-  fromEmail       String?
-  subject         String?
-  ticketId        Int?
-  createdAt       DateTime @default(now())
-
-  @@index([ticketId])
 }
 
 model RCVConsulta {
@@ -1105,7 +1760,7 @@ model RCVResumen {
 }
 
 model RcvConciliacion {
-  id                 String    @id
+  id                 String    @id @default(cuid())
   empresaKey         String
   tipoRcv            String
   tipoDoc            String
@@ -1124,681 +1779,30 @@ model RcvConciliacion {
   responsable        String?
   conciliadoAt       DateTime?
   createdAt          DateTime  @default(now())
-  updatedAt          DateTime
+  updatedAt          DateTime  @updatedAt
 
   @@unique([empresaKey, tipoRcv, tipoDoc, rutContraparte, folio])
-  @@index([empresaKey, tipoRcv, estadoConciliacion])
   @@index([empresaKey, tipoRcv])
-}
-
-model ReporteGenerado {
-  id             Int      @id @default(autoincrement())
-  empresaId      Int?
-  empresaNombre  String
-  periodo        String
-  tipo           String
-  nombreArchivo  String
-  urlArchivo     String?
-  sharepointPath String?
-  generadoPorId  Int?
-  generadoPor    String?
-  estado         String   @default("GENERADO")
-  createdAt      DateTime @default(now())
-  storagePath    String?
-
-  @@index([empresaId, createdAt])
-  @@index([periodo])
-  @@index([tipo])
-}
-
-model ReporteIA {
-  id        Int      @id @default(autoincrement())
-  empresaId Int
-  periodo   String
-  contenido Json
-  createdAt DateTime @default(now())
-
-  @@unique([empresaId, periodo])
-}
-
-model Servidor {
-  id            Int      @id @default(autoincrement())
-  empresaId     Int
-  nombreUsuario String
-  contrasena    String
-  ipExterna     String
-  probado       Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  nombre        String
-  updatedAt     DateTime
-
-  @@index([empresaId])
-}
-
-model ServidorUsuario {
-  id            Int      @id @default(autoincrement())
-  servidorId    Int
-  usuario       String
-  contrasena    String
-  estado        String?
-  acceso        String?
-  equipo        String?
-  nombreUsuario String
-  solicitanteId Int?
-  tipo          String?
-  updatedAt     DateTime
-
-  @@index([servidorId])
-  @@index([solicitanteId])
-}
-
-model SiiApiCache {
-  id         Int      @id @default(autoincrement())
-  empresaKey String
-  rutEmpresa String
-  tipo       String
-  mes        String?
-  ano        String?
-  data       Json
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime
-
-  @@unique([empresaKey, tipo, mes, ano])
-  @@index([empresaKey])
-  @@index([rutEmpresa])
-  @@index([tipo])
-}
-
-model SiiApiRequestLog {
-  id         Int      @id @default(autoincrement())
-  empresaKey String?
-  rutEmpresa String?
-  endpoint   String
-  method     String   @default("GET")
-  status     Int?
-  ok         Boolean  @default(false)
-  error      String?
-  durationMs Int?
-  createdAt  DateTime @default(now())
-
-  @@index([createdAt])
-  @@index([empresaKey])
-  @@index([rutEmpresa])
-  @@index([status])
-}
-
-model SlaConfig {
-  id                   Int      @id @default(autoincrement())
-  priority             String   @unique
-  firstResponseMinutes Int
-  resolutionMinutes    Int
-  updatedAt            DateTime
-}
-
-model TeamViewerDeviceMap {
-  id            Int      @id @default(autoincrement())
-  deviceId      String   @unique
-  deviceNombre  String?
-  empresaId     Int?
-  solicitanteId Int?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime
-
-  @@index([empresaId])
-  @@index([solicitanteId])
-}
-
-model Ticket {
-  id              Int            @id @default(autoincrement())
-  empresaId       Int
-  requesterId     Int?
-  assigneeId      Int?
-  subject         String
-  status          TicketStatus   @default(NEW)
-  priority        TicketPriority @default(NORMAL)
-  channel         TicketChannel  @default(WEB)
-  fromEmail       String?
-  inboxEmail      String?
-  firstResponseAt DateTime?
-  resolvedAt      DateTime?
-  closedAt        DateTime?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime
-  lastActivityAt  DateTime       @default(now())
-  publicId        String         @unique
-  aiSummary       String?
-  rolAsignado     String?
-  deletedAt       DateTime?
-  lastReopenedAt  DateTime?
-
-  @@index([assigneeId])
-  @@index([createdAt])
-  @@index([empresaId])
-  @@index([status])
-}
-
-model TicketAttachment {
-  id          Int      @id @default(autoincrement())
-  messageId   Int
-  filename    String
-  mimeType    String
-  url         String
-  bytes       Int
-  createdAt   DateTime @default(now())
-  contentId   String?
-  isInline    Boolean  @default(false)
-  storagePath String?
-
-  @@index([contentId])
-  @@index([messageId])
-  @@index([storagePath])
-}
-
-model TicketEmailSignature {
-  id        Int      @id @default(autoincrement())
-  nombre    String   @default("Equipo de Soporte Técnico")
-  cargo     String   @default("Soporte Técnico")
-  area      String   @default("Asesorías RIDS Ltda.")
-  email     String   @default("soporte@rids.cl")
-  telefono  String?
-  sitioWeb1 String?
-  sitioWeb2 String?
-  imageUrl  String?
-  isEnabled Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime
-}
-
-model TicketEmailTemplate {
-  id          Int      @id @default(autoincrement())
-  key         String   @unique
-  name        String
-  subjectTpl  String
-  bodyHtmlTpl String
-  isEnabled   Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime
-}
-
-model TicketEvent {
-  id        Int             @id @default(autoincrement())
-  ticketId  Int
-  type      TicketEventType
-  oldValue  String?
-  newValue  String?
-  actorType TicketActorType
-  actorId   Int?
-  createdAt DateTime        @default(now())
-
-  @@index([ticketId])
-}
-
-model TicketMessage {
-  id               Int              @id @default(autoincrement())
-  ticketId         Int
-  direction        MessageDirection
-  isInternal       Boolean          @default(false)
-  bodyText         String?
-  bodyHtml         String?
-  fromEmail        String?
-  toEmail          String?
-  cc               String?
-  sourceMessageId  String?          @unique
-  sourceInReplyTo  String?
-  sourceReferences String?
-  createdAt        DateTime         @default(now())
-  graphMessageId   String?
-
-  @@index([createdAt])
-  @@index([graphMessageId])
-  @@index([ticketId])
-}
-
-model TicketSlaAlertLog {
-  id        Int      @id @default(autoincrement())
-  ticketId  Int
-  alertType String
-  createdAt DateTime @default(now())
-
-  @@unique([ticketId, alertType])
-  @@index([alertType])
-  @@index([ticketId])
-}
-
-model area_configs {
-  id          Int      @id @default(autoincrement())
-  nombre      String   @unique
-  mensajeBase String
-  firmaArea   String?
-  updatedAt   DateTime
-}
-
-model AnalisisInventarioIA {
-  id                        Int      @id @default(autoincrement())
-  empresaId                 Int
-  mes                       Int
-  ano                       Int
-  totalEquipos              Int      @default(0)
-  resumen                   String?
-  hallazgos                 Json?
-  riesgos                   Json?
-  recomendaciones           Json?
-  generadoPorId             Int?
-  createdAt                 DateTime @default(now())
-  updatedAt                 DateTime
-  resumenEstados            Json?
-  resumenEstadosAdicionales Json?
-  resumenTiposAdicionales   Json?
-  totalAdicionales          Int      @default(0)
-
-  @@unique([empresaId, mes, ano])
-  @@index([empresaId])
-  @@index([mes, ano])
-}
-
-model BitacoraTecnico {
-  id                       Int                   @id @default(autoincrement())
-  fecha                    DateTime              @default(now())
-  titulo                   String?
-  descripcion              String
-  tipoActividad            TipoBitacoraTecnico   @default(OTRO)
-  estado                   EstadoBitacoraTecnico @default(REGISTRADA)
-  tecnicoId                Int
-  empresaId                Int?
-  solicitanteId            Int?
-  ticketId                 Int?
-  trabajoId                Int?
-  visitaId                 Int?
-  mantencionId             Int?
-  equipoId                 Int?
-  cotizacionId             Int?
-  createdAt                DateTime              @default(now())
-  updatedAt                DateTime
-  recordatorioAt           DateTime?
-  recordatorioCompletado   Boolean               @default(false)
-  recordatorioCompletadoAt DateTime?
-  recordatorioNotificadoAt DateTime?
-
-  @@index([cotizacionId])
-  @@index([empresaId])
-  @@index([equipoId])
-  @@index([estado])
-  @@index([fecha])
-  @@index([mantencionId])
-  @@index([solicitanteId])
-  @@index([tecnicoId])
-  @@index([ticketId])
-  @@index([tipoActividad])
-  @@index([trabajoId])
-  @@index([visitaId])
-  @@index([recordatorioAt])
-  @@index([recordatorioCompletado])
-  @@index([recordatorioCompletado, recordatorioNotificadoAt, recordatorioAt])
-  @@index([recordatorioNotificadoAt])
-}
-
-model ManualTutorial {
-  id             Int                @id @default(autoincrement())
-  titulo         String
-  descripcion    String?
-  categoria      String
-  problema       String
-  solucion       String
-  tipo           TipoManualTutorial @default(MANUAL)
-  empresaId      Int
-  urlArchivo     String?
-  urlVideo       String?
-  plataforma     String
-  visibleCliente Boolean            @default(false)
-  activo         Boolean            @default(true)
-  creadoPorId    Int?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime
-
-  @@index([activo])
-  @@index([categoria])
-  @@index([empresaId])
-  @@index([tipo])
-  @@index([visibleCliente])
-}
-
-model ManualTutorialArchivo {
-  id            Int      @id @default(autoincrement())
-  manualId      Int
-  nombreArchivo String
-  urlArchivo    String
-  createdAt     DateTime @default(now())
-
-  @@index([manualId])
-}
-
-model EquipoAgenteEvento {
-  id        Int      @id @default(autoincrement())
-  equipoId  Int
-  tipo      String
-  mensaje   String?
-  metadata  Json?
-  createdAt DateTime @default(now())
-
-  @@index([createdAt])
-  @@index([equipoId])
-  @@index([tipo])
-}
-
-model EquipoSoftware {
-  id          Int       @id @default(autoincrement())
-  equipoId    Int
-  nombre      String
-  version     String?
-  publisher   String?
-  installDate DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime
-
-  @@unique([equipoId, nombre, version])
-  @@index([equipoId])
-  @@index([nombre])
-}
-
-model CotizacionMasivaEjecucion {
-  id                Int      @id @default(autoincrement())
-  plantillaId       Int
-  fecha             DateTime @default(now())
-  nombre            String?
-  totalCotizaciones Int      @default(0)
-
-  @@index([fecha])
-  @@index([plantillaId])
-}
-
-model CotizacionMasivaPlantilla {
-  id          Int      @id @default(autoincrement())
-  nombre      String
-  descripcion String?
-  activo      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime
-  tecnicoId   Int?
-
-  @@index([activo])
-  @@index([tecnicoId])
-}
-
-model CotizacionMasivaPlantillaCantidad {
-  id                 Int @id @default(autoincrement())
-  plantillaEntidadId Int
-  productoId         Int
-  cantidad           Int @default(1)
-
-  @@unique([plantillaEntidadId, productoId])
-  @@index([plantillaEntidadId])
-  @@index([productoId])
-}
-
-model CotizacionMasivaPlantillaEntidad {
-  id          Int @id @default(autoincrement())
-  plantillaId Int
-  entidadId   Int
-
-  @@unique([plantillaId, entidadId])
-  @@index([entidadId])
-  @@index([plantillaId])
-}
-
-model CotizacionMasivaPlantillaItem {
-  id          Int @id @default(autoincrement())
-  plantillaId Int
-  productoId  Int
-
-  @@unique([plantillaId, productoId])
-  @@index([plantillaId])
-  @@index([productoId])
-}
-
-model EquipoMantencion {
-  id               Int       @id @default(autoincrement())
-  equipoId         Int?
-  empresaId        Int?
-  solicitanteId    Int?
-  tecnicoId        Int?
-  tipo             String
-  estado           String
-  origen           String    @default("MANT_GENERAL_RIDS")
-  fechaInicio      DateTime
-  fechaFin         DateTime?
-  duracionSegundos Int?
-  duracionTexto    String?
-  tareasRealizadas Json      @default("[]")
-  tareasConError   Json      @default("[]")
-  resumen          String?
-  reporteTexto     String?
-  serial           String?
-  hostname         String?
-  usuarioActual    String?
-  localIp          String?
-  macAddress       String?
-  marca            String?
-  modelo           String?
-  agenteVersion    String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime
-
-  @@index([empresaId])
-  @@index([equipoId])
-  @@index([estado])
-  @@index([fechaInicio])
-  @@index([hostname])
-  @@index([macAddress])
-  @@index([origen])
-  @@index([serial])
-  @@index([solicitanteId])
-  @@index([tecnicoId])
-  @@index([tipo])
-}
-
-model CotizacionEnviada {
-  id            Int       @id @default(autoincrement())
-  cotizacionId  Int?
-  to            String?
-  subject       String?
-  sentBy        String?
-  jobId         String?
-  meta          Json?
-  clienteNombre String?
-  creadoPor     String?
-  fechaCreacion DateTime?
-  sentAt        DateTime  @default(now())
-
-  @@index([cotizacionId])
-  @@index([jobId])
-  @@index([sentAt])
-}
-
-model HistorialEtapaOportunidadVenta {
-  id            Int                    @id @default(autoincrement())
-  oportunidadId Int
-  etapaAnterior EtapaOportunidadVenta?
-  etapaNueva    EtapaOportunidadVenta
-  actorId       Int?
-  createdAt     DateTime               @default(now())
-
-  @@index([createdAt])
-  @@index([oportunidadId])
-}
-
-model OportunidadVenta {
-  id                        Int                        @id @default(autoincrement())
-  codigo                    String                     @unique
-  titulo                    String
-  entidadId                 Int?
-  proyecto                  String?
-  contactoNombre            String?
-  contactoEmail             String?
-  contactoTelefono          String?
-  responsableId             Int
-  etapa                     EtapaOportunidadVenta      @default(NUEVA)
-  prioridad                 PrioridadOportunidadVenta  @default(MEDIA)
-  montoEstimado             Decimal?                   @db.Decimal(14, 2)
-  moneda                    MonedaGestioo              @default(CLP)
-  probabilidadCierre        Int?
-  proximaAccion             String?
-  fechaProximaAccion        DateTime?
-  fechaUltimoContacto       DateTime?
-  observaciones             String?
-  motivoPerdida             String?
-  fechaCierre               DateTime?
-  montoFinal                Decimal?                   @db.Decimal(14, 2)
-  orden                     Int                        @default(0)
-  activo                    Boolean                    @default(true)
-  desactivadoAt             DateTime?
-  createdAt                 DateTime                   @default(now())
-  updatedAt                 DateTime
-  comentariosInternos       String?
-  condicionesEspeciales     String?
-  estadoDesarrolloPropuesta EstadoDesarrolloPropuesta?
-  fechaComprometidaEnvio    DateTime?                  @db.Date
-  informacionPendiente      String?
-  riesgoTecnico             RiesgoTecnicoOportunidad?
-  tipoServicio              TipoServicioOportunidad?
-  tipoServicioOtro          String?
-  montoPropuesto            Decimal?                   @db.Decimal(14, 2)
-  fechaEnvioPropuesta       DateTime?                  @db.Date
-  fechaVencimientoPropuesta DateTime?                  @db.Date
-  comentariosCliente        String?
-  objeciones                String?
-  versionPropuesta          String?
-  contrapropuestas          String?
-  ajustesSolicitados        String?
-  motivoPostergacion        String?
-  fechaReactivacion         DateTime?                  @db.Date
-  fechaProbableCierre       DateTime?                  @db.Date
-
-  @@index([activo])
-  @@index([entidadId])
-  @@index([etapa])
-  @@index([etapa, orden])
-  @@index([prioridad])
-  @@index([responsableId])
+  @@index([empresaKey, tipoRcv, estadoConciliacion])
 }
 
 model RcvVencimiento {
-  id               Int      @id @default(autoincrement())
-  empresaKey       String
-  tipoDoc          String
-  folio            String
-  fechaVencimiento DateTime
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime
+  id                Int      @id @default(autoincrement())
+  empresaKey        String
+  tipoDoc           String
+  folio             String
+  fechaVencimiento  DateTime
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  /// MANUAL | RCV | DTE_CACHE | DTE | DIAS_CREDITO | DUEMINT | LEGACY
+  origenVencimiento String   @default("LEGACY")
 
   @@unique([empresaKey, tipoDoc, folio])
   @@index([empresaKey])
-  @@index([fechaVencimiento])
-  @@index([folio])
   @@index([tipoDoc])
-}
-
-model Recordatorio {
-  id              Int                @id @default(autoincrement())
-  titulo          String
-  mensaje         String?
-  fechaProgramada DateTime
-  estado          EstadoRecordatorio @default(PENDIENTE)
-  origen          OrigenRecordatorio @default(MANUAL)
-  destinatarioId  Int
-  creadoPorId     Int?
-  bitacoraId      Int?
-  ticketId        Int?
-  cotizacionId    Int?
-  visitaId        Int?
-  equipoId        Int?
-  mantencionId    Int?
-  oportunidadId   Int?
-  leidoAt         DateTime?
-  notificadoAt    DateTime?
-  completadoAt    DateTime?
-  canceladoAt     DateTime?
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime
-
-  @@index([bitacoraId])
-  @@index([cotizacionId])
-  @@index([creadoPorId])
-  @@index([destinatarioId, estado, fechaProgramada])
-  @@index([destinatarioId])
-  @@index([equipoId])
-  @@index([estado])
-  @@index([fechaProgramada])
-  @@index([leidoAt])
-  @@index([mantencionId])
-  @@index([notificadoAt])
-  @@index([oportunidadId])
-  @@index([origen])
-  @@index([ticketId])
-  @@index([visitaId])
-}
-
-model SeguimientoOportunidadVenta {
-  id                 Int       @id @default(autoincrement())
-  oportunidadId      Int
-  autorId            Int
-  comentario         String
-  fechaContacto      DateTime?
-  proximaAccion      String?
-  fechaProximaAccion DateTime?
-  createdAt          DateTime  @default(now())
-
-  @@index([createdAt])
-  @@index([oportunidadId])
-}
-
-model empresa_alias_outlook {
-  id        Int      @id @default(autoincrement())
-  alias     String   @unique
-  empresaId Int
-  createdAt DateTime @default(now())
-
-  @@index([empresaId], map: "empresa_alias_outlook_empresaid_idx")
-}
-
-model Adicional {
-  id              Int                   @id @default(autoincrement())
-  nombre          String?
-  tipo            String
-  marca           String?
-  modelo          String?
-  serialAdicional String?               @unique
-  macAddress      String?
-  ipAddress       String?
-  hostname        String?
-  ubicacion       String?
-  descripcion     String?
-  cantidad        Int                   @default(1)
-  estado          EstadoEquipoAdicional @default(ASIGNADO)
-  origen          OrigenEquipoAdicional @default(MANUAL)
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime
-
-  @@index([estado])
-  @@index([ipAddress])
-  @@index([macAddress])
-  @@index([marca])
-  @@index([modelo])
-  @@index([origen])
-  @@index([tipo])
-}
-
-model AdicionalEquipo {
-  id          Int                   @id @default(autoincrement())
-  adicionalId Int
-  equipoId    Int
-  origen      OrigenEquipoAdicional @default(MANUAL)
-  observacion String?
-  createdAt   DateTime              @default(now())
-  updatedAt   DateTime
-
-  @@unique([adicionalId, equipoId])
-  @@index([adicionalId])
-  @@index([equipoId])
+  @@index([folio])
+  @@index([fechaVencimiento])
+  @@index([origenVencimiento])
 }
 
 model RcvCobranzaConfig {
@@ -1813,9 +1817,140 @@ model RcvCobranzaConfig {
   horaCobranza      String    @default("08:00")
   adjuntarPdf       Boolean   @default(true)
   createdAt         DateTime  @default(now())
-  updatedAt         DateTime
+  updatedAt         DateTime  @updatedAt
+  /// *
+  /// * Locks del scheduler.
+  /// * Evitan que dos instancias de Railway ejecuten
+  /// * el mismo proceso durante el mismo minuto.
   ultimaConsultaAt  DateTime?
   ultimoEnvioAt     DateTime?
+  ultimoRecoveryAt  DateTime?
+
+  @@index([activo])
+  @@index([envioAutomatico])
+}
+
+model ReceptorCobranza {
+  id             Int                        @id @default(autoincrement())
+  /// RUT del cliente/deudor.
+  /// Idealmente normalizado: 760159867
+  rut            String                     @unique
+  razonSocial    String?
+  /// Habilita este receptor para cobranza.
+  activo         Boolean                    @default(true)
+  recibeCobranza Boolean                    @default(true)
+  /// Condición de pago utilizada cuando el DTE
+  /// no contiene FchVenc.
+  diasCredito    Int?
+  /// Relación opcional si además es una Empresa real del CRM.
+  empresaId      Int?
+  /// RCV | CRM | MANUAL
+  origen         String                     @default("RCV")
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+  empresa        Empresa?                   @relation(fields: [empresaId], references: [id_empresa], onDelete: SetNull)
+  contactos      ReceptorCobranzaContacto[]
+
+  @@index([empresaId])
+  @@index([activo])
+  @@index([recibeCobranza])
+  @@index([origen])
+}
+
+model ReceptorCobranzaContacto {
+  id             Int              @id @default(autoincrement())
+  receptorId     Int
+  nombre         String?
+  email          String
+  activo         Boolean          @default(true)
+  recibeCobranza Boolean          @default(true)
+  principal      Boolean          @default(false)
+  /// MANUAL | CRM | RCV
+  origen         String           @default("MANUAL")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  receptor       ReceptorCobranza @relation(fields: [receptorId], references: [id], onDelete: Cascade)
+
+  @@unique([receptorId, email])
+  @@index([receptorId])
+  @@index([activo])
+  @@index([recibeCobranza])
+}
+
+model ReceptorFacturacion {
+  id             Int                           @id @default(autoincrement())
+  rut            String                        @unique
+  razonSocial    String?
+  activo         Boolean                       @default(true)
+  recibeFacturas Boolean                       @default(false)
+  empresaId      Int?
+  origen         String                        @default("RCV")
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
+  empresa        Empresa?                      @relation(fields: [empresaId], references: [id_empresa], onDelete: SetNull)
+  contactos      ReceptorFacturacionContacto[]
+
+  @@index([empresaId])
+  @@index([activo])
+  @@index([recibeFacturas])
+  @@index([origen])
+}
+
+model ReceptorFacturacionContacto {
+  id             Int                 @id @default(autoincrement())
+  receptorId     Int
+  nombre         String?
+  email          String
+  activo         Boolean             @default(true)
+  recibeFacturas Boolean             @default(true)
+  principal      Boolean             @default(false)
+  origen         String              @default("MANUAL")
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  receptor       ReceptorFacturacion @relation(fields: [receptorId], references: [id], onDelete: Cascade)
+
+  @@unique([receptorId, email])
+  @@index([receptorId])
+  @@index([activo])
+  @@index([recibeFacturas])
+}
+
+model RcvFacturaEnvioConfig {
+  id                Int       @id @default(autoincrement())
+  /// *
+  /// * econnet | rids
+  empresaKey        String    @unique
+  /// *
+  /// * Habilita el módulo para la empresa emisora.
+  activo            Boolean   @default(false)
+  /// *
+  /// * Permite consultar BaseAPI/SII si hace falta
+  /// * obtener el DTE/PDF.
+  consultaSiiActiva Boolean   @default(true)
+  /// *
+  /// * IMPORTANTE:
+  /// * Durante desarrollo debe quedar false.
+  /// * Cuando sea true, el scheduler podrá enviar
+  /// * automáticamente los registros preparados.
+  envioAutomatico   Boolean   @default(false)
+  /// *
+  /// * Hora prevista para buscar facturas nuevas.
+  horaConsulta      String    @default("07:30")
+  /// *
+  /// * Evita hacer catch-up de facturas demasiado antiguas.
+  /// * Ejemplo:
+  /// * una factura emitida hace 10 días puede enviarse,
+  /// * una de hace 8 meses no.
+  diasAntiguedadMax Int       @default(30)
+  /// *
+  /// * Adjuntar representación PDF del DTE.
+  adjuntarPdf       Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  horaEnvio         String    @default("08:00")
+  ultimaConsultaAt  DateTime?
+  ultimoEnvioAt     DateTime?
+  /// Última ejecución del proceso de recuperación/reintento.
   ultimoRecoveryAt  DateTime?
 
   @@index([activo])
@@ -1824,55 +1959,69 @@ model RcvCobranzaConfig {
 
 model RcvFacturaEnvio {
   id              Int       @id @default(autoincrement())
+  /// *
+  /// * Empresa que EMITE el DTE.
+  /// * econnet | rids
   empresaKey      String
+  /// *
+  /// * Por ahora solamente trabajaremos sobre RCV ventas.
   tipoRcv         String    @default("ventas")
+  /// *
+  /// * Identificación tributaria.
+  /// * Inicialmente:
+  /// * 33 = Factura Electrónica
+  /// * 34 = Factura Exenta Electrónica
   tipoDoc         String
   folio           String
+  /// *
+  /// * Cliente receptor.
+  /// * Siempre normalizado:
+  /// * 775530502
   rutContraparte  String
   razonSocial     String?
+  /// *
+  /// * Un registro por cada contacto que debe recibir
+  /// * la factura.
   emailDestino    String
   nombreDestino   String?
   asunto          String?
+  /// *
+  /// * Estados previstos:
+  /// * PENDIENTE
+  /// * PROCESANDO
+  /// * ENVIADO
+  /// * ERROR
+  /// * Se mantiene String para seguir el mismo patrón
+  /// * que RcvRecordatorioEnvio.
   estado          String    @default("PENDIENTE")
+  /// *
+  /// * true = generado por automatización.
   automatico      Boolean   @default(true)
+  /// *
+  /// * Snapshot financiero/documental al momento
+  /// * de preparar el envío.
   montoTotal      Int       @default(0)
   fechaEmision    DateTime?
+  /// *
+  /// * Control del worker.
   intentos        Int       @default(0)
   ultimoIntentoAt DateTime?
   procesandoAt    DateTime?
+  /// *
+  /// * Resultado final.
   enviadoAt       DateTime?
   error           String?
   createdAt       DateTime  @default(now())
-  updatedAt       DateTime
+  updatedAt       DateTime  @updatedAt
 
   @@unique([empresaKey, tipoRcv, tipoDoc, folio, rutContraparte, emailDestino])
-  @@index([createdAt])
   @@index([empresaKey])
-  @@index([enviadoAt])
-  @@index([estado])
-  @@index([folio])
   @@index([rutContraparte])
   @@index([tipoDoc])
-}
-
-model RcvFacturaEnvioConfig {
-  id                Int       @id @default(autoincrement())
-  empresaKey        String    @unique
-  activo            Boolean   @default(false)
-  consultaSiiActiva Boolean   @default(true)
-  envioAutomatico   Boolean   @default(false)
-  horaConsulta      String    @default("07:30")
-  diasAntiguedadMax Int       @default(30)
-  adjuntarPdf       Boolean   @default(true)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime
-  horaEnvio         String    @default("08:00")
-  ultimaConsultaAt  DateTime?
-  ultimoEnvioAt     DateTime?
-  ultimoRecoveryAt  DateTime?
-
-  @@index([activo])
-  @@index([envioAutomatico])
+  @@index([folio])
+  @@index([estado])
+  @@index([enviadoAt])
+  @@index([createdAt])
 }
 
 model RcvRecordatorioEnvio {
@@ -1895,90 +2044,1135 @@ model RcvRecordatorioEnvio {
   enviadoAt        DateTime?
   error            String?
   createdAt        DateTime  @default(now())
-  updatedAt        DateTime
+  updatedAt        DateTime  @updatedAt
   cicloVencimiento String
   intentos         Int       @default(0)
   procesandoAt     DateTime?
   ultimoIntentoAt  DateTime?
 
   @@unique([empresaKey, tipoRcv, tipoDoc, folio, rutContraparte, cicloVencimiento, tipoRecordatorio, emailDestino])
-  @@index([createdAt])
   @@index([empresaKey])
-  @@index([enviadoAt])
-  @@index([estado])
-  @@index([folio])
   @@index([rutContraparte])
+  @@index([folio])
+  @@index([estado])
+  @@index([enviadoAt])
+  @@index([createdAt])
 }
 
-model ReceptorCobranza {
-  id             Int      @id @default(autoincrement())
-  rut            String   @unique
-  razonSocial    String?
-  activo         Boolean  @default(true)
-  recibeCobranza Boolean  @default(true)
-  diasCredito    Int?
-  empresaId      Int?
-  origen         String   @default("RCV")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime
+model SiiApiRequestLog {
+  id         Int      @id @default(autoincrement())
+  empresaKey String?
+  rutEmpresa String?
+  endpoint   String
+  method     String   @default("GET")
+  status     Int?
+  ok         Boolean  @default(false)
+  error      String?
+  durationMs Int?
+  createdAt  DateTime @default(now())
 
-  @@index([activo])
+  @@index([empresaKey])
+  @@index([rutEmpresa])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model SiiApiCache {
+  id         Int      @id @default(autoincrement())
+  empresaKey String
+  rutEmpresa String
+  tipo       String
+  mes        String?
+  ano        String?
+  data       Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([empresaKey, tipo, mes, ano])
+  @@index([empresaKey])
+  @@index([rutEmpresa])
+  @@index([tipo])
+}
+
+model AnalisisInventarioIA {
+  id                        Int      @id @default(autoincrement())
+  empresaId                 Int
+  mes                       Int
+  ano                       Int
+  totalEquipos              Int      @default(0)
+  resumen                   String?
+  hallazgos                 Json?
+  riesgos                   Json?
+  recomendaciones           Json?
+  generadoPorId             Int?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  /// Snapshot del inventario al momento de generar el análisis.
+  resumenEstados            Json?
+  resumenEstadosAdicionales Json?
+  resumenTiposAdicionales   Json?
+  totalAdicionales          Int      @default(0)
+  empresa                   Empresa  @relation(fields: [empresaId], references: [id_empresa])
+  generadoPor               Tecnico? @relation(fields: [generadoPorId], references: [id_tecnico])
+
+  @@unique([empresaId, mes, ano])
   @@index([empresaId])
-  @@index([origen])
-  @@index([recibeCobranza])
+  @@index([mes, ano])
 }
 
-model ReceptorCobranzaContacto {
-  id             Int      @id @default(autoincrement())
-  receptorId     Int
-  nombre         String?
-  email          String
-  activo         Boolean  @default(true)
-  recibeCobranza Boolean  @default(true)
-  principal      Boolean  @default(false)
-  origen         String   @default("MANUAL")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime
+model ManualTutorial {
+  id             Int                     @id @default(autoincrement())
+  titulo         String
+  descripcion    String?
+  categoria      String
+  problema       String
+  solucion       String
+  tipo           TipoManualTutorial      @default(MANUAL)
+  empresaId      Int
+  urlArchivo     String?
+  urlVideo       String?
+  plataforma     String
+  visibleCliente Boolean                 @default(false)
+  activo         Boolean                 @default(true)
+  creadoPorId    Int?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  empresa        Empresa                 @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
+  creadoPor      Tecnico?                @relation(fields: [creadoPorId], references: [id_tecnico], onDelete: SetNull)
+  archivos       ManualTutorialArchivo[]
 
-  @@unique([receptorId, email])
-  @@index([activo])
-  @@index([receptorId])
-  @@index([recibeCobranza])
-}
-
-model ReceptorFacturacion {
-  id             Int      @id @default(autoincrement())
-  rut            String   @unique
-  razonSocial    String?
-  activo         Boolean  @default(true)
-  recibeFacturas Boolean  @default(false)
-  empresaId      Int?
-  origen         String   @default("RCV")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime
-
-  @@index([activo])
   @@index([empresaId])
-  @@index([origen])
-  @@index([recibeFacturas])
+  @@index([categoria])
+  @@index([tipo])
+  @@index([activo])
+  @@index([visibleCliente])
 }
 
-model ReceptorFacturacionContacto {
-  id             Int      @id @default(autoincrement())
-  receptorId     Int
-  nombre         String?
-  email          String
-  activo         Boolean  @default(true)
-  recibeFacturas Boolean  @default(true)
-  principal      Boolean  @default(false)
-  origen         String   @default("MANUAL")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime
+model BitacoraTecnico {
+  id                       Int                    @id @default(autoincrement())
+  fecha                    DateTime               @default(now())
+  titulo                   String?
+  descripcion              String
+  tipoActividad            TipoBitacoraTecnico    @default(OTRO)
+  estado                   EstadoBitacoraTecnico  @default(REGISTRADA)
+  tecnicoId                Int
+  empresaId                Int?
+  solicitanteId            Int?
+  ticketId                 Int?
+  trabajoId                Int?
+  visitaId                 Int?
+  mantencionId             Int?
+  equipoId                 Int?
+  cotizacionId             Int?
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+  /// Fecha y hora en la que debe mostrarse o enviarse el recordatorio.
+  recordatorioAt           DateTime?
+  /// Indica si el técnico ya completó o descartó el recordatorio.
+  recordatorioCompletado   Boolean                @default(false)
+  /// Fecha real en la que el recordatorio fue marcado como completado.
+  recordatorioCompletadoAt DateTime?
+  /// Evita que un proceso automático envíe el mismo aviso varias veces.
+  recordatorioNotificadoAt DateTime?
+  usaEtapas                Boolean                @default(false)
+  tecnico                  Tecnico                @relation(fields: [tecnicoId], references: [id_tecnico])
+  empresa                  Empresa?               @relation(fields: [empresaId], references: [id_empresa])
+  solicitante              Solicitante?           @relation(fields: [solicitanteId], references: [id_solicitante])
+  ticket                   Ticket?                @relation(fields: [ticketId], references: [id])
+  trabajo                  DetalleTrabajoGestioo? @relation(fields: [trabajoId], references: [id])
+  visita                   Visita?                @relation(fields: [visitaId], references: [id_visita])
+  mantencion               MantencionRemota?      @relation(fields: [mantencionId], references: [id_mantencion])
+  equipo                   Equipo?                @relation(fields: [equipoId], references: [id_equipo])
+  cotizacion               CotizacionGestioo?     @relation(fields: [cotizacionId], references: [id])
+  recordatorios            Recordatorio[]         @relation("BitacoraRecordatorios")
+  evidencias               BitacoraEvidencia[]
+  etapas                   BitacoraEtapa[]
+  aprobaciones             BitacoraAprobacion[]
+  eventos                  BitacoraEvento[]
 
-  @@unique([receptorId, email])
+  @@index([fecha])
+  @@index([tecnicoId])
+  @@index([empresaId])
+  @@index([solicitanteId])
+  @@index([ticketId])
+  @@index([trabajoId])
+  @@index([visitaId])
+  @@index([mantencionId])
+  @@index([equipoId])
+  @@index([cotizacionId])
+  @@index([estado])
+  @@index([tipoActividad])
+  @@index([recordatorioAt])
+  @@index([recordatorioCompletado])
+  @@index([recordatorioNotificadoAt])
+  @@index([recordatorioCompletado, recordatorioNotificadoAt, recordatorioAt])
+}
+
+model BitacoraEvidencia {
+  id            Int                    @id @default(autoincrement())
+  bitacoraId    Int
+  etapa         EtapaEvidenciaBitacora
+  tipo          TipoEvidenciaBitacora
+  nombre        String
+  mimeType      String
+  bytes         Int
+  url           String?
+  storagePath   String
+  publicId      String?                @unique
+  descripcion   String?
+  subidoPorId   Int
+  createdAt     DateTime               @default(now())
+  etapaId       Int?
+  bitacora      BitacoraTecnico        @relation(fields: [bitacoraId], references: [id], onDelete: Cascade)
+  etapaRegistro BitacoraEtapa?         @relation(fields: [etapaId], references: [id], onDelete: Cascade)
+  subidoPor     Tecnico                @relation("BitacoraEvidenciaSubidaPor", fields: [subidoPorId], references: [id_tecnico])
+
+  @@index([bitacoraId])
+  @@index([bitacoraId, etapa])
+  @@index([etapaId])
+  @@index([subidoPorId])
+  @@index([createdAt])
+}
+
+model BitacoraEtapa {
+  id               Int                  @id @default(autoincrement())
+  bitacoraId       Int
+  etapa            EtapaBitacora
+  estado           EstadoEtapaBitacora  @default(PENDIENTE)
+  titulo           String?
+  descripcion      String?
+  requiereRevision Boolean              @default(false)
+  iniciadoAt       DateTime?
+  completadoAt     DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  bitacora         BitacoraTecnico      @relation(fields: [bitacoraId], references: [id], onDelete: Cascade)
+  evidencias       BitacoraEvidencia[]
+  aprobaciones     BitacoraAprobacion[]
+  eventos          BitacoraEvento[]
+
+  @@unique([bitacoraId, etapa])
+  @@index([bitacoraId])
+  @@index([etapa])
+  @@index([estado])
+}
+
+model BitacoraAprobacion {
+  id                  Int                      @id @default(autoincrement())
+  bitacoraId          Int
+  etapaId             Int
+  estado              EstadoAprobacionBitacora @default(PENDIENTE)
+  solicitadoPorId     Int
+  aprobadorId         Int
+  comentarioSolicitud String?
+  comentarioRespuesta String?
+  solicitadoAt        DateTime                 @default(now())
+  respondidoAt        DateTime?
+  solicitudRevisionId String?
+  bitacora            BitacoraTecnico          @relation(fields: [bitacoraId], references: [id], onDelete: Cascade)
+  etapa               BitacoraEtapa            @relation(fields: [etapaId], references: [id], onDelete: Cascade)
+  solicitadoPor       Tecnico                  @relation("BitacoraAprobacionSolicitante", fields: [solicitadoPorId], references: [id_tecnico])
+  aprobador           Tecnico                  @relation("BitacoraAprobacionAprobador", fields: [aprobadorId], references: [id_tecnico])
+
+  @@index([bitacoraId])
+  @@index([etapaId])
+  @@index([etapaId, solicitudRevisionId])
+  @@index([solicitadoPorId])
+  @@index([aprobadorId, estado])
+  @@index([solicitadoAt])
+}
+
+model BitacoraEvento {
+  id          Int                @id @default(autoincrement())
+  bitacoraId  Int
+  etapaId     Int?
+  tipo        TipoEventoBitacora
+  actorId     Int?
+  descripcion String?
+  metadata    Json?
+  createdAt   DateTime           @default(now())
+  bitacora    BitacoraTecnico    @relation(fields: [bitacoraId], references: [id], onDelete: Cascade)
+  etapa       BitacoraEtapa?     @relation(fields: [etapaId], references: [id], onDelete: Cascade)
+  actor       Tecnico?           @relation("BitacoraEventoActor", fields: [actorId], references: [id_tecnico], onDelete: SetNull)
+
+  @@index([bitacoraId, createdAt])
+  @@index([etapaId])
+  @@index([actorId])
+  @@index([tipo])
+}
+
+model Recordatorio {
+  id              Int                  @id @default(autoincrement())
+  /// Texto principal mostrado en la campana global.
+  titulo          String
+  /// Información adicional del recordatorio.
+  mensaje         String?
+  /// Fecha y hora en la que debe activarse.
+  fechaProgramada DateTime
+  /// Estado actual del recordatorio.
+  estado          EstadoRecordatorio   @default(PENDIENTE)
+  /// Módulo desde el cual fue creado.
+  origen          OrigenRecordatorio   @default(MANUAL)
+  /// Técnico que recibirá el recordatorio.
+  destinatarioId  Int
+  /// Técnico que creó el recordatorio.
+  creadoPorId     Int?
+  /// Relaciones opcionales con registros del CRM.
+  bitacoraId      Int?
+  ticketId        Int?
+  cotizacionId    Int?
+  visitaId        Int?
+  equipoId        Int?
+  mantencionId    Int?
+  oportunidadId   Int?
+  /// Fecha en la que el usuario visualizó el aviso.
+  leidoAt         DateTime?
+  /// Fecha en la que el sistema envió la notificación.
+  notificadoAt    DateTime?
+  /// Fecha en la que el recordatorio fue completado.
+  completadoAt    DateTime?
+  /// Fecha en la que el recordatorio fue cancelado.
+  canceladoAt     DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  suscripcionId   Int?
+  destinatario    Tecnico              @relation("RecordatorioDestinatario", fields: [destinatarioId], references: [id_tecnico], onDelete: Cascade)
+  creadoPor       Tecnico?             @relation("RecordatorioCreador", fields: [creadoPorId], references: [id_tecnico], onDelete: SetNull)
+  bitacora        BitacoraTecnico?     @relation("BitacoraRecordatorios", fields: [bitacoraId], references: [id], onDelete: Cascade)
+  ticket          Ticket?              @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  cotizacion      CotizacionGestioo?   @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+  visita          Visita?              @relation(fields: [visitaId], references: [id_visita], onDelete: Cascade)
+  equipo          Equipo?              @relation(fields: [equipoId], references: [id_equipo], onDelete: Cascade)
+  suscripcion     SuscripcionContrato? @relation(fields: [suscripcionId], references: [id], onDelete: Cascade)
+
+  @@index([destinatarioId])
+  @@index([creadoPorId])
+  @@index([fechaProgramada])
+  @@index([estado])
+  @@index([origen])
+  @@index([leidoAt])
+  @@index([notificadoAt])
+  @@index([bitacoraId])
+  @@index([ticketId])
+  @@index([cotizacionId])
+  @@index([visitaId])
+  @@index([equipoId])
+  @@index([mantencionId])
+  @@index([oportunidadId])
+  @@index([suscripcionId])
+  @@index([destinatarioId, estado, fechaProgramada])
+}
+
+model ManualTutorialArchivo {
+  id            Int            @id @default(autoincrement())
+  manualId      Int
+  nombreArchivo String
+  urlArchivo    String
+  createdAt     DateTime       @default(now())
+  manual        ManualTutorial @relation(fields: [manualId], references: [id], onDelete: Cascade)
+
+  @@index([manualId])
+}
+
+model UbicacionTecnico {
+  id             Int      @id @default(autoincrement())
+  tecnicoId      Int
+  agendaId       Int?
+  latitud        Float
+  longitud       Float
+  precision      Float?
+  velocidad      Float?
+  estadoTracking String
+  createdAt      DateTime @default(now())
+
+  @@index([agendaId])
+  @@index([createdAt])
+  @@index([estadoTracking])
+  @@index([tecnicoId])
+}
+
+model CotizacionMasivaEjecucion {
+  id                Int                       @id @default(autoincrement())
+  plantillaId       Int
+  fecha             DateTime                  @default(now())
+  nombre            String?
+  totalCotizaciones Int                       @default(0)
+  plantilla         CotizacionMasivaPlantilla @relation(fields: [plantillaId], references: [id], onDelete: Cascade)
+
+  @@index([fecha])
+  @@index([plantillaId])
+}
+
+model CotizacionMasivaPlantilla {
+  id          Int                                @id @default(autoincrement())
+  nombre      String
+  descripcion String?
+  activo      Boolean                            @default(true)
+  createdAt   DateTime                           @default(now())
+  updatedAt   DateTime                           @updatedAt
+  tecnicoId   Int?
+  tecnico     Tecnico?                           @relation(fields: [tecnicoId], references: [id_tecnico], onDelete: SetNull)
+  items       CotizacionMasivaPlantillaItem[]
+  entidades   CotizacionMasivaPlantillaEntidad[]
+  ejecuciones CotizacionMasivaEjecucion[]
+
   @@index([activo])
-  @@index([receptorId])
-  @@index([recibeFacturas])
+  @@index([tecnicoId])
+}
+
+model CotizacionMasivaPlantillaCantidad {
+  id                 Int                              @id @default(autoincrement())
+  plantillaEntidadId Int
+  productoId         Int
+  cantidad           Int                              @default(1)
+  plantillaEntidad   CotizacionMasivaPlantillaEntidad @relation(fields: [plantillaEntidadId], references: [id], onDelete: Cascade)
+  producto           ProductoGestioo                  @relation(fields: [productoId], references: [id], onDelete: Restrict)
+
+  @@unique([plantillaEntidadId, productoId])
+  @@index([plantillaEntidadId])
+  @@index([productoId])
+}
+
+model CotizacionMasivaPlantillaEntidad {
+  id          Int                                 @id @default(autoincrement())
+  plantillaId Int
+  entidadId   Int
+  plantilla   CotizacionMasivaPlantilla           @relation(fields: [plantillaId], references: [id], onDelete: Cascade)
+  entidad     EntidadGestioo                      @relation(fields: [entidadId], references: [id], onDelete: Restrict)
+  cantidades  CotizacionMasivaPlantillaCantidad[]
+
+  @@unique([plantillaId, entidadId])
+  @@index([entidadId])
+  @@index([plantillaId])
+}
+
+model CotizacionMasivaPlantillaItem {
+  id          Int                       @id @default(autoincrement())
+  plantillaId Int
+  productoId  Int
+  plantilla   CotizacionMasivaPlantilla @relation(fields: [plantillaId], references: [id], onDelete: Cascade)
+  producto    ProductoGestioo           @relation(fields: [productoId], references: [id], onDelete: Restrict)
+
+  @@unique([plantillaId, productoId])
+  @@index([plantillaId])
+  @@index([productoId])
+}
+
+model OportunidadVenta {
+  id                        Int                              @id @default(autoincrement())
+  codigo                    String                           @unique
+  titulo                    String
+  entidadId                 Int?
+  proyecto                  String?
+  contactoNombre            String?
+  contactoEmail             String?
+  contactoTelefono          String?
+  responsableId             Int
+  etapa                     EtapaOportunidadVenta            @default(NUEVA)
+  prioridad                 PrioridadOportunidadVenta        @default(MEDIA)
+  montoEstimado             Decimal?                         @db.Decimal(14, 2)
+  moneda                    MonedaGestioo                    @default(CLP)
+  probabilidadCierre        Int?
+  proximaAccion             String?
+  fechaProximaAccion        DateTime?
+  fechaUltimoContacto       DateTime?
+  observaciones             String?
+  motivoPerdida             String?
+  fechaCierre               DateTime?
+  montoFinal                Decimal?                         @db.Decimal(14, 2)
+  orden                     Int                              @default(0)
+  activo                    Boolean                          @default(true)
+  desactivadoAt             DateTime?
+  createdAt                 DateTime                         @default(now())
+  updatedAt                 DateTime                         @updatedAt
+  comentariosInternos       String?
+  condicionesEspeciales     String?
+  estadoDesarrolloPropuesta EstadoDesarrolloPropuesta?
+  fechaComprometidaEnvio    DateTime?                        @db.Date
+  informacionPendiente      String?
+  riesgoTecnico             RiesgoTecnicoOportunidad?
+  tipoServicio              TipoServicioOportunidad?
+  tipoServicioOtro          String?
+  montoPropuesto            Decimal?                         @db.Decimal(14, 2)
+  fechaEnvioPropuesta       DateTime?                        @db.Date
+  fechaVencimientoPropuesta DateTime?                        @db.Date
+  comentariosCliente        String?
+  objeciones                String?
+  versionPropuesta          String?
+  contrapropuestas          String?
+  ajustesSolicitados        String?
+  motivoPostergacion        String?
+  fechaReactivacion         DateTime?                        @db.Date
+  fechaProbableCierre       DateTime?                        @db.Date
+  notas                     String?
+  entidad                   EntidadGestioo?                  @relation(fields: [entidadId], references: [id])
+  responsable               Tecnico                          @relation("ResponsableOportunidadVenta", fields: [responsableId], references: [id_tecnico])
+  historialEtapas           HistorialEtapaOportunidadVenta[]
+  seguimientos              SeguimientoOportunidadVenta[]
+  cotizaciones              CotizacionGestioo[]
+  mercadoPublicoOrigen      OportunidadMercadoPublico?       @relation("MercadoPublicoOportunidadVenta")
+  documentos                OportunidadDocumento[]
+  avisosFechas              OportunidadFechaAviso[]
+
+  @@index([etapa])
+  @@index([responsableId])
+  @@index([entidadId])
+  @@index([prioridad])
+  @@index([activo])
+  @@index([etapa, orden])
+}
+
+/// Aviso enviado al responsable por una fecha de la oportunidad (próxima acción,
+/// envío comprometido, vencimiento de propuesta, reactivación). El único evita
+/// repetir; si la fecha cambia, fechaObjetivo cambia y se vuelve a avisar.
+model OportunidadFechaAviso {
+  id            Int              @id @default(autoincrement())
+  oportunidadId Int
+  /// PROXIMA_ACCION | COMPROMISO_ENVIO | VENCIMIENTO_PROPUESTA | REACTIVACION
+  tipoFecha     String
+  fechaObjetivo DateTime
+  /// Días antes: 3 | 1 | 0
+  umbral        Int
+  destinatario  String
+  createdAt     DateTime         @default(now())
+  oportunidad   OportunidadVenta @relation(fields: [oportunidadId], references: [id], onDelete: Cascade)
+
+  @@unique([oportunidadId, tipoFecha, fechaObjetivo, umbral])
+  @@index([oportunidadId])
+  @@index([createdAt])
+}
+
+/// PDF adjunto a una oportunidad del funnel (propuesta, bases, orden de compra…).
+/// El archivo vive en Supabase Storage (bucket oportunidades-documentos).
+model OportunidadDocumento {
+  id            Int              @id @default(autoincrement())
+  oportunidadId Int
+  /// PROPUESTA | BASES | ORDEN_COMPRA | CONTRATO | OTRO
+  tipo          String           @default("OTRO")
+  nombre        String
+  descripcion   String?
+  mimeType      String
+  bytes         Int
+  storagePath   String           @unique
+  subidoPorId   Int?
+  createdAt     DateTime         @default(now())
+  oportunidad   OportunidadVenta @relation(fields: [oportunidadId], references: [id], onDelete: Cascade)
+  subidoPor     Tecnico?         @relation("OportunidadDocumentoSubidoPor", fields: [subidoPorId], references: [id_tecnico], onDelete: SetNull)
+
+  @@index([oportunidadId])
+  @@index([subidoPorId])
+}
+
+model HistorialEtapaOportunidadVenta {
+  id            Int                    @id @default(autoincrement())
+  oportunidadId Int
+  etapaAnterior EtapaOportunidadVenta?
+  etapaNueva    EtapaOportunidadVenta
+  actorId       Int?
+  createdAt     DateTime               @default(now())
+  nota          String?
+  oportunidad   OportunidadVenta       @relation(fields: [oportunidadId], references: [id], onDelete: Cascade)
+  actor         Tecnico?               @relation(fields: [actorId], references: [id_tecnico])
+
+  @@index([oportunidadId])
+  @@index([createdAt])
+}
+
+model SeguimientoOportunidadVenta {
+  id                 Int                          @id @default(autoincrement())
+  oportunidadId      Int
+  autorId            Int
+  comentario         String
+  fechaContacto      DateTime?
+  proximaAccion      String?
+  fechaProximaAccion DateTime?
+  createdAt          DateTime                     @default(now())
+  completadoAt       DateTime?
+  estado             EstadoSeguimientoOportunidad @default(PENDIENTE)
+  notaEstado         String?
+  oportunidad        OportunidadVenta             @relation(fields: [oportunidadId], references: [id], onDelete: Cascade)
+  autor              Tecnico                      @relation(fields: [autorId], references: [id_tecnico])
+
+  @@index([oportunidadId])
+  @@index([createdAt])
+}
+
+model PlantillaCorreo {
+  id            Int                 @id @default(autoincrement())
+  nombre        String
+  descripcion   String?
+  tipo          TipoPlantillaCorreo
+  storagePath   String?
+  nombreArchivo String?
+  mimeType      String?
+  bytes         Int?
+  htmlProcesado String?
+  activo        Boolean             @default(true)
+  creadoPorId   Int?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  uso           UsoPlantillaCorreo  @default(CONTENIDO)
+  creadoPor     Tecnico?            @relation(fields: [creadoPorId], references: [id_tecnico], onDelete: SetNull)
+
+  @@index([tipo])
+  @@index([activo])
+  @@index([creadoPorId])
+  @@index([createdAt])
+  @@index([uso])
+}
+
+model EmpresaFavoritaTecnico {
+  id        Int      @id @default(autoincrement())
+  tecnicoId Int
+  empresaId Int
+  origen    String   @default("RIDS") @db.VarChar(16)
+  createdAt DateTime @default(now())
+
+  @@unique([tecnicoId, origen, empresaId])
+  @@index([origen, empresaId])
+  @@index([tecnicoId])
+}
+
+model OportunidadMercadoPublico {
+  id                   Int                             @id @default(autoincrement())
+  codigoExterno        String                          @unique
+  nombre               String
+  descripcion          String?
+  codigoEstado         Int?
+  estadoMercadoPublico String?
+  tipoLicitacion       String?
+  fechaPublicacion     DateTime?
+  fechaCierre          DateTime?
+  moneda               String?
+  montoEstimado        Decimal?                        @db.Decimal(18, 2)
+  organismoCodigo      String?
+  organismoNombre      String
+  organismoRut         String?
+  unidadCodigo         String?
+  unidadNombre         String?
+  unidadDireccion      String?
+  unidadComuna         String?
+  unidadRegion         String?
+  contactoNombre       String?
+  contactoCargo        String?
+  contactoEmail        String?
+  contactoTelefono     String?
+  score                Int                             @default(0)
+  nivelAfinidad        NivelAfinidadMercadoPublico     @default(BAJA)
+  coincidencias        String[]                        @default([])
+  estado               EstadoOportunidadMercadoPublico @default(NUEVA)
+  entidadId            Int?
+  oportunidadVentaId   Int?                            @unique
+  convertidoPorId      Int?
+  convertidoAt         DateTime?
+  rawJson              Json?
+  sincronizadoAt       DateTime                        @default(now())
+  createdAt            DateTime                        @default(now())
+  updatedAt            DateTime                        @updatedAt
+  entidad              EntidadGestioo?                 @relation("MercadoPublicoEntidad", fields: [entidadId], references: [id], onDelete: SetNull)
+  oportunidadVenta     OportunidadVenta?               @relation("MercadoPublicoOportunidadVenta", fields: [oportunidadVentaId], references: [id], onDelete: SetNull)
+  convertidoPor        Tecnico?                        @relation("MercadoPublicoConvertidoPor", fields: [convertidoPorId], references: [id_tecnico], onDelete: SetNull)
+  hitos                LicitacionHito[]
+
+  @@index([estado])
+  @@index([score])
+  @@index([nivelAfinidad])
+  @@index([organismoRut])
+  @@index([organismoCodigo])
+  @@index([fechaPublicacion])
+  @@index([fechaCierre])
+  @@index([entidadId])
+  @@index([convertidoPorId])
+}
+
+/// Fecha clave de una licitación de Mercado Público.
+/// origen API: la sincronización la crea y actualiza. MANUAL: solo la edita el usuario.
+/// Independiente de Recordatorio y del resumen de pendientes.
+model LicitacionHito {
+  id                          Int                       @id @default(autoincrement())
+  oportunidadMercadoPublicoId Int
+  /// CIERRE | FINAL_PREGUNTAS | PUBLICACION_RESPUESTAS | APERTURA_TECNICA | APERTURA_ECONOMICA | ADJUDICACION | VISITA_TERRENO | ENTREGA_ANTECEDENTES | OTRO
+  tipo                        String
+  /// Texto libre (obligatorio en hitos MANUAL de tipo OTRO)
+  descripcion                 String?
+  /// Fecha y hora del hito (hora de Chile convertida a UTC)
+  fecha                       DateTime
+  /// API | MANUAL
+  origen                      String                    @default("API")
+  /// false = la API ya no informa este hito o el usuario lo desactivó; no genera avisos
+  activo                      Boolean                   @default(true)
+  createdAt                   DateTime                  @default(now())
+  updatedAt                   DateTime                  @updatedAt
+  oportunidadMercadoPublico   OportunidadMercadoPublico @relation(fields: [oportunidadMercadoPublicoId], references: [id], onDelete: Cascade)
+  avisos                      LicitacionHitoAviso[]
+
+  @@index([oportunidadMercadoPublicoId])
+  @@index([oportunidadMercadoPublicoId, tipo])
+  @@index([fecha])
+  @@index([activo])
+}
+
+/// Registro de cada aviso enviado por un hito. El único evita repetir un aviso;
+/// si la fecha del hito cambia (prórroga), fechaObjetivo cambia y se vuelve a avisar.
+model LicitacionHitoAviso {
+  id            Int            @id @default(autoincrement())
+  hitoId        Int
+  fechaObjetivo DateTime
+  /// Días antes del hito: 7 | 3 | 1 | 0
+  umbral        Int
+  destinatarios String[]       @default([])
+  /// ENVIADO | ERROR
+  estado        String         @default("ENVIADO")
+  error         String?
+  createdAt     DateTime       @default(now())
+  hito          LicitacionHito @relation(fields: [hitoId], references: [id], onDelete: Cascade)
+
+  @@unique([hitoId, fechaObjetivo, umbral])
+  @@index([hitoId])
+  @@index([createdAt])
+}
+
+model LeypdElemento {
+  id               Int       @id @default(autoincrement())
+  empresaId        Int
+  numero           Int
+  /// NO_INICIADO | EN_PROGRESO | IMPLEMENTADO | NO_APLICA
+  estado           String    @default("NO_INICIADO")
+  responsable      String?
+  fechaCompromiso  DateTime? @db.Date
+  evidencia        String?
+  observaciones    String?
+  actualizadoPorId Int?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  empresa          Empresa   @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
+  actualizadoPor   Tecnico?  @relation(fields: [actualizadoPorId], references: [id_tecnico], onDelete: SetNull)
+
+  @@unique([empresaId, numero])
+  @@index([empresaId])
+  @@index([numero])
+  @@index([estado])
+  @@index([fechaCompromiso])
+  @@index([actualizadoPorId])
+}
+
+model LeypdFicha {
+  id                         Int       @id @default(autoincrement())
+  empresaId                  Int       @unique
+  ///
+  /// Estructura:
+  ///
+  /// {
+  /// "campo": {
+  /// "valor": "...",
+  /// "fuente": "CRM | RIDS | CLIENTE_PORTAL | ENLACE_PUBLICO",
+  /// "confirmado": true,
+  /// "actualizadoPor": "...",
+  /// "fecha": "..."
+  /// }
+  /// }
+  ///
+  datos                      Json      @default("{}")
+  tokenHash                  String?   @unique @db.VarChar(64)
+  tokenExpiresAt             DateTime?
+  tokenRevokedAt             DateTime?
+  enlaceCreadoAt             DateTime?
+  respondidoAt               DateTime?
+  respondidoPor              String?
+  fuenteRespuesta            String?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+  nombreRespondienteBorrador String?
+  empresa                    Empresa   @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
+
+  @@index([respondidoAt])
+  @@index([tokenExpiresAt])
+}
+
+model LeypdActualizacion {
+  id            Int       @id @default(autoincrement())
+  /// PENDIENTE | EJECUTANDO | COMPLETADO | ERROR | CANCELADO
+  estado        String    @default("PENDIENTE")
+  pasoActual    Int       @default(0)
+  totalPasos    Int?
+  progreso      Int       @default(0)
+  mensaje       String?
+  error         String?
+  iniciadoPorId Int?
+  iniciadoAt    DateTime?
+  terminadoAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  empresaId     Int?
+  iniciadoPor   Tecnico?  @relation(fields: [iniciadoPorId], references: [id_tecnico], onDelete: SetNull)
+  empresa       Empresa?  @relation(fields: [empresaId], references: [id_empresa], onDelete: SetNull)
+
+  @@index([estado])
+  @@index([createdAt])
+  @@index([iniciadoPorId])
+  @@index([empresaId])
+}
+
+/// Último archivo que el worker subió a la carpeta LEYPD de cada empresa.
+/// Permite no subir una versión nueva si el contenido no cambió.
+model LeypdDocumentoGenerado {
+  id        Int      @id @default(autoincrement())
+  empresaId Int
+  /// Ruta relativa a la carpeta LEYPD, p. ej. "01 Política de Privacidad/01 Politica_Privacidad_NORMEN.docx"
+  ruta      String
+  /// driveItem de Microsoft Graph
+  itemId    String
+  /// sha256 del contenido sin metadatos ni fecha del día
+  huella    String   @db.VarChar(64)
+  /// cTag que devolvió SharePoint al subir: si cambia, alguien modificó el archivo
+  cTag      String?
+  subidoAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  empresa   Empresa  @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
+
+  @@unique([empresaId, ruta])
+  @@index([empresaId])
+}
+
+model LeypdSitioRevision {
+  id                Int       @id @default(autoincrement())
+  empresaId         Int
+  dominio           String
+  /// Lo que detectó la revisión automática (SSL, banner, servicios, formularios…)
+  datos             Json
+  /// Último día en que el sitio respondió
+  respondioAt       DateTime  @db.Date
+  /// Primer día sin respuesta desde la última vez que respondió (null = responde)
+  sinRespuestaDesde DateTime? @db.Date
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  empresa           Empresa   @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
+
+  @@unique([empresaId, dominio])
+  @@index([empresaId])
+}
+
+model LeypdSharepoint {
+  id              Int       @id @default(autoincrement())
+  empresaId       Int       @unique
+  /// IDs de Microsoft Graph. No cambian si la carpeta se renombra o se mueve.
+  driveId         String
+  carpetaItemId   String
+  carpetaNombre   String
+  carpetaWebUrl   String
+  checklistItemId String?
+  checklistNombre String?
+  checklistWebUrl String?
+  /// { "1": { existe, itemId, webUrl, documentos[], faltantes[], opcionalesFaltantes[] }, ... }
+  elementos       Json      @default("{}")
+  sincronizadoAt  DateTime?
+  ultimoError     String?
+  vinculadoPorId  Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  empresa         Empresa   @relation(fields: [empresaId], references: [id_empresa], onDelete: Cascade)
+
+  @@index([sincronizadoAt])
+}
+
+model CampaniaProteccionDatos {
+  id                          Int                           @id @default(autoincrement())
+  nombre                      String
+  descripcion                 String?
+  tituloDocumento             String
+  versionDocumento            String
+  contenidoHtml               String
+  documentoHash               String                        @db.VarChar(64)
+  configuracionConsentimiento Json?
+  asuntoCorreo                String
+  cuerpoCorreoHtml            String
+  estado                      EstadoCampaniaProteccionDatos @default(BORRADOR)
+  fechaInicio                 DateTime?
+  fechaFin                    DateTime?
+  fechaEnvioInicial           DateTime?
+  creadoPorId                 Int?
+  createdAt                   DateTime                      @default(now())
+  updatedAt                   DateTime                      @updatedAt
+  empresaId                   Int?
+  leypdElementoNumero         Int?
+  origen                      String                        @default("GENERAL")
+  empresa                     Empresa?                      @relation(fields: [empresaId], references: [id_empresa], onDelete: SetNull)
+  creadoPor                   Tecnico?                      @relation(fields: [creadoPorId], references: [id_tecnico], onDelete: SetNull)
+  destinatarios               ConsentimientoDatos[]
+
+  @@index([empresaId])
+  @@index([estado])
+  @@index([creadoPorId])
+  @@index([createdAt])
+  @@index([fechaInicio])
+  @@index([origen])
+  @@index([empresaId, origen])
+  @@index([empresaId, origen, leypdElementoNumero])
+}
+
+model ConsentimientoDatos {
+  id                      Int                         @id @default(autoincrement())
+  campaniaId              Int
+  solicitanteId           Int?
+  empresaId               Int?
+  nombre                  String?
+  email                   String
+  empresaNombre           String?
+  tokenHash               String?                     @unique @db.VarChar(64)
+  tokenExpiresAt          DateTime?
+  estado                  EstadoConsentimientoDatos   @default(PENDIENTE)
+  fechaEnvio              DateTime?
+  fechaAperturaFormulario DateTime?
+  fechaRespuesta          DateTime?
+  fechaRevocacion         DateTime?
+  aceptado                Boolean?
+  versionDocumento        String
+  documentoHash           String                      @db.VarChar(64)
+  snapshotDocumentoHtml   String
+  respuestaJson           Json?
+  ipRespuesta             String?
+  userAgent               String?
+  evidenciaPath           String?
+  createdAt               DateTime                    @default(now())
+  updatedAt               DateTime                    @updatedAt
+  campania                CampaniaProteccionDatos     @relation(fields: [campaniaId], references: [id], onDelete: Restrict)
+  solicitante             Solicitante?                @relation(fields: [solicitanteId], references: [id_solicitante], onDelete: SetNull)
+  empresa                 Empresa?                    @relation(fields: [empresaId], references: [id_empresa], onDelete: SetNull)
+  eventos                 ConsentimientoDatosEvento[]
+
+  @@unique([campaniaId, email])
+  @@index([campaniaId])
+  @@index([solicitanteId])
+  @@index([empresaId])
+  @@index([estado])
+  @@index([email])
+  @@index([fechaEnvio])
+  @@index([fechaRespuesta])
+  @@index([createdAt])
+}
+
+model ConsentimientoDatosEvento {
+  id               Int                           @id @default(autoincrement())
+  consentimientoId Int
+  tipo             TipoEventoConsentimientoDatos
+  detalle          Json?
+  ip               String?
+  userAgent        String?
+  createdAt        DateTime                      @default(now())
+  consentimiento   ConsentimientoDatos           @relation(fields: [consentimientoId], references: [id], onDelete: Cascade)
+
+  @@index([consentimientoId])
+  @@index([tipo])
+  @@index([createdAt])
+  @@index([consentimientoId, createdAt])
+}
+
+enum EstadoCampaniaProteccionDatos {
+  BORRADOR
+  ACTIVA
+  FINALIZADA
+  CANCELADA
+}
+
+enum EstadoConsentimientoDatos {
+  PENDIENTE
+  ENVIADO
+  ERROR_ENVIO
+  ACEPTADO
+  RECHAZADO
+  REVOCADO
+  EXPIRADO
+}
+
+enum TipoEventoConsentimientoDatos {
+  CREADO
+  ENVIADO
+  ERROR_ENVIO
+  FORMULARIO_ABIERTO
+  ACEPTADO
+  RECHAZADO
+  REVOCADO
+  REENVIADO
+  DOCUMENTO_ABIERTO
+  COMPROBANTE_ENVIADO
+}
+
+enum EstadoSeguimientoOportunidad {
+  PENDIENTE
+  COMPLETADA
+  CANCELADA
+}
+
+enum EstadoOportunidadMercadoPublico {
+  NUEVA
+  INTERESANTE
+  DESCARTADA
+  CONVERTIDA
+}
+
+enum NivelAfinidadMercadoPublico {
+  BAJA
+  MEDIA
+  ALTA
+  MUY_ALTA
+}
+
+enum TipoPlantillaCorreo {
+  HTML
+  IMAGEN
+}
+
+enum TipoBitacoraTecnico {
+  SOPORTE
+  TERRENO
+  REMOTO
+  TALLER
+  INTERNO
+  ADMINISTRATIVO
+  REUNION
+  OTRO
+  INSTALACION
+}
+
+enum EstadoBitacoraTecnico {
+  REGISTRADA
+  REVISADA
+  ANULADA
+  PENDIENTE_APROBACION
+  APROBADA
+  EN_PROCESO
+  PENDIENTE_CIERRE
+  CERRADA
+  RECHAZADA
+}
+
+enum EstadoAprobacionBitacora {
+  PENDIENTE
+  APROBADA
+  RECHAZADA
+  CANCELADA
+}
+
+enum EtapaEvidenciaBitacora {
+  ANTES
+  EN_PROCESO
+  DESPUES
+}
+
+enum TipoEvidenciaBitacora {
+  IMAGEN
+  VIDEO
+}
+
+enum EtapaBitacora {
+  ANTES
+  EN_PROCESO
+  DESPUES
+}
+
+enum EstadoEtapaBitacora {
+  PENDIENTE
+  EN_PROCESO
+  PENDIENTE_REVISION
+  APROBADA
+  RECHAZADA
+  COMPLETADA
+}
+
+enum TipoEventoBitacora {
+  CREADA
+  ETAPA_INICIADA
+  ETAPA_ACTUALIZADA
+  ETAPA_COMPLETADA
+  EVIDENCIA_AGREGADA
+  EVIDENCIA_ELIMINADA
+  REVISION_SOLICITADA
+  REVISION_APROBADA
+  REVISION_RECHAZADA
+  REVISION_CANCELADA
+  BITACORA_CERRADA
+  BITACORA_ANULADA
+}
+
+enum TipoManualTutorial {
+  MANUAL
+  VIDEO
+  GUIA
+  PROCEDIMIENTO
+}
+
+enum TipoAgenda {
+  SEMANA
+  SABADO
+}
+
+enum EstadoAgenda {
+  PROGRAMADA
+  NOTIFICADA
+  COMPLETADA
+  CANCELADA
+  EN_RUTA
+  INICIADA
+}
+
+enum EstadoDTE {
+  EMITIDO
+  RECIBIDO
+  ACEPTADO
+  RECHAZADO
+  OBSERVADO
+  ANULADO
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+enum TicketChannel {
+  WEB
+  EMAIL
+  API
+}
+
+enum TicketStatus {
+  NEW
+  OPEN
+  PENDING
+  ON_HOLD
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum TicketEventType {
+  STATUS_CHANGED
+  ASSIGNED
+  PRIORITY_CHANGED
+  CREATED
+  CLOSED
+  REOPENED
+  MESSAGE_SENT
+  INTERNAL_NOTE
+}
+
+enum TicketActorType {
+  REQUESTER
+  AGENT
+  SYSTEM
 }
 
 enum MonedaGestioo {
@@ -2029,6 +3223,15 @@ enum AreaGestioo {
   SALIDA
 }
 
+enum DestinoEquipoTaller {
+  SIN_DEFINIR
+  VENTA
+  RIDS
+  CLIENTE
+  BAJA
+  VENTA_EMPRESA
+}
+
 enum PrioridadGestioo {
   BAJA
   NORMAL
@@ -2046,6 +3249,12 @@ enum EstadoCotizacionGestioo {
   APROBADA
   RECHAZADA
   FACTURADA
+}
+
+enum EstadoFactura {
+  PENDIENTE
+  PAGADA
+  ANULADA
 }
 
 enum TipoCotizacionGestioo {
@@ -2087,95 +3296,6 @@ enum TipoEquipo {
   OTRO
 }
 
-enum AuditAction {
-  CREATE
-  UPDATE
-  DELETE
-}
-
-enum EstadoAgenda {
-  PROGRAMADA
-  NOTIFICADA
-  COMPLETADA
-  CANCELADA
-  EN_RUTA
-  INICIADA
-}
-
-enum OrigenVisita {
-  MANUAL
-  AGENDA
-}
-
-enum EstadoDTE {
-  EMITIDO
-  RECIBIDO
-  ACEPTADO
-  RECHAZADO
-  OBSERVADO
-  ANULADO
-}
-
-enum EstadoFactura {
-  PENDIENTE
-  PAGADA
-  ANULADA
-}
-
-enum MessageDirection {
-  INBOUND
-  OUTBOUND
-}
-
-enum OrigenTrabajo {
-  INDEPENDIENTE
-  DESDE_COTIZACION
-}
-
-enum TicketActorType {
-  REQUESTER
-  AGENT
-  SYSTEM
-}
-
-enum TicketChannel {
-  WEB
-  EMAIL
-  API
-}
-
-enum TicketEventType {
-  STATUS_CHANGED
-  ASSIGNED
-  PRIORITY_CHANGED
-  CREATED
-  CLOSED
-  REOPENED
-  MESSAGE_SENT
-  INTERNAL_NOTE
-}
-
-enum TicketPriority {
-  LOW
-  NORMAL
-  HIGH
-  URGENT
-}
-
-enum TicketStatus {
-  NEW
-  OPEN
-  PENDING
-  ON_HOLD
-  RESOLVED
-  CLOSED
-}
-
-enum TipoAgenda {
-  SEMANA
-  SABADO
-}
-
 enum EstadoEquipo {
   ACTIVO
   EN_STOCK
@@ -2185,37 +3305,9 @@ enum EstadoEquipo {
   EN_TALLER_EXTERNO
 }
 
-enum DestinoEquipoTaller {
-  SIN_DEFINIR
-  VENTA
-  RIDS
-  CLIENTE
-  BAJA
-  VENTA_EMPRESA
-}
-
-enum EstadoBitacoraTecnico {
-  REGISTRADA
-  REVISADA
-  ANULADA
-}
-
-enum TipoBitacoraTecnico {
-  SOPORTE
-  TERRENO
-  REMOTO
-  TALLER
-  INTERNO
-  ADMINISTRATIVO
-  REUNION
-  OTRO
-}
-
-enum TipoManualTutorial {
-  MANUAL
-  VIDEO
-  GUIA
-  PROCEDIMIENTO
+enum OrigenTrabajo {
+  INDEPENDIENTE
+  DESDE_COTIZACION
 }
 
 enum EstadoAgenteEquipo {
@@ -2226,20 +3318,15 @@ enum EstadoAgenteEquipo {
   CRITICO
 }
 
-enum EstadoDesarrolloPropuesta {
-  PENDIENTE
-  EN_PREPARACION
-  ESPERANDO_ANTECEDENTES
-  REVISION_INTERNA
-  LISTA_PARA_COTIZAR
+enum OrigenVisita {
+  MANUAL
+  AGENDA
 }
 
-enum EstadoRecordatorio {
-  PENDIENTE
-  COMPLETADO
-  CANCELADO
-}
-
+/// *
+/// * =========================================================
+/// * FUNNEL COMERCIAL — OPORTUNIDADES DE VENTA
+/// * =========================================================
 enum EtapaOportunidadVenta {
   NUEVA
   COTIZACION_PREPARACION
@@ -2250,15 +3337,6 @@ enum EtapaOportunidadVenta {
   POSTERGADA
 }
 
-enum OrigenRecordatorio {
-  MANUAL
-  BITACORA
-  TICKET
-  COTIZACION
-  VISITA
-  EQUIPO
-}
-
 enum PrioridadOportunidadVenta {
   BAJA
   MEDIA
@@ -2266,10 +3344,12 @@ enum PrioridadOportunidadVenta {
   URGENTE
 }
 
-enum RiesgoTecnicoOportunidad {
-  BAJO
-  MEDIO
-  ALTO
+enum EstadoDesarrolloPropuesta {
+  PENDIENTE
+  EN_PREPARACION
+  ESPERANDO_ANTECEDENTES
+  REVISION_INTERNA
+  LISTA_PARA_COTIZAR
 }
 
 enum TipoServicioOportunidad {
@@ -2279,6 +3359,35 @@ enum TipoServicioOportunidad {
   OTRO
 }
 
+enum RiesgoTecnicoOportunidad {
+  BAJO
+  MEDIO
+  ALTO
+}
+
+/// Módulo desde el cual fue creado el recordatorio.
+enum OrigenRecordatorio {
+  MANUAL
+  BITACORA
+  TICKET
+  COTIZACION
+  VISITA
+  EQUIPO
+  SUSCRIPCION
+}
+
+/// Estado funcional del recordatorio.
+enum EstadoRecordatorio {
+  PENDIENTE
+  COMPLETADO
+  CANCELADO
+}
+
+enum OrigenEquipoAdicional {
+  MANUAL
+  AGENTE
+}
+
 enum EstadoEquipoAdicional {
   ASIGNADO
   EN_STOCK
@@ -2286,7 +3395,7 @@ enum EstadoEquipoAdicional {
   DADO_DE_BAJA
 }
 
-enum OrigenEquipoAdicional {
-  MANUAL
-  AGENTE
+enum UsoPlantillaCorreo {
+  CONTENIDO
+  FIRMA
 }

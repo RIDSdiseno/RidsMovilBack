@@ -880,7 +880,7 @@ function mapAgendaAsignada(
     nombre: string;
     razonSocial: string | null;
     detalleEmpresa: {
-      rut: string;
+      rut: string | null;          // ← antes: string
       direccion: string | null;
       direcciones: Prisma.JsonValue | null;
     } | null;

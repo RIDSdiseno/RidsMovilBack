@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // src/routes/auth.routes.ts
 const express_1 = require("express");
 const auth_controller_1 = require("../controllers/auth.controller");
+const visitas_pendientes_controller_1 = require("../controllers/visitas-pendientes.controller");
 const auth_middleware_1 = require("../middlewares/auth.middleware");
 const empresas_favoritas_controller_1 = require("../controllers/empresas-favoritas.controller");
 const r = (0, express_1.Router)();
@@ -38,6 +39,7 @@ r.post("/ubicaciones", auth_middleware_1.authGuard, auth_controller_1.registrarU
 r.post("/crear_visita", auth_middleware_1.authGuard, auth_controller_1.crearVisita);
 r.put("/finalizar_visita/:id", auth_middleware_1.authGuard, auth_controller_1.completarVisita);
 r.put("/cancelar_visita/:id", auth_middleware_1.authGuard, auth_controller_1.cancelarVisita);
+r.get("/visitas/pendientes", auth_middleware_1.authGuard, visitas_pendientes_controller_1.listarVisitasPendientes);
 r.post('/createSolicitante', auth_middleware_1.authGuard, auth_controller_1.createSolicitante);
 // Rutas Sucursales
 r.post('/sucursales', auth_middleware_1.authGuard, auth_controller_1.crearSucursal);

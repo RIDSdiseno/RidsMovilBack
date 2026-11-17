@@ -1531,13 +1531,32 @@ const cancelarVisita = async (req, res) => {
         }
         const visita = await prisma_js_1.prisma.visita.findUnique({
             where: { id_visita: visitaId },
-            select: { id_visita: true, status: true },
+            select: { id_visita: true, status: true, tecnicoId: true, agendaId: true },
         });
         if (!visita)
             return res.status(404).json({ error: "Visita no encontrada" });
+        // Cada técnico solo cancela sus propias visitas, igual que al completarlas.
+        if (visita.tecnicoId !== req.user?.id) {
+            return res.status(403).json({ error: "No puedes cancelar una visita de otro técnico" });
+        }
         if (visita.status === client_1.EstadoVisita.COMPLETADA) {
             return res.status(409).json({ error: "No se puede cancelar una visita completada" });
         }
+        // Una visita ligada a una agenda responde a una cita comprometida con el
+        // cliente: eliminarla dejaría la agenda iniciada y sin formulario. Se
+        // completa desde el formulario o se cancela la agenda, que es el registro
+        // que corresponde cerrar. Se valida acá y no solo en la aplicación para que
+        // ningún cliente pueda saltearlo.
+        if (visita.agendaId !== null) {
+            return res.status(409).json({
+                error: "Esta visita pertenece a una agenda: complétala o cancela la agenda correspondiente",
+            });
+        }
+        // La visita se elimina en lugar de marcarse como cancelada: los reportes
+        // mensuales cuentan sobre esta tabla y las filas canceladas ensuciaban esos
+        // totales. Al borrarla queda libre el vínculo con la agenda, que es único,
+        // de modo que esa agenda puede volver a generar un formulario si la visita
+        // se retoma.
         const eliminada = await prisma_js_1.prisma.visita.delete({
             where: { id_visita: visitaId },
             select: {
@@ -1546,7 +1565,7 @@ const cancelarVisita = async (req, res) => {
                 inicio: true,
             },
         });
-        return res.status(200).json({ visita: eliminada });
+        return res.status(200).json({ visita: eliminada, agendaId: visita.agendaId });
     }
     catch (error) {
         console.error("Error al cancelar visita:", error);

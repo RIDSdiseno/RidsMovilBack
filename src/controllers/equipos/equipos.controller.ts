@@ -261,13 +261,20 @@ export const createEquipo = async (req: Request, res: Response) => {
 
             return tx.equipo.findUnique({
                 where: { id_equipo: created.id_equipo },
-                include: { equipo: true, adicionales: true },
+                include: { detalle: true, adicionales: true },
             });
         });
 
+        // Compatibilidad con la app: antes la relación se llamaba `equipo` y era
+        // un arreglo de DetalleEquipo. Se sigue entregando `equipo: [detalle]`
+        // para no romper clientes que lean esa propiedad.
+        const equipoRespuesta = equipo
+            ? { ...equipo, equipo: equipo.detalle ? [equipo.detalle] : [] }
+            : null;
+
         return res.status(201).json({
             message: 'Equipo creado',
-            equipo, // devolvemos el registro creado para que la UI pueda pintar el resultado
+            equipo: equipoRespuesta, // devolvemos el registro creado para que la UI pueda pintar el resultado
         });
     } catch (error: any) {
         // duplicados (por ejemplo, serial único)
@@ -493,7 +500,7 @@ export const getAllEquipos = async (req: Request, res: Response) => {
                     },
                 },
 
-                equipo: {
+                detalle: {
                     select: {
                         macWifi: true,
                         redEthernet: true,
@@ -511,8 +518,6 @@ export const getAllEquipos = async (req: Request, res: Response) => {
                         oneDriveOperativo: true,
                         oneDriveUsuario: true,
                     },
-                    orderBy: { id: 'desc' },
-                    take: 1,
                 },
 
                 adicionales: {
@@ -543,7 +548,7 @@ export const getAllEquipos = async (req: Request, res: Response) => {
         );
 
         const equiposMap = equipos.map(eq => {
-            const detalle = eq.equipo[0];
+            const detalle = eq.detalle;
 
             const oneDriveEstado =
                 detalle?.oneDriveEstado
@@ -585,7 +590,7 @@ export const getAllEquipos = async (req: Request, res: Response) => {
             };
         });
 
-        equiposMap.forEach(eq => delete (eq as any).equipo);
+        equiposMap.forEach(eq => delete (eq as any).detalle);
 
         if (paginar) {
             return res.json({
@@ -638,7 +643,7 @@ export const getEquipoDetalleMovil = async (req: Request, res: Response) => {
             where: { id_equipo: id },
             include: {
                 solicitante: { include: { empresa: true } },
-                equipo: { orderBy: { id: 'desc' }, take: 1 },
+                detalle: true,
                 adicionales: true,
             },
         });
@@ -780,7 +785,7 @@ export const getEquipoDetalleMovil = async (req: Request, res: Response) => {
                     }
                 : null;
 
-        const detalle = equipo.equipo[0] ?? null;
+        const detalle = equipo.detalle ?? null;
 
         return res.status(200).json({
             id_equipo: equipo.id_equipo,
@@ -953,12 +958,7 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
                         },
                     },
 
-                    equipo: {
-                        orderBy: {
-                            id: "desc",
-                        },
-                        take: 1,
-                    },
+                    detalle: true,
 
                     adicionales: {
                         orderBy: {
@@ -1203,12 +1203,7 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
                         },
                     },
 
-                    equipo: {
-                        orderBy: {
-                            id: "desc",
-                        },
-                        take: 1,
-                    },
+                    detalle: true,
 
                     adicionales: {
                         orderBy: {
@@ -1322,10 +1317,10 @@ export const actualizarEquipo = async (req: Request, res: Response) => {
             );
 
             const detalleAntes =
-                equipoAntes.equipo[0] ?? null;
+                equipoAntes.detalle ?? null;
 
             const detalleDespues =
-                equipoDespues.equipo[0] ?? null;
+                equipoDespues.detalle ?? null;
 
             addChange(
                 "macWifi",

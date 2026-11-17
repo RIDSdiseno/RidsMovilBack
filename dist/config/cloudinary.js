@@ -7,6 +7,7 @@ exports.cloudinaryConfig = exports.cloudinaryEnabled = void 0;
 exports.buildVisitFolder = buildVisitFolder;
 exports.buildEntregaFolder = buildEntregaFolder;
 exports.createUploadSignature = createUploadSignature;
+exports.buildTallerEntradaFolder = buildTallerEntradaFolder;
 const crypto_1 = __importDefault(require("crypto"));
 const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
 const apiKey = process.env.CLOUDINARY_API_KEY;
@@ -53,4 +54,7 @@ function createUploadSignature({ folder, publicId, timestamp, }) {
         signature,
         cloudName,
     };
+}
+function buildTallerEntradaFolder(equipoId) {
+    return `${baseFolder}/taller/entrada/equipo-${equipoId}`;
 }

@@ -138,12 +138,18 @@ const createEquipo = async (req, res) => {
             }
             return tx.equipo.findUnique({
                 where: { id_equipo: created.id_equipo },
-                include: { equipo: true, adicionales: true },
+                include: { detalle: true, adicionales: true },
             });
         });
+        // Compatibilidad con la app: antes la relación se llamaba `equipo` y era
+        // un arreglo de DetalleEquipo. Se sigue entregando `equipo: [detalle]`
+        // para no romper clientes que lean esa propiedad.
+        const equipoRespuesta = equipo
+            ? { ...equipo, equipo: equipo.detalle ? [equipo.detalle] : [] }
+            : null;
         return res.status(201).json({
             message: 'Equipo creado',
-            equipo, // devolvemos el registro creado para que la UI pueda pintar el resultado
+            equipo: equipoRespuesta, // devolvemos el registro creado para que la UI pueda pintar el resultado
         });
     }
     catch (error) {
@@ -349,7 +355,7 @@ const getAllEquipos = async (req, res) => {
                         empresaId: true,
                     },
                 },
-                equipo: {
+                detalle: {
                     select: {
                         macWifi: true,
                         redEthernet: true,
@@ -366,8 +372,6 @@ const getAllEquipos = async (req, res) => {
                         oneDriveOperativo: true,
                         oneDriveUsuario: true,
                     },
-                    orderBy: { id: 'desc' },
-                    take: 1,
                 },
                 adicionales: {
                     select: {
@@ -391,7 +395,7 @@ const getAllEquipos = async (req, res) => {
             .map((m) => m.equipoId)
             .filter((id) => id != null));
         const equiposMap = equipos.map(eq => {
-            const detalle = eq.equipo[0];
+            const detalle = eq.detalle;
             const oneDriveEstado = detalle?.oneDriveEstado
                 ?.trim()
                 .toUpperCase() ?? null;
@@ -421,7 +425,7 @@ const getAllEquipos = async (req, res) => {
                     'Sin solicitante',
             };
         });
-        equiposMap.forEach(eq => delete eq.equipo);
+        equiposMap.forEach(eq => delete eq.detalle);
         if (paginar) {
             return res.json({
                 equipos: equiposMap,
@@ -445,17 +449,31 @@ exports.getAllEquipos = getAllEquipos;
 // agente/mantencion del listado, y no vale la pena cargar ese detalle aqui.
 // Se pide solo al abrir el detalle de un equipo, no en el listado, para no
 // cargar auditoria de los 400+ equipos de una vez.
+// Roles a los que no se les entregan las credenciales guardadas de los equipos
+// (contraseña de TeamViewer, administrador local y accesos de empresa). Se usa
+// para la cuenta de revisión de la tienda de aplicaciones, que necesita recorrer
+// la aplicación completa pero no debe ver accesos de clientes reales.
+const ROLES_SIN_CREDENCIALES = new Set(['DEMO']);
 const getEquipoDetalleMovil = async (req, res) => {
     try {
         const id = Number(req.params.id);
         if (!Number.isInteger(id) || id <= 0) {
             return res.status(400).json({ error: 'ID inválido' });
         }
+        // El rol se consulta a la base y no se lee del token: el token no lo
+        // incluye, así que leerlo de ahí dejaría esta comprobación sin efecto.
+        const actor = req.user?.id
+            ? await prisma_1.prisma.tecnico.findUnique({
+                where: { id_tecnico: req.user.id },
+                select: { rol: true },
+            })
+            : null;
+        const ocultarCredenciales = ROLES_SIN_CREDENCIALES.has(String(actor?.rol ?? '').toUpperCase());
         const equipo = await prisma_1.prisma.equipo.findUnique({
             where: { id_equipo: id },
             include: {
                 solicitante: { include: { empresa: true } },
-                equipo: { orderBy: { id: 'desc' }, take: 1 },
+                detalle: true,
                 adicionales: true,
             },
         });
@@ -564,7 +582,7 @@ const getEquipoDetalleMovil = async (req, res) => {
                     email: null,
                 }
             : null;
-        const detalle = equipo.equipo[0] ?? null;
+        const detalle = equipo.detalle ?? null;
         return res.status(200).json({
             id_equipo: equipo.id_equipo,
             serial: equipo.serial,
@@ -593,14 +611,14 @@ const getEquipoDetalleMovil = async (req, res) => {
             estadoAlm: detalle?.estadoAlm ?? '',
             office: detalle?.office ?? '',
             teamViewer: detalle?.teamViewer ?? '',
-            claveTv: detalle?.claveTv ?? '',
+            claveTv: ocultarCredenciales ? '' : detalle?.claveTv ?? '',
             revisado: detalle?.revisado ?? '',
-            adminRidsUsuario: detalle?.adminRidsUsuario ?? '',
-            adminRidsPassword: detalle?.adminRidsPassword ?? '',
-            usuarioEmpresa: detalle?.usuarioEmpresa ?? '',
-            passwordEmpresa: detalle?.passwordEmpresa ?? '',
-            usuarioPersonal: detalle?.usuarioPersonal ?? '',
-            passwordPersonal: detalle?.passwordPersonal ?? '',
+            adminRidsUsuario: ocultarCredenciales ? '' : detalle?.adminRidsUsuario ?? '',
+            adminRidsPassword: ocultarCredenciales ? '' : detalle?.adminRidsPassword ?? '',
+            usuarioEmpresa: ocultarCredenciales ? '' : detalle?.usuarioEmpresa ?? '',
+            passwordEmpresa: ocultarCredenciales ? '' : detalle?.passwordEmpresa ?? '',
+            usuarioPersonal: ocultarCredenciales ? '' : detalle?.usuarioPersonal ?? '',
+            passwordPersonal: ocultarCredenciales ? '' : detalle?.passwordPersonal ?? '',
             adicionales: equipo.adicionales ?? [],
             creadoPor,
             creadoEn: createLog?.createdAt ?? equipo.createdAt,
@@ -699,12 +717,7 @@ const actualizarEquipo = async (req, res) => {
                         empresaId: true,
                     },
                 },
-                equipo: {
-                    orderBy: {
-                        id: "desc",
-                    },
-                    take: 1,
-                },
+                detalle: true,
                 adicionales: {
                     orderBy: {
                         id: "asc",
@@ -921,12 +934,7 @@ const actualizarEquipo = async (req, res) => {
                         empresaId: true,
                     },
                 },
-                equipo: {
-                    orderBy: {
-                        id: "desc",
-                    },
-                    take: 1,
-                },
+                detalle: true,
                 adicionales: {
                     orderBy: {
                         id: "asc",
@@ -959,8 +967,8 @@ const actualizarEquipo = async (req, res) => {
             addChange("propiedad", equipoAntes.propiedad, equipoDespues.propiedad);
             addChange("propietarioExterno", equipoAntes.propietarioExterno, equipoDespues.propietarioExterno);
             addChange("observaciones", equipoAntes.observaciones, equipoDespues.observaciones);
-            const detalleAntes = equipoAntes.equipo[0] ?? null;
-            const detalleDespues = equipoDespues.equipo[0] ?? null;
+            const detalleAntes = equipoAntes.detalle ?? null;
+            const detalleDespues = equipoDespues.detalle ?? null;
             addChange("macWifi", detalleAntes?.macWifi, detalleDespues?.macWifi);
             addChange("redEthernet", detalleAntes?.redEthernet, detalleDespues?.redEthernet);
             addChange("so", detalleAntes?.so, detalleDespues?.so);
